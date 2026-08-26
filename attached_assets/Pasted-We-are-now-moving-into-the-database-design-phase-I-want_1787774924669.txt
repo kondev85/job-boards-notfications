@@ -1,0 +1,67 @@
+We are now moving into the database design phase.
+
+I want to use Replit's built-in PostgreSQL database as the persistent database for our job tracker instead of relying on CSV/SQLite as the primary store.
+
+Before writing or modifying code, please design and propose the PostgreSQL schema for our use case.
+
+Important: Matt Herzog's existing job_boards.py scraper should remain as intact as possible. We want to build a separate persistence/application layer around it rather than rewriting the scraper.
+
+First inspect the fields currently produced by the Ashby, Greenhouse and Lever adapters and compare them with what we need for a personal remote-job tracker.
+
+We need to support:
+
+Ashby
+Greenhouse
+Lever
+
+We eventually want to filter and rank jobs by:
+
+Project Manager
+Product Manager
+Program Manager
+Technical Project Manager
+Technical Program Manager
+Product Owner
+Delivery Manager
+Remote status
+Location / country / region
+Europe / EMEA
+Employment type
+Published date
+First time we discovered the job
+Last time we saw the job
+Whether the job is still active/closed
+Company
+Industry/company category
+Job description
+Department
+Team
+Job URL
+ATS and external job ID
+
+Please consider which fields should be:
+
+Stored directly on the jobs table
+Normalized into separate tables, such as companies, locations, etc.
+Derived/calculated later, such as relevance scores
+
+Also consider:
+
+preventing duplicate jobs across scraper runs
+tracking when a job first appears in our database
+detecting when a job disappears/closes
+efficient filtering by title, date, remote status and company
+preserving the original ATS data where useful
+allowing us to add AI/relevance scoring later without changing the core job record
+
+Do not implement anything yet.
+
+Return:
+
+Proposed tables
+Columns and data types
+Primary keys / unique constraints
+Important indexes
+How an Ashby/Greenhouse/Lever record maps into the schema
+Any fields that the existing scraper does not currently provide and would require an additional change
+A recommended minimal v1 schema versus things we should postpone
