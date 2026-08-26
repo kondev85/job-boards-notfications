@@ -1,0 +1,1 @@
+- [Wayback discovery transport](wayback-discovery-transport.md) — Ashby archive discovery may stall over HTTP in this environment; HTTPS can return the same CDX data successfully.

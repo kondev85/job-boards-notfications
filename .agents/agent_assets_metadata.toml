@@ -1,0 +1,58 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "ER73p3P4XYu-y92qWWp1c"
+uri = "file://ashby-relevant-pm-7d.csv"
+type = "table"
+title = "Ashby relevant Project/Product Manager jobs — last 7 days"
+description = "48 Ashby postings published from 19–26 August 2026, filtered to Project/Product Manager titles, isRemote=True, and Europe/EMEA or generic remote locations."
+logical_id = "20451139-448b-49e5-b950-ed0ef668a983"
+content_hash = "sha256:8eb9e659f7d149a13a75e6d7e20b6256d49268e100d54912ddc5fb539c0af9b3"
+size = 13390
+mtime_ms = 1787756907345
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:b17893c0-756e-48f3-9c59-d0c65ca48ee2/20451139-448b-49e5-b950-ed0ef668a983/de3f257a-78e8-464c-89bc-b1fe53de4165"
+storage_version_token = "1787756926671633"
+content_type = "text/csv"
+
+[[outputs]]
+id = "fXK_Vf3IsVHAv-I5-u3Dv"
+uri = "file://ashby-relevant-pm-7d.json"
+type = "unspecified"
+title = "Ashby relevant jobs — JSON export"
+description = "The same 48 filtered Ashby postings in JSON format, including relevance_reason and direct application URLs."
+logical_id = "eaa456da-459b-4173-bef3-2592257f1537"
+content_hash = "sha256:db71c3525143e3198ac5e6edd8996efad384ccd646e573141e95d1fc2949ae1a"
+size = 26446
+mtime_ms = 1787756907346
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:b17893c0-756e-48f3-9c59-d0c65ca48ee2/eaa456da-459b-4173-bef3-2592257f1537/bddadb9b-1c19-4819-97e4-2bf4db9e0da8"
+storage_version_token = "1787756927317049"
+content_type = "application/octet-stream"
+
+[[outputs]]
+id = "vmjDCuBxdMMzKatqBo1O9"
+uri = "file://ashby-relevant-pm-7d-remote-only.csv"
+type = "table"
+title = "Ashby fully remote Project/Product Manager jobs — last 7 days"
+description = "21 postings published from 19–26 August 2026 with Project/Product Manager titles, isRemote=True, and workplaceType=Remote."
+logical_id = "4e3f216c-e6bb-475b-a335-d8a0722a46d4"
+content_hash = "sha256:ce439ba7b477d2816ea95c4a48f37a7e919ae26c2eaa019203cb595490aa1f95"
+size = 6170
+mtime_ms = 1787756963079
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:b17893c0-756e-48f3-9c59-d0c65ca48ee2/4e3f216c-e6bb-475b-a335-d8a0722a46d4/caf17322-c0c1-4f93-b64b-67fc4e47e17e"
+storage_version_token = "1787756968189479"
+content_type = "text/csv"
+
+[[outputs]]
+id = "60chumLp8VlXvTUVE1Oop"
+uri = "file://ashby-relevant-pm-7d-remote-only.json"
+type = "unspecified"
+title = "Ashby fully remote jobs — JSON export"
+description = "The same 21 strict remote Ashby matches in JSON format, with direct application URLs."
+logical_id = "0aa9d86c-b5ba-4826-96a8-78067a435822"
+content_hash = "sha256:358fa0fb6257ba93ab879ba57d38b12a5650cb95d42c240fd2c64e65e62e2ee7"
+size = 11808
+mtime_ms = 1787756963080
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:b17893c0-756e-48f3-9c59-d0c65ca48ee2/0aa9d86c-b5ba-4826-96a8-78067a435822/ef79487d-462a-4712-9bb9-dabfdc2fda7c"
+storage_version_token = "1787756968840763"
+content_type = "application/octet-stream"
