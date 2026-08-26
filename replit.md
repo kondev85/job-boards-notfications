@@ -37,3 +37,67 @@ test scrape (`--ats greenhouse --title "engineer" --limit 5`) successfully hit t
 network and returned 442 matching postings.
 
 No core logic has been modified — the project runs as imported.
+
+## PostgreSQL persistence (v1)
+
+Replit's managed PostgreSQL database is available through `DATABASE_URL`; no
+database installation or external credentials are needed. The original SQLite
+scraper remains available and is not replaced. `postgres_persistence.py` is a
+separate persistence layer that reuses the scraper's ATS adapters and creates
+only these PostgreSQL tables:
+
+```text
+companies
+job_boards
+jobs
+```
+
+The initial company row is source-scoped to each `(ats, slug)` board. The
+persistence layer does not automatically merge companies across ATS platforms.
+Jobs are unique by `(ats, external_id)`. Ashby and Lever descriptions are stored
+as normalized plain text; Greenhouse descriptions remain empty until a separate
+enrichment strategy is approved. `source_updated_at` is populated only when an
+upstream payload supplies an updated/modified timestamp.
+
+### Safe smoke import
+
+This imports exactly three boards and is the checkpoint before any large import:
+
+```bash
+uv run postgres_persistence.py \
+  --board ashby:abridge \
+  --board ashby:linear \
+  --board greenhouse:stripe
+```
+
+The command creates the schema if needed, imports current listed jobs, and
+upserts repeat runs without duplicates. It does not run the full Ashby import.
+
+Inspect the PostgreSQL database from Replit's My Data pane, or use SQL such as:
+
+```sql
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'public'
+ORDER BY table_name;
+
+SELECT jb.ats, jb.slug, COUNT(j.job_id) AS jobs
+FROM job_boards jb
+LEFT JOIN jobs j ON j.board_id = jb.board_id
+GROUP BY jb.ats, jb.slug
+ORDER BY jb.ats, jb.slug;
+
+SELECT ats, external_id, title, description_text IS NOT NULL AS has_description
+FROM jobs
+ORDER BY job_id
+LIMIT 10;
+```
+
+### Full import (run only after the smoke-test review)
+
+```bash
+uv run postgres_persistence.py --ats ashby
+```
+
+This uses the locally cached `boards.json` registry. The full command is
+intentionally documented but is not run as part of the smoke-test checkpoint.
