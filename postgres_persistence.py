@@ -16,6 +16,11 @@ Examples:
         --board ashby:linear \
         --board greenhouse:stripe
 
+    # Enrich one Greenhouse board with full plain-text descriptions:
+    uv run postgres_persistence.py \
+        --board greenhouse:stripe \
+        --greenhouse-content
+
     # Later, after the smoke test has been reviewed:
     uv run postgres_persistence.py --ats ashby --published-after 2026-07-15
 """
@@ -146,9 +151,13 @@ def _source_updated_at(ats: str, raw_job: dict[str, Any]) -> datetime | None:
     return None
 
 
-def _plain_description(ats: str, normalized: dict[str, Any]) -> str | None:
+def _plain_description(
+    ats: str,
+    normalized: dict[str, Any],
+    greenhouse_content: bool = False,
+) -> str | None:
     """Return the full description that the existing adapter already received."""
-    if ats == "greenhouse":
+    if ats == "greenhouse" and not greenhouse_content:
         # The normal persistence path deliberately does not request content=true.
         # Keep this nullable until a separate enrichment strategy is approved.
         return None
@@ -215,10 +224,15 @@ def _fetch_normalized(
     ats: str,
     slug: str,
     published_after: datetime | None = None,
+    greenhouse_content: bool = False,
 ) -> tuple[list[dict[str, Any]], int]:
     payload = json.loads(
         job_boards.fetch(
-            job_boards.board_url(ats, slug, want_content=False),
+            job_boards.board_url(
+                ats,
+                slug,
+                want_content=greenhouse_content and ats == "greenhouse",
+            ),
             timeout=30,
         )
     )
@@ -256,7 +270,11 @@ def _fetch_normalized(
             "published_at": published_at,
             "source_updated_at": _source_updated_at(ats, raw_job),
             "job_url": _optional(normalized.get("jobUrl")),
-            "description_text": _plain_description(ats, normalized),
+            "description_text": _plain_description(
+                ats,
+                normalized,
+                greenhouse_content=greenhouse_content,
+            ),
         })
     rows = [row for row in normalized_rows if row["external_id"]]
     return rows, skipped
@@ -390,6 +408,9 @@ def run(args: argparse.Namespace) -> int:
         raise SystemExit(
             "--published-after must be an ISO date or timestamp, such as 2026-07-15"
         )
+    greenhouse_content = args.greenhouse_content
+    if greenhouse_content and not any(ats == "greenhouse" for ats, _ in specs):
+        raise SystemExit("--greenhouse-content requires at least one Greenhouse board")
     dsn = os.environ.get("DATABASE_URL")
     if not dsn:
         raise SystemExit("DATABASE_URL is not set; use the Replit-managed database")
@@ -404,7 +425,12 @@ def run(args: argparse.Namespace) -> int:
         conn.execute(SCHEMA_SQL)
         for index, (ats, slug) in enumerate(specs, 1):
             try:
-                rows, skipped = _fetch_normalized(ats, slug, published_after)
+                rows, skipped = _fetch_normalized(
+                    ats,
+                    slug,
+                    published_after,
+                    greenhouse_content=greenhouse_content,
+                )
                 with conn.transaction():
                     with conn.cursor() as cur:
                         seen_at = datetime.now(timezone.utc)
@@ -474,6 +500,14 @@ def main() -> None:
         help=(
             "persist only jobs published on or after this inclusive ISO date "
             "or timestamp"
+        ),
+    )
+    parser.add_argument(
+        "--greenhouse-content",
+        action="store_true",
+        help=(
+            "request Greenhouse content=true and persist full plain-text "
+            "descriptions; use with a scoped board list because responses are larger"
         ),
     )
     args = parser.parse_args()

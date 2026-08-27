@@ -73,6 +73,23 @@ uv run postgres_persistence.py \
 The command creates the schema if needed, imports current listed jobs, and
 upserts repeat runs without duplicates. It does not run the full Ashby import.
 
+### Greenhouse descriptions
+
+The normal Greenhouse endpoint omits descriptions. To enrich an explicitly
+selected board, request the larger `content=true` response:
+
+```bash
+uv run postgres_persistence.py \
+  --board greenhouse:stripe \
+  --greenhouse-content
+```
+
+This updates the existing jobs' `description_text` values with plain text and
+does not erase other metadata. Keep the board list scoped while testing because
+Greenhouse content responses are substantially larger than the normal list
+response. Department and team remain nullable until a reliable source mapping
+is identified.
+
 Inspect the PostgreSQL database from Replit's My Data pane, or use SQL such as:
 
 ```sql
