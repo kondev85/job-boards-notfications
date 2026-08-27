@@ -32,6 +32,7 @@ import json
 import os
 import sys
 from datetime import datetime, timezone
+from html import unescape
 from pathlib import Path
 from typing import Any
 
@@ -162,7 +163,10 @@ def _plain_description(
         # Keep this nullable until a separate enrichment strategy is approved.
         return None
     description = normalized.get("_description") or ""
-    text = job_boards.plain_text(str(description))
+    # Greenhouse content is HTML-escaped inside the JSON string (`&lt;p&gt;`).
+    # Decode once before the shared cleaner strips tags; otherwise those tags
+    # become visible only after the cleaner has already run.
+    text = job_boards.plain_text(unescape(str(description)))
     return text or None
 
 
