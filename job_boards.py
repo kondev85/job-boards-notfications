@@ -57,7 +57,7 @@ BOARDS_SEED = HERE / "boards.seed.json"
 BOARDS_CACHE = HERE / "boards.json"
 COLLINFO = "https://index.commoncrawl.org/collinfo.json"
 WAYBACK_CDX = (
-    "http://web.archive.org/cdx/search/cdx?url={domain}"
+    "https://web.archive.org/cdx/search/cdx?url={domain}"
     "&matchType=domain&fl=original&collapse=urlkey&output=json"
 )
 URLSCAN_SEARCH = "https://urlscan.io/api/v1/search/?q=page.domain%3A{domain}&size=10000"
