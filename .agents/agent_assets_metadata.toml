@@ -56,3 +56,31 @@ mtime_ms = 1787756963080
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:b17893c0-756e-48f3-9c59-d0c65ca48ee2/0aa9d86c-b5ba-4826-96a8-78067a435822/ef79487d-462a-4712-9bb9-dabfdc2fda7c"
 storage_version_token = "1787756968840763"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "iM3bEuofIwHwKeb9BEt1R"
+uri = "file://reports/matched_roles.csv"
+type = "table"
+title = "Matched roles CSV"
+description = "2,892 open matched roles for Konstantin, sorted by match score. Includes company, title, location, score, URL, and description."
+logical_id = "3bdca6bb-7d23-497b-a730-dc5ae7dc1d7d"
+content_hash = "sha256:7ddc0e86af4eaccd459e2df0aec6e826b2ad4bf79e6238e07122683d760b087f"
+size = 19783033
+mtime_ms = 1787862184111
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:b17893c0-756e-48f3-9c59-d0c65ca48ee2/3bdca6bb-7d23-497b-a730-dc5ae7dc1d7d/b87327bd-d476-43f9-bdf0-6736c6aac6ba"
+storage_version_token = "1787862191769970"
+content_type = "text/csv"
+
+[[outputs]]
+id = "5ca0pvtcBP4RUAC6YIcjZ"
+uri = "file://reports/matched_roles.json"
+type = "unspecified"
+title = "Matched roles JSON"
+description = "The same 2,892 open matched roles as structured JSON for programmatic review."
+logical_id = "ea963162-bdbd-4d4f-bd24-8fa16d4e29ce"
+content_hash = "sha256:08b5eb71fe9f8af414f1fc2aea4ca0bc05a86730812bf226009fa61ca643d709"
+size = 21155150
+mtime_ms = 1787862184831
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:b17893c0-756e-48f3-9c59-d0c65ca48ee2/ea963162-bdbd-4d4f-bd24-8fa16d4e29ce/4d05ca18-62dd-40a9-aed9-47991191ca1d"
+storage_version_token = "1787862192704010"
+content_type = "application/octet-stream"
