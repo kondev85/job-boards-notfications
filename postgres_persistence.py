@@ -91,6 +91,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     UNIQUE (ats, external_id)
 );
 
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS company TEXT;
+
 CREATE INDEX IF NOT EXISTS jobs_published_at_idx
     ON jobs (published_at DESC);
 CREATE INDEX IF NOT EXISTS jobs_remote_idx
@@ -114,7 +116,6 @@ CREATE INDEX IF NOT EXISTS companies_category_idx
 CREATE INDEX IF NOT EXISTS companies_industry_idx
     ON companies (industry);
 
-ALTER TABLE jobs ADD COLUMN IF NOT EXISTS company TEXT;
 UPDATE jobs AS j
 SET company = c.display_name
 FROM job_boards AS b
@@ -386,9 +387,24 @@ def _ensure_board(
     return cur.fetchone()[0]
 
 
+def _board_company_name(cur: psycopg.Cursor, board_id: int) -> str:
+    cur.execute(
+        "SELECT c.display_name "
+        "FROM job_boards AS b "
+        "JOIN companies AS c ON c.company_id = b.company_id "
+        "WHERE b.board_id = %s",
+        (board_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        raise ValueError(f"board {board_id} has no company")
+    return row[0]
+
+
 def _upsert_board_jobs(
     cur: psycopg.Cursor,
     board_id: int,
+    company: str,
     rows: list[dict[str, Any]],
     seen_at: datetime,
     close_missing: bool = True,
@@ -398,12 +414,12 @@ def _upsert_board_jobs(
         cur.execute(
             """
             INSERT INTO jobs (
-                board_id, ats, external_id, title, department, team,
+                board_id, company, ats, external_id, title, department, team,
                 employment_type, location_raw, is_remote, workplace_type,
                 published_at, source_updated_at, job_url, description_text,
                 first_seen, last_seen, updated_at
             ) VALUES (
-                %(board_id)s, %(ats)s, %(external_id)s, %(title)s,
+                %(board_id)s, %(company)s, %(ats)s, %(external_id)s, %(title)s,
                 %(department)s, %(team)s, %(employment_type)s,
                 %(location_raw)s, %(is_remote)s, %(workplace_type)s,
                 %(published_at)s, %(source_updated_at)s, %(job_url)s,
@@ -411,6 +427,7 @@ def _upsert_board_jobs(
             )
             ON CONFLICT (ats, external_id) DO UPDATE SET
                 board_id = EXCLUDED.board_id,
+                company = EXCLUDED.company,
                 title = EXCLUDED.title,
                 department = EXCLUDED.department,
                 team = EXCLUDED.team,
@@ -430,7 +447,7 @@ def _upsert_board_jobs(
                 closed_at = NULL,
                 updated_at = EXCLUDED.updated_at
             """,
-            {**row, "board_id": board_id, "seen_at": seen_at},
+            {**row, "board_id": board_id, "company": company, "seen_at": seen_at},
         )
 
     closed = 0
@@ -496,10 +513,12 @@ def run(args: argparse.Namespace) -> int:
                     with conn.cursor() as cur:
                         seen_at = datetime.now(timezone.utc)
                         board_id = _ensure_board(cur, ats, slug, seen_at)
+                        company = _board_company_name(cur, board_id)
                         existing = _count_existing(cur, rows)
                         _, closed = _upsert_board_jobs(
                             cur,
                             board_id,
+                            company,
                             rows,
                             seen_at,
                             close_missing=published_after is None,

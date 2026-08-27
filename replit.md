@@ -55,9 +55,15 @@ jobs
 The initial company row is source-scoped to each `(ats, slug)` board. The
 persistence layer does not automatically merge companies across ATS platforms.
 Jobs are unique by `(ats, external_id)`. Ashby and Lever descriptions are stored
-as normalized plain text; Greenhouse descriptions remain empty until a separate
-enrichment strategy is approved. `source_updated_at` is populated only when an
-upstream payload supplies an updated/modified timestamp.
+as normalized plain text; Greenhouse descriptions are populated when the
+scoped `--greenhouse-content` enrichment option is used. `source_updated_at` is
+populated only when an upstream payload supplies an updated/modified timestamp.
+
+`jobs.company` is a denormalized display snapshot of the related
+`companies.display_name`, while `jobs.board_id` and
+`job_boards.company_id` remain the canonical relationship. Greenhouse department
+and team are filled only when a board supplies explicitly named custom metadata;
+the fields remain nullable when that metadata is absent.
 
 ### Safe smoke import
 
@@ -108,6 +114,12 @@ SELECT ats, external_id, title, description_text IS NOT NULL AS has_description
 FROM jobs
 ORDER BY job_id
 LIMIT 10;
+
+SELECT company, department, team, COUNT(*) AS jobs
+FROM jobs
+GROUP BY company, department, team
+ORDER BY company
+LIMIT 20;
 ```
 
 ### Full import (run only after the smoke-test review)
