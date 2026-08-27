@@ -248,7 +248,7 @@ def test_postgres_schema_constraints_repeat_import_and_lifecycle():
                         _row("job-2", title="Data Engineer", published_at=first_seen),
                     ]
                     inserted, closed = persistence._upsert_board_jobs(
-                        cur, board_id, rows, first_seen
+                        cur, board_id, "acme", rows, first_seen
                     )
                     assert (inserted, closed) == (2, 0)
 
@@ -297,6 +297,7 @@ def test_postgres_schema_constraints_repeat_import_and_lifecycle():
                     inserted, closed = persistence._upsert_board_jobs(
                         cur,
                         board_id,
+                        "acme",
                         [
                             _row(
                                 "job-1",
@@ -346,6 +347,7 @@ def test_postgres_schema_constraints_repeat_import_and_lifecycle():
                     inserted, closed = persistence._upsert_board_jobs(
                         cur,
                         board_id,
+                        "acme",
                         [reopened, _row("job-1", description=None)],
                         datetime(2026, 8, 3, tzinfo=timezone.utc),
                     )
