@@ -17,7 +17,7 @@ Examples:
         --board greenhouse:stripe
 
     # Later, after the smoke test has been reviewed:
-    uv run postgres_persistence.py --ats ashby
+    uv run postgres_persistence.py --ats ashby --published-after 2026-07-15
 """
 
 from __future__ import annotations
@@ -211,7 +211,11 @@ def _ats_list(value: str) -> list[str]:
     return ats_list
 
 
-def _fetch_normalized(ats: str, slug: str) -> list[dict[str, Any]]:
+def _fetch_normalized(
+    ats: str,
+    slug: str,
+    published_after: datetime | None = None,
+) -> tuple[list[dict[str, Any]], int]:
     payload = json.loads(
         job_boards.fetch(
             job_boards.board_url(ats, slug, want_content=False),
@@ -224,6 +228,7 @@ def _fetch_normalized(ats: str, slug: str) -> list[dict[str, Any]]:
         raise ValueError(f"{ats}/{slug}: response has no jobs array")
 
     normalized_rows: list[dict[str, Any]] = []
+    skipped = 0
     for raw_job in raw_jobs:
         if not isinstance(raw_job, dict):
             continue
@@ -231,6 +236,12 @@ def _fetch_normalized(ats: str, slug: str) -> list[dict[str, Any]]:
         if normalized is None:
             continue
         normalized = job_boards._clean(normalized)
+        published_at = _timestamp(normalized.get("publishedAt"))
+        if published_after is not None and (
+            published_at is None or published_at < published_after
+        ):
+            skipped += 1
+            continue
         normalized_rows.append({
             "ats": ats,
             "slug": slug,
@@ -242,12 +253,13 @@ def _fetch_normalized(ats: str, slug: str) -> list[dict[str, Any]]:
             "location_raw": _optional(normalized.get("location")),
             "is_remote": bool(normalized.get("isRemote")),
             "workplace_type": _optional(normalized.get("workplaceType")),
-            "published_at": _timestamp(normalized.get("publishedAt")),
+            "published_at": published_at,
             "source_updated_at": _source_updated_at(ats, raw_job),
             "job_url": _optional(normalized.get("jobUrl")),
             "description_text": _plain_description(ats, normalized),
         })
-    return [row for row in normalized_rows if row["external_id"]]
+    rows = [row for row in normalized_rows if row["external_id"]]
+    return rows, skipped
 
 
 def _ensure_board(
@@ -300,6 +312,7 @@ def _upsert_board_jobs(
     board_id: int,
     rows: list[dict[str, Any]],
     seen_at: datetime,
+    close_missing: bool = True,
 ) -> tuple[int, int]:
     seen_ids = {row["external_id"] for row in rows}
     for row in rows:
@@ -341,12 +354,14 @@ def _upsert_board_jobs(
             {**row, "board_id": board_id, "seen_at": seen_at},
         )
 
-    cur.execute(
-        "UPDATE jobs SET closed_at = %s, updated_at = %s "
-        "WHERE board_id = %s AND closed_at IS NULL AND last_seen < %s",
-        (seen_at, seen_at, board_id, seen_at),
-    )
-    closed = cur.rowcount
+    closed = 0
+    if close_missing:
+        cur.execute(
+            "UPDATE jobs SET closed_at = %s, updated_at = %s "
+            "WHERE board_id = %s AND closed_at IS NULL AND last_seen < %s",
+            (seen_at, seen_at, board_id, seen_at),
+        )
+        closed = cur.rowcount
     return len(seen_ids), closed
 
 
@@ -370,6 +385,11 @@ def _count_existing(
 
 def run(args: argparse.Namespace) -> int:
     specs = _board_specs(args)
+    published_after = _timestamp(args.published_after) if args.published_after else None
+    if args.published_after and published_after is None:
+        raise SystemExit(
+            "--published-after must be an ISO date or timestamp, such as 2026-07-15"
+        )
     dsn = os.environ.get("DATABASE_URL")
     if not dsn:
         raise SystemExit("DATABASE_URL is not set; use the Replit-managed database")
@@ -384,13 +404,19 @@ def run(args: argparse.Namespace) -> int:
         conn.execute(SCHEMA_SQL)
         for index, (ats, slug) in enumerate(specs, 1):
             try:
-                rows = _fetch_normalized(ats, slug)
+                rows, skipped = _fetch_normalized(ats, slug, published_after)
                 with conn.transaction():
                     with conn.cursor() as cur:
                         seen_at = datetime.now(timezone.utc)
                         board_id = _ensure_board(cur, ats, slug, seen_at)
                         existing = _count_existing(cur, rows)
-                        _, closed = _upsert_board_jobs(cur, board_id, rows, seen_at)
+                        _, closed = _upsert_board_jobs(
+                            cur,
+                            board_id,
+                            rows,
+                            seen_at,
+                            close_missing=published_after is None,
+                        )
                 new = len(rows) - existing
                 total_jobs += len(rows)
                 total_new += new
@@ -398,7 +424,8 @@ def run(args: argparse.Namespace) -> int:
                 total_closed += closed
                 print(
                     f"{index}/{len(specs)} {ats}/{slug}: "
-                    f"{len(rows)} jobs ({new} new, {existing} updated, {closed} closed)"
+                    f"{len(rows)} jobs ({new} new, {existing} updated, "
+                    f"{skipped} before cutoff, {closed} closed)"
                 )
             except job_boards.NotFound:
                 failed += 1
@@ -441,6 +468,13 @@ def main() -> None:
         "--limit",
         type=int,
         help="maximum boards per selected ATS when using cached boards",
+    )
+    parser.add_argument(
+        "--published-after",
+        help=(
+            "persist only jobs published on or after this inclusive ISO date "
+            "or timestamp"
+        ),
     )
     args = parser.parse_args()
     if args.limit is not None and args.limit < 1:

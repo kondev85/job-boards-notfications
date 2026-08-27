@@ -96,8 +96,12 @@ LIMIT 10;
 ### Full import (run only after the smoke-test review)
 
 ```bash
-uv run postgres_persistence.py --ats ashby
+uv run postgres_persistence.py --ats ashby --published-after 2026-07-15
 ```
 
 This uses the locally cached `boards.json` registry. The full command is
 intentionally documented but is not run as part of the smoke-test checkpoint.
+The cutoff is inclusive: jobs with `published_at` on July 15, 2026 or later are
+eligible; jobs with an older or missing `published_at` are skipped before any
+database upsert. A cutoff run does not close existing jobs that were omitted
+because of the filter.
