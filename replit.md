@@ -93,8 +93,23 @@ uv run postgres_persistence.py \
 This updates the existing jobs' `description_text` values with plain text and
 does not erase other metadata. Keep the board list scoped while testing because
 Greenhouse content responses are substantially larger than the normal list
-response. Department and team remain nullable until a reliable source mapping
-is identified.
+response. Department and team are populated only from explicitly named
+Greenhouse metadata fields and otherwise remain nullable.
+
+To import the bounded Greenhouse seed list while preserving all existing rows
+older than July 27, 2026:
+
+```bash
+uv run postgres_persistence.py \
+  --boards-from boards.seed.json \
+  --ats greenhouse \
+  --published-after 2026-07-27 \
+  --greenhouse-content
+```
+
+With `--published-after`, the importer does not close or delete older jobs.
+Repeating the command makes one sequential API request per selected board and
+upserts jobs by `(ats, external_id)`.
 
 Inspect the PostgreSQL database from Replit's My Data pane, or use SQL such as:
 
