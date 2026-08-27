@@ -9,14 +9,20 @@ and Lever job boards. See `README.md` for the full product description and
 This is a CLI tool, not a web server — there is no long-running process, so no
 Replit workflow is configured. Run it on demand from the Shell.
 
-`uv` and Python 3.12 are already available in this environment; the script pins its
-own dependencies (none) via PEP 723 inline metadata, so no install step is needed.
+`uv` and Python 3.12 are already available in this environment; the scraper and its
+original tests pin no dependencies via PEP 723 inline metadata. The PostgreSQL
+regression script provisions its `psycopg` dependency automatically when run with
+`uv`.
 
 ```bash
 # Identify your traffic (recommended before real network runs)
 export JOB_SCRAPER_CONTACT="you@example.com"
 
-# Offline self-check (58 tests, no network)
+
+# Offline self-check (58 scraper tests, no network)
+uv run test_job_boards.py
+
+# Offline self-check (58 scraper tests, no network)
 uv run test_job_boards.py
 
 # Small test scrape (5 Greenhouse boards, title match "engineer")
@@ -32,9 +38,10 @@ uv run job_boards.py --refresh-boards --all
 Output goes to `job-boards.csv`, `job-boards.json`, and an accumulating
 `job-boards.db` SQLite file (all gitignored by design — see `.gitignore` comments).
 
-Verified in this environment: `uv run test_job_boards.py` passes (58/58), and a live
-test scrape (`--ats greenhouse --title "engineer" --limit 5`) successfully hit the
-network and returned 442 matching postings.
+Verified in this environment: `uv run test_job_boards.py` passes (58/58), and the
+PostgreSQL regression suite covers adapter mappings plus a temporary local database.
+A live test scrape (`--ats greenhouse --title "engineer" --limit 5`) successfully hit
+the network and returned 442 matching postings.
 
 No core logic has been modified — the project runs as imported.
 
@@ -149,3 +156,6 @@ The cutoff is inclusive: jobs with `published_at` on July 15, 2026 or later are
 eligible; jobs with an older or missing `published_at` are skipped before any
 database upsert. A cutoff run does not close existing jobs that were omitted
 because of the filter.
+
+# PostgreSQL persistence regressions (offline fixtures + temporary local database)
+uv run test_postgres_persistence.py
