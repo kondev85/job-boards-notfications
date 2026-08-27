@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS job_boards (
 CREATE TABLE IF NOT EXISTS jobs (
     job_id             BIGSERIAL PRIMARY KEY,
     board_id           BIGINT NOT NULL REFERENCES job_boards(board_id),
+    company            TEXT,
     ats                TEXT NOT NULL CHECK (ats IN ('ashby', 'greenhouse', 'lever')),
     external_id        TEXT NOT NULL,
     title              TEXT NOT NULL,
@@ -102,6 +103,8 @@ CREATE INDEX IF NOT EXISTS jobs_closed_at_idx
     ON jobs (closed_at);
 CREATE INDEX IF NOT EXISTS jobs_title_lower_idx
     ON jobs (lower(title));
+CREATE INDEX IF NOT EXISTS jobs_company_idx
+    ON jobs (company);
 CREATE INDEX IF NOT EXISTS job_boards_company_id_idx
     ON job_boards (company_id);
 CREATE INDEX IF NOT EXISTS job_boards_ats_idx
@@ -110,6 +113,14 @@ CREATE INDEX IF NOT EXISTS companies_category_idx
     ON companies (category);
 CREATE INDEX IF NOT EXISTS companies_industry_idx
     ON companies (industry);
+
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS company TEXT;
+UPDATE jobs AS j
+SET company = c.display_name
+FROM job_boards AS b
+JOIN companies AS c ON c.company_id = b.company_id
+WHERE j.board_id = b.board_id
+  AND j.company IS DISTINCT FROM c.display_name;
 """
 
 
@@ -149,6 +160,44 @@ def _source_updated_at(ats: str, raw_job: dict[str, Any]) -> datetime | None:
     for key in keys_by_ats[ats]:
         if raw_job.get(key) not in (None, ""):
             return _timestamp(raw_job[key])
+    return None
+
+
+def _metadata_text(value: Any) -> str | None:
+    if isinstance(value, list):
+        parts = [_metadata_text(item) for item in value]
+        return _optional(", ".join(part for part in parts if part))
+    if isinstance(value, dict):
+        for key in ("name", "value", "label"):
+            if value.get(key) not in (None, ""):
+                return _metadata_text(value[key])
+        return None
+    return _optional(value)
+
+
+def _greenhouse_metadata_field(
+    raw_job: dict[str, Any],
+    field: str,
+) -> str | None:
+    """Read an explicitly named Greenhouse custom field without guessing."""
+    aliases = {
+        "department": {"department", "department name", "dept"},
+        "team": {"team", "team name"},
+    }[field]
+    direct = _optional(raw_job.get(field))
+    if direct:
+        return direct
+    metadata = raw_job.get("metadata")
+    if not isinstance(metadata, list):
+        return None
+    for item in metadata:
+        if not isinstance(item, dict):
+            continue
+        name = _optional(item.get("name"))
+        if name and name.casefold().strip() in aliases:
+            value = _metadata_text(item.get("value"))
+            if value:
+                return value
     return None
 
 
@@ -265,8 +314,16 @@ def _fetch_normalized(
             "slug": slug,
             "external_id": _optional(normalized.get("id")),
             "title": str(normalized.get("title") or ""),
-            "department": _optional(normalized.get("department")),
-            "team": _optional(normalized.get("team")),
+            "department": (
+                _greenhouse_metadata_field(raw_job, "department")
+                if ats == "greenhouse"
+                else _optional(normalized.get("department"))
+            ),
+            "team": (
+                _greenhouse_metadata_field(raw_job, "team")
+                if ats == "greenhouse"
+                else _optional(normalized.get("team"))
+            ),
             "employment_type": _optional(normalized.get("employmentType")),
             "location_raw": _optional(normalized.get("location")),
             "is_remote": bool(normalized.get("isRemote")),
