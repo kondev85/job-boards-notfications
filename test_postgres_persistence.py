@@ -262,7 +262,101 @@ def test_postgres_schema_constraints_repeat_import_and_lifecycle():
                     """
                 )
             }
-            assert tables == {"companies", "job_boards", "jobs"}
+            assert tables == {
+                "companies",
+                "job_boards",
+                "jobs",
+                "users",
+                "job_matches",
+            }
+
+            user = conn.execute(
+                """
+                SELECT name, email, active, is_default, profile_text, cv_text,
+                       target_roles, target_industries, base_city, base_country,
+                       base_latitude, base_longitude, remote_allowed,
+                       onsite_allowed, onsite_max_distance_km, hybrid_allowed,
+                       hybrid_max_distance_km, willing_to_relocate,
+                       relocation_cities, relocation_countries, preferred_regions,
+                       excluded_regions, min_match_score
+                FROM users
+                WHERE email = %s
+                """,
+                (persistence.KONSTANTIN_EMAIL,),
+            ).fetchone()
+            assert user is not None
+            assert user[:10] == (
+                "Konstantin Kondev",
+                persistence.KONSTANTIN_EMAIL,
+                True,
+                True,
+                persistence.KONSTANTIN_PROFILE_TEXT,
+                persistence.KONSTANTIN_CV_TEXT,
+                list(persistence.KONSTANTIN_TARGET_ROLES),
+                list(persistence.KONSTANTIN_TARGET_INDUSTRIES),
+                "Estepona",
+                "Spain",
+            )
+            assert user[10:] == (
+                None,
+                None,
+                True,
+                True,
+                100,
+                True,
+                600,
+                True,
+                list(persistence.KONSTANTIN_RELOCATION_CITIES),
+                list(persistence.KONSTANTIN_RELOCATION_COUNTRIES),
+                list(persistence.KONSTANTIN_PREFERRED_REGIONS),
+                list(persistence.KONSTANTIN_EXCLUDED_REGIONS),
+                75,
+            )
+
+            # Schema initialization can run repeatedly without creating a
+            # second seed profile or changing the job import rows.
+            conn.execute(persistence.SCHEMA_SQL)
+            assert conn.execute(
+                "SELECT COUNT(*) FROM users WHERE email = %s",
+                (persistence.KONSTANTIN_EMAIL,),
+            ).fetchone()[0] == 1
+            assert conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 2
+
+            indexes = {
+                row[0]
+                for row in conn.execute(
+                    """
+                    SELECT indexname
+                    FROM pg_indexes
+                    WHERE schemaname = current_schema()
+                      AND tablename = 'job_matches'
+                    """
+                )
+            }
+            assert {
+                "job_matches_user_id_idx",
+                "job_matches_job_id_idx",
+                "job_matches_score_idx",
+                "job_matches_match_status_idx",
+                "job_matches_notified_at_idx",
+            } <= indexes
+            foreign_keys = {
+                row[0]: row[1]
+                for row in conn.execute(
+                    """
+                    SELECT conname, pg_get_constraintdef(oid)
+                    FROM pg_constraint
+                    WHERE conrelid = 'job_matches'::regclass
+                      AND contype = 'f'
+                    """
+                )
+            }
+            assert "ON DELETE CASCADE" in foreign_keys[
+                "job_matches_user_id_fkey"
+            ]
+            assert "ON DELETE CASCADE" in foreign_keys[
+                "job_matches_job_id_fkey"
+            ]
 
             constraints = {
                 row[0]
@@ -283,6 +377,64 @@ def test_postgres_schema_constraints_repeat_import_and_lifecycle():
                 "jobs_ats_external_id" in name or name.endswith("_ats_external_id_key")
                 for name in constraints
             )
+            assert "job_matches_user_job_key" in constraints
+
+            user_id = conn.execute(
+                "SELECT user_id FROM users WHERE email = %s",
+                (persistence.KONSTANTIN_EMAIL,),
+            ).fetchone()[0]
+            job_id = conn.execute(
+                "SELECT job_id FROM jobs WHERE external_id = 'job-1'"
+            ).fetchone()[0]
+            match_values = (
+                user_id,
+                job_id,
+                88,
+                "Strong role and industry fit.",
+                "matching-model",
+                "v1",
+            )
+            with conn.transaction():
+                conn.execute(
+                    """
+                    INSERT INTO job_matches (
+                        user_id, job_id, score, feedback,
+                        model_name, model_version
+                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    match_values,
+                )
+            default_match = conn.execute(
+                """
+                SELECT score, match_status, feedback, model_name, model_version,
+                       notified_at
+                FROM job_matches
+                WHERE user_id = %s AND job_id = %s
+                """,
+                (user_id, job_id),
+            ).fetchone()
+            assert default_match == (
+                88,
+                "pending",
+                "Strong role and industry fit.",
+                "matching-model",
+                "v1",
+                None,
+            )
+
+            try:
+                with conn.transaction():
+                    conn.execute(
+                        """
+                        INSERT INTO job_matches (user_id, job_id)
+                        VALUES (%s, %s)
+                        """,
+                        (user_id, job_id),
+                    )
+            except psycopg.errors.UniqueViolation:
+                pass
+            else:
+                raise AssertionError("duplicate user/job match was accepted")
 
             with conn.transaction():
                 with conn.cursor() as cur:
@@ -356,6 +508,50 @@ def test_postgres_schema_constraints_repeat_import_and_lifecycle():
                 "SELECT closed_at, description_text FROM jobs WHERE external_id = 'job-2'"
             ).fetchone()
             assert reopened_state == (None, "Reopened role.")
+
+            # Both foreign keys cascade independently. Keep this after the
+            # import lifecycle assertions because deleting a job intentionally
+            # removes it from the subsequent upsert fixture.
+            with conn.transaction():
+                conn.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
+            assert conn.execute("SELECT COUNT(*) FROM job_matches").fetchone()[0] == 0
+            conn.execute(persistence.SCHEMA_SQL)
+            user_id = conn.execute(
+                "SELECT user_id FROM users WHERE email = %s",
+                (persistence.KONSTANTIN_EMAIL,),
+            ).fetchone()[0]
+            job_id = conn.execute(
+                "SELECT job_id FROM jobs WHERE external_id = 'job-1'"
+            ).fetchone()[0]
+            with conn.transaction():
+                conn.execute(
+                    "INSERT INTO job_matches (user_id, job_id) VALUES (%s, %s)",
+                    (user_id, job_id),
+                )
+            assert conn.execute("SELECT COUNT(*) FROM job_matches").fetchone()[0] == 1
+
+            # A database that already has the original three tables receives
+            # the new tables and seed without recreating or disturbing jobs.
+            with conn.transaction():
+                conn.execute("DROP TABLE job_matches, users CASCADE")
+            conn.execute(persistence.SCHEMA_SQL)
+            assert conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 2
+            assert conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 1
+
+            user_id = conn.execute(
+                "SELECT user_id FROM users WHERE email = %s",
+                (persistence.KONSTANTIN_EMAIL,),
+            ).fetchone()[0]
+            job_id = conn.execute(
+                "SELECT job_id FROM jobs WHERE external_id = 'job-1'"
+            ).fetchone()[0]
+            with conn.transaction():
+                conn.execute(
+                    "INSERT INTO job_matches (user_id, job_id) VALUES (%s, %s)",
+                    (user_id, job_id),
+                )
+                conn.execute("DELETE FROM jobs WHERE job_id = %s", (job_id,))
+            assert conn.execute("SELECT COUNT(*) FROM job_matches").fetchone()[0] == 0
 
 
 if __name__ == "__main__":

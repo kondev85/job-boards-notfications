@@ -51,12 +51,14 @@ Replit's managed PostgreSQL database is available through `DATABASE_URL`; no
 database installation or external credentials are needed. The original SQLite
 scraper remains available and is not replaced. `postgres_persistence.py` is a
 separate persistence layer that reuses the scraper's ATS adapters and creates
-only these PostgreSQL tables:
+these PostgreSQL tables:
 
 ```text
 companies
 job_boards
 jobs
+users
+job_matches
 ```
 
 The initial company row is source-scoped to each `(ats, slug)` board. The
@@ -71,6 +73,21 @@ populated only when an upstream payload supplies an updated/modified timestamp.
 `job_boards.company_id` remain the canonical relationship. Greenhouse department
 and team are filled only when a board supplies explicitly named custom metadata;
 the fields remain nullable when that metadata is absent.
+
+`users` stores matching profiles and their location, workplace, relocation, region,
+and score-threshold preferences. Schema initialization seeds one default active
+profile for Konstantin Kondev (`infobettor@gmail.com`) from the supplied CV and
+profile specification. The seed uses the email as its stable key, so rerunning an
+import updates that profile instead of creating a duplicate. Estepona's latitude
+and longitude remain NULL because the supplied `36.xxxxxx` and `-5.xxxxxx` values
+are placeholders, not verified coordinates.
+
+`job_matches` links a user to a job with a nullable score, match status, optional
+feedback/model metadata, notification timestamp, and audit timestamps. A
+`(user_id, job_id)` unique constraint prevents duplicate matches; deleting either
+the user or job cascades to its matches. This change creates no matches and does
+not run a matching algorithm, calculate scores, call an AI model, send
+notifications, or schedule notification delivery.
 
 ### Safe smoke import
 
@@ -141,6 +158,19 @@ SELECT company, department, team, COUNT(*) AS jobs
 FROM jobs
 GROUP BY company, department, team
 ORDER BY company
+LIMIT 20;
+
+SELECT user_id, name, email, active, is_default, base_city, base_country,
+       min_match_score
+FROM users
+ORDER BY user_id;
+
+SELECT jm.match_id, u.email, j.ats, j.external_id, jm.score,
+       jm.match_status, jm.notified_at
+FROM job_matches jm
+JOIN users u ON u.user_id = jm.user_id
+JOIN jobs j ON j.job_id = jm.job_id
+ORDER BY jm.match_id
 LIMIT 20;
 ```
 

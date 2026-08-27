@@ -43,7 +43,104 @@ import job_boards
 
 ATS_NAMES = tuple(job_boards.SOURCES)
 
-SCHEMA_SQL = """
+KONSTANTIN_EMAIL = "infobettor@gmail.com"
+KONSTANTIN_PROFILE_TEXT = "Professional profile"
+KONSTANTIN_CV_TEXT = """KONSTANTIN KONDEV
+Program Manager
+
+PROFESSIONAL SUMMARY
+Results-driven Program Manager with 10+ years delivering complex software development projects and full-stack solutions. Proven track record building and scaling digital products from concept to market-ready platforms. Expertise in product & project management, agile methodologies, and stakeholder management across gaming & enterprise solution industries.
+
+TOP SKILLS
+Project Management
+Product Management
+People Management
+JavaScript & Rest APIs & PostgreSQL
+
+WORK HISTORY
+CO-FOUNDER & COO 03/2026 till now
+BlocksRace, Estepona, Spain
+Led the creation of BlocksRace from concept to market-ready product, defining the vision, betting mechanics, user experience for a new prediction market category based on Bitcoin mining events.
+Established relationships with casino operators, sportsbooks, gaming aggregators, and industry stakeholders to validate product-market fit and drive potential B2B integrations.
+Oversaw product launch, user acquisition initiatives, community engagement, and platform analytics, using player behavior and betting data to continuously refine the product.
+
+PROGRAM MANAGER 05/2024 to 02/2026
+Playtech, Gibraltar, Gibraltar
+Led cross-functional teams across Product, Development, Integration, Operations, Compliance, functions to deliver strategic initiatives for Tier-1 gaming operators.
+Managed the successful implementation of Playtech's full technology portfolio, including PAM, Casino, Live Casino, Poker, Sportsbook, and third-party integrations.
+Delivered complex platform launches and major product enhancements across regulated markets including Brazil, Ontario, Pennsylvania, Italy, Spain, Netherlands, and APAC.
+Reduced project delivery timelines by 22% through process optimization, improved planning methodologies, and enhanced stakeholder coordination.
+Built trusted relationships with executive-level client stakeholders, contributing to improved customer satisfaction and long-term partnership growth.
+Streamlined communication and governance processes across internal and external stakeholders, increasing transparency, alignment, and project visibility.
+
+SENIOR PROJECT MANAGER / TEAM LEAD 10/2019 to 05/2024
+Playtech, Gibraltar
+Managed complex software delivery projects from initiation through to launch, including the integration of new products, services, and third-party providers across multiple regulated markets.
+Coordinated cross-functional teams spanning Commercial, Compliance, Product, Engineering, Integrations, Operations, and QA to ensure successful project execution.
+Served as the primary point of contact for internal and external stakeholders, balancing business objectives, regulatory requirements, technical constraints, and delivery timelines.
+Managed relationships with third-party technology, payment, and gaming content providers, overseeing integrations and operational readiness.
+Team Lead of 3 project managers based in Estonia for Platform Projects Delivery.
+Led and mentored a team of three Project Managers based in Estonia, supporting project delivery, prioritization and professional development.
+
+AGILE PROJECT MANAGER 08/2018 to 07/2019
+The Workshop - Inventors of play, Málaga
+Managed the delivery of software development initiatives supporting online gaming and betting products, coordinating activities from project inception through to release.
+Facilitated Agile and Scrum practices across multidisciplinary teams, ensuring effective planning, prioritization, execution, and continuous improvement.
+Led Agile ceremonies including Roadmap Planning, Backlog Refinement, Sprint Planning, Daily Stand-ups, Reviews, and Retrospectives.
+Worked closely with Product Managers, Designers, Solution Architects, Developers, QA Engineers, Delivery, and Support teams to remove impediments and drive successful outcomes.
+Manage the relationship with 3rd party vendors and all stakeholders.
+
+SENIOR PROJECT MANAGER 11/2015 to 08/2018
+Hewlett Packard Enterprise, Sofia
+Managing strategic and worldwide projects to ensure that they meet all scope, time, budget and quality expectations through planning, controlling and managing.
+Identify, analyze and integrate business and technical needs.
+Mitigate risks, perform impact analysis as part of the change management process and make recommendations regarding proposed changes to the projects.
+Close monitoring of customer satisfaction, upselling /cross-selling.
+
+PROJECT MANAGER 11/2013 to 10/2015
+Hewlett Packard Enterprise, Sofia
+Collaborated with infrastructure, platform, and technology consultancy teams to coordinate technical initiatives, manage dependencies, and support the delivery of scalable, high-availability services and infrastructure.
+Plan and supervise all aspects of a project – overall and on a daily basis: planning, tasks completion, progress monitoring, budget, risk log etc.
+
+PROJECT SUPPORT SPECIALIST 04/2013 to 11/2013
+Hewlett Packard Enterprise, Sofia
+Ensure the agreed project management methods, standards and processes are maintained throughout the project lifecycle.
+Assist the Project Manager in the production and maintenance of project plans.
+Set up and maintain systems for recording project costs.
+Maintain risk and issue logs and change control records.
+
+CUSTOMER/MERCHANT SERVICE REPRESENTATIVE 10/2010 to 04/2013
+Paysafe (Skrill), Sofia
+L1&L2 Customer Support.
+Research and resolve complex customer issues.
+Keep abreast of new company products and services.
+
+FOUNDER 04/2009 to 05/2012
+InfoBettor.com, Sofia
+Conceptualized, developed, and successfully launched a sports betting information platform from initial idea to market-ready product.
+Continuously delivered new features and platform enhancements based on user feedback and market analysis.
+Revenue Growth & Partnerships: Established and scaled affiliate partnerships and sports betting operators.
+Digital Marketing & User Acquisition: Designed and executed multi-channel marketing campaigns (Forums, FaceBook, Twitter, Google Ads).
+
+CERTIFICATIONS
+ITIL Foundation
+Professional Scrum Master
+Prince2
+
+EDUCATION
+University of National and World Economy 2004 - 2008
+Bachelor of Business Administration Sofia - Bulgaria.
+
+LANGUAGES
+English (Proficient)
+Bulgarian (Proficient)
+Spanish (Basic)
+
+TECHNICAL SKILLS & TOOLS
+JavaScript, Node.js, Express.js, Rest API, SQL
+Jira, Git, Monday"""
+
+SCHEMA_DDL_SQL = """
 CREATE TABLE IF NOT EXISTS companies (
     company_id   BIGSERIAL PRIMARY KEY,
     display_name TEXT NOT NULL,
@@ -93,6 +190,50 @@ CREATE TABLE IF NOT EXISTS jobs (
 
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS company TEXT;
 
+CREATE TABLE IF NOT EXISTS users (
+    user_id                 BIGSERIAL PRIMARY KEY,
+    name                    TEXT NOT NULL,
+    email                   TEXT UNIQUE NOT NULL,
+    active                  BOOLEAN NOT NULL DEFAULT TRUE,
+    is_default              BOOLEAN NOT NULL DEFAULT FALSE,
+    profile_text            TEXT,
+    cv_text                 TEXT,
+    target_roles            TEXT[],
+    target_industries       TEXT[],
+    base_city               TEXT,
+    base_country            TEXT,
+    base_latitude           NUMERIC(9,6),
+    base_longitude          NUMERIC(9,6),
+    remote_allowed          BOOLEAN,
+    onsite_allowed          BOOLEAN,
+    onsite_max_distance_km  INTEGER,
+    hybrid_allowed          BOOLEAN,
+    hybrid_max_distance_km  INTEGER,
+    willing_to_relocate     BOOLEAN,
+    relocation_cities       TEXT[],
+    relocation_countries    TEXT[],
+    preferred_regions       TEXT[],
+    excluded_regions        TEXT[],
+    min_match_score         INTEGER,
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS job_matches (
+    match_id       BIGSERIAL PRIMARY KEY,
+    user_id        BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    job_id         BIGINT NOT NULL REFERENCES jobs(job_id) ON DELETE CASCADE,
+    score          INTEGER,
+    match_status   TEXT NOT NULL DEFAULT 'pending',
+    feedback       TEXT,
+    model_name     TEXT,
+    model_version  TEXT,
+    notified_at    TIMESTAMPTZ,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT job_matches_user_job_key UNIQUE (user_id, job_id)
+);
+
 CREATE INDEX IF NOT EXISTS jobs_published_at_idx
     ON jobs (published_at DESC);
 CREATE INDEX IF NOT EXISTS jobs_remote_idx
@@ -115,6 +256,16 @@ CREATE INDEX IF NOT EXISTS companies_category_idx
     ON companies (category);
 CREATE INDEX IF NOT EXISTS companies_industry_idx
     ON companies (industry);
+CREATE INDEX IF NOT EXISTS job_matches_user_id_idx
+    ON job_matches (user_id);
+CREATE INDEX IF NOT EXISTS job_matches_job_id_idx
+    ON job_matches (job_id);
+CREATE INDEX IF NOT EXISTS job_matches_score_idx
+    ON job_matches (score);
+CREATE INDEX IF NOT EXISTS job_matches_match_status_idx
+    ON job_matches (match_status);
+CREATE INDEX IF NOT EXISTS job_matches_notified_at_idx
+    ON job_matches (notified_at);
 
 UPDATE jobs AS j
 SET company = c.display_name
@@ -123,6 +274,103 @@ JOIN companies AS c ON c.company_id = b.company_id
 WHERE j.board_id = b.board_id
   AND j.company IS DISTINCT FROM c.display_name;
 """
+
+KONSTANTIN_TARGET_ROLES = (
+    "Project Manager",
+    "Product Manager",
+    "Program Manager",
+    "Technical Project Manager",
+    "Technical Program Manager",
+    "Product Owner",
+    "Product Operations",
+    "Implementation Manager",
+    "Delivery Manager",
+    "Operations Manager",
+)
+KONSTANTIN_TARGET_INDUSTRIES = (
+    "Gambling",
+    "Crypto",
+    "Fintech",
+    "Finance",
+    "Technology",
+)
+KONSTANTIN_RELOCATION_CITIES = ("Madrid", "Málaga")
+KONSTANTIN_RELOCATION_COUNTRIES = ("Spain", "Portugal")
+KONSTANTIN_PREFERRED_REGIONS = ("Europe", "EU", "EEA", "EMEA")
+KONSTANTIN_EXCLUDED_REGIONS = ("US-only",)
+
+
+def _sql_literal(value: str) -> str:
+    """Quote a trusted static seed value for the schema initialization SQL."""
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _sql_text_array(values: tuple[str, ...]) -> str:
+    return "ARRAY[" + ", ".join(_sql_literal(value) for value in values) + "]::TEXT[]"
+
+
+KONSTANTIN_SEED_SQL = f"""
+INSERT INTO users (
+    name, email, active, is_default, profile_text, cv_text, target_roles,
+    target_industries, base_city, base_country, base_latitude, base_longitude,
+    remote_allowed, onsite_allowed, onsite_max_distance_km, hybrid_allowed,
+    hybrid_max_distance_km, willing_to_relocate, relocation_cities,
+    relocation_countries, preferred_regions, excluded_regions, min_match_score
+) VALUES (
+    {_sql_literal("Konstantin Kondev")},
+    {_sql_literal(KONSTANTIN_EMAIL)},
+    TRUE,
+    TRUE,
+    {_sql_literal(KONSTANTIN_PROFILE_TEXT)},
+    {_sql_literal(KONSTANTIN_CV_TEXT)},
+    {_sql_text_array(KONSTANTIN_TARGET_ROLES)},
+    {_sql_text_array(KONSTANTIN_TARGET_INDUSTRIES)},
+    'Estepona',
+    'Spain',
+    NULL,
+    NULL,
+    TRUE,
+    TRUE,
+    100,
+    TRUE,
+    600,
+    TRUE,
+    {_sql_text_array(KONSTANTIN_RELOCATION_CITIES)},
+    {_sql_text_array(KONSTANTIN_RELOCATION_COUNTRIES)},
+    {_sql_text_array(KONSTANTIN_PREFERRED_REGIONS)},
+    {_sql_text_array(KONSTANTIN_EXCLUDED_REGIONS)},
+    75
+)
+ON CONFLICT (email) DO UPDATE SET
+    name = EXCLUDED.name,
+    active = EXCLUDED.active,
+    is_default = EXCLUDED.is_default,
+    profile_text = EXCLUDED.profile_text,
+    cv_text = EXCLUDED.cv_text,
+    target_roles = EXCLUDED.target_roles,
+    target_industries = EXCLUDED.target_industries,
+    base_city = EXCLUDED.base_city,
+    base_country = EXCLUDED.base_country,
+    base_latitude = EXCLUDED.base_latitude,
+    base_longitude = EXCLUDED.base_longitude,
+    remote_allowed = EXCLUDED.remote_allowed,
+    onsite_allowed = EXCLUDED.onsite_allowed,
+    onsite_max_distance_km = EXCLUDED.onsite_max_distance_km,
+    hybrid_allowed = EXCLUDED.hybrid_allowed,
+    hybrid_max_distance_km = EXCLUDED.hybrid_max_distance_km,
+    willing_to_relocate = EXCLUDED.willing_to_relocate,
+    relocation_cities = EXCLUDED.relocation_cities,
+    relocation_countries = EXCLUDED.relocation_countries,
+    preferred_regions = EXCLUDED.preferred_regions,
+    excluded_regions = EXCLUDED.excluded_regions,
+    min_match_score = EXCLUDED.min_match_score,
+    updated_at = now();
+"""
+
+# Keep one public schema command for callers and tests. The seed is deliberately
+# part of initialization so any importer run repairs the canonical seed without
+# duplicating it or touching existing jobs/matches.
+SCHEMA_SQL = SCHEMA_DDL_SQL + KONSTANTIN_SEED_SQL
 
 
 def _optional(value: Any) -> str | None:
