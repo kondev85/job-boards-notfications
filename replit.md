@@ -85,9 +85,34 @@ are placeholders, not verified coordinates.
 `job_matches` links a user to a job with a nullable score, match status, optional
 feedback/model metadata, notification timestamp, and audit timestamps. A
 `(user_id, job_id)` unique constraint prevents duplicate matches; deleting either
-the user or job cascades to its matches. This change creates no matches and does
-not run a matching algorithm, calculate scores, call an AI model, send
-notifications, or schedule notification delivery.
+the user or job cascades to its matches.
+
+Run the deterministic preference matcher after importing jobs:
+
+```bash
+uv run postgres_persistence.py --match
+```
+
+The matcher considers active users and jobs whose `closed_at` is NULL. It first
+rejects jobs whose text location contains an excluded region or whose workplace
+type is not allowed. Remaining jobs receive a deterministic 100-point score:
+role fit is 40 points, industry fit 25, workplace fit 20, and textual location
+fit 15. Empty preference dimensions are unconstrained and receive their full
+weight. Role matches search the title, department, and team; industry matches
+search company industry/category plus job text. Remote, onsite, and hybrid
+preferences are honored. City, country, and region preferences use the stored
+location text; numeric distance limits are not calculated because the schema
+does not contain verified job coordinates.
+
+Only jobs at or above `min_match_score` create or update a `matched` row. A
+below-threshold job does not create a new row; if it already has a match, that
+row is updated to `rejected` with the latest score and matcher metadata.
+Closed or excluded jobs are skipped and do not create or alter match rows.
+Matching writes `model_name = 'deterministic-preferences'` and
+`model_version = 'v1'` because those values identify this scoring workflow.
+Rerunning the command updates the same `(user_id, job_id)` row and does not
+create duplicates. This workflow does not call an AI model, send notifications,
+or schedule notification delivery.
 
 ### Safe smoke import
 

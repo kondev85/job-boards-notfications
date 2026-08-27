@@ -554,6 +554,167 @@ def test_postgres_schema_constraints_repeat_import_and_lifecycle():
             assert conn.execute("SELECT COUNT(*) FROM job_matches").fetchone()[0] == 0
 
 
+def test_matching_is_repeatable_and_applies_open_location_and_threshold_rules():
+    with _temporary_postgres() as dsn:
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    board_id = persistence._ensure_board(
+                        cur,
+                        "ashby",
+                        "matching-fixtures",
+                        datetime(2026, 8, 10, tzinfo=timezone.utc),
+                    )
+                    rows = [
+                        _row(
+                            "match",
+                            title="Program Manager",
+                            description="Technology delivery",
+                        ),
+                        _row(
+                            "below-threshold",
+                            title="Backend Engineer",
+                            description="Build reliable systems.",
+                        ),
+                        _row(
+                            "excluded-region",
+                            title="Program Manager",
+                            description="Technology delivery",
+                        )
+                        | {"location_raw": "Remote - US-only"},
+                        _row(
+                            "closed",
+                            title="Program Manager",
+                            description="Technology delivery",
+                        ),
+                    ]
+                    persistence._upsert_board_jobs(
+                        cur,
+                        board_id,
+                        "matching-fixtures",
+                        rows,
+                        datetime(2026, 8, 10, tzinfo=timezone.utc),
+                    )
+                    cur.execute(
+                        "UPDATE companies SET industry = 'Technology' "
+                        "WHERE display_name = 'matching-fixtures'"
+                    )
+                    cur.execute(
+                        "UPDATE jobs SET closed_at = %s "
+                        "WHERE ats = 'ashby' AND external_id = 'closed'",
+                        (datetime(2026, 8, 11, tzinfo=timezone.utc),),
+                    )
+
+            first = persistence.run_matching(
+                conn,
+                user_email=persistence.KONSTANTIN_EMAIL,
+                now=datetime(2026, 8, 12, tzinfo=timezone.utc),
+            )
+            assert first == {
+                "evaluated": 2,
+                "matched": 1,
+                "rejected": 1,
+                "skipped": 1,
+            }
+            match = conn.execute(
+                """
+                SELECT match_id, score, match_status, model_name, model_version
+                FROM job_matches jm
+                JOIN users u ON u.user_id = jm.user_id
+                JOIN jobs j ON j.job_id = jm.job_id
+                WHERE u.email = %s AND j.external_id = 'match'
+                """,
+                (persistence.KONSTANTIN_EMAIL,),
+            ).fetchone()
+            assert match is not None
+            assert match[1:] == (
+                100,
+                "matched",
+                persistence.MATCH_MODEL_NAME,
+                persistence.MATCH_MODEL_VERSION,
+            )
+            match_id = match[0]
+
+            # A second run updates the same row rather than creating a duplicate.
+            second = persistence.run_matching(
+                conn,
+                user_email=persistence.KONSTANTIN_EMAIL,
+                now=datetime(2026, 8, 13, tzinfo=timezone.utc),
+            )
+            assert second == first
+            assert conn.execute(
+                """
+                SELECT COUNT(*), MIN(match_id), MAX(match_id)
+                FROM job_matches jm
+                JOIN users u ON u.user_id = jm.user_id
+                WHERE u.email = %s
+                """,
+                (persistence.KONSTANTIN_EMAIL,),
+            ).fetchone() == (1, match_id, match_id)
+
+            # If a previously matched role falls below the threshold, its score
+            # and deterministic model provenance are updated in the audit row.
+            conn.execute(
+                """
+                UPDATE jobs SET title = 'Backend Engineer'
+                WHERE ats = 'ashby' AND external_id = 'match'
+                """
+            )
+            persistence.run_matching(
+                conn,
+                user_email=persistence.KONSTANTIN_EMAIL,
+                now=datetime(2026, 8, 14, tzinfo=timezone.utc),
+            )
+            assert conn.execute(
+                """
+                SELECT score, match_status, model_name, model_version
+                FROM job_matches
+                WHERE match_id = %s
+                """,
+                (match_id,),
+            ).fetchone() == (
+                60,
+                "rejected",
+                persistence.MATCH_MODEL_NAME,
+                persistence.MATCH_MODEL_VERSION,
+            )
+
+
+def test_matching_normalizes_accents_for_relocation_locations():
+    user = {
+        "target_roles": ["Program Manager"],
+        "target_industries": ["Technology"],
+        "base_city": "Estepona",
+        "base_country": "Spain",
+        "remote_allowed": True,
+        "onsite_allowed": True,
+        "hybrid_allowed": True,
+        "willing_to_relocate": True,
+        "relocation_cities": ["Madrid", "Málaga"],
+        "relocation_countries": ["Spain", "Portugal"],
+        "preferred_regions": ["Europe"],
+        "excluded_regions": ["US-only"],
+        "min_match_score": 75,
+    }
+    job = {
+        "title": "Program Manager",
+        "department": None,
+        "team": None,
+        "company": "Technology",
+        "description_text": None,
+        "location_raw": "Malaga, Spain",
+        "is_remote": False,
+        "workplace_type": "onsite",
+        "industry": None,
+        "category": None,
+    }
+    result = persistence.evaluate_job_match(user, job)
+    assert result is not None
+    assert result["qualifies"] is True
+    assert result["score"] == 100
+
+
 if __name__ == "__main__":
     tests = [value for name, value in sorted(globals().items()) if name.startswith("test_")]
     for test in tests:

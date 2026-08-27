@@ -30,7 +30,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
+import unicodedata
 from datetime import datetime, timezone
 from html import unescape
 from pathlib import Path
@@ -298,6 +300,15 @@ KONSTANTIN_RELOCATION_CITIES = ("Madrid", "Málaga")
 KONSTANTIN_RELOCATION_COUNTRIES = ("Spain", "Portugal")
 KONSTANTIN_PREFERRED_REGIONS = ("Europe", "EU", "EEA", "EMEA")
 KONSTANTIN_EXCLUDED_REGIONS = ("US-only",)
+
+MATCH_MODEL_NAME = "deterministic-preferences"
+MATCH_MODEL_VERSION = "v1"
+MATCH_SCORE_WEIGHTS = {
+    "role": 40,
+    "industry": 25,
+    "workplace": 20,
+    "location": 15,
+}
 
 
 def _sql_literal(value: str) -> str:
@@ -727,8 +738,289 @@ def _count_existing(
     return cur.fetchone()[0]
 
 
+def _normalized_search_text(value: Any) -> str:
+    """Fold accents and punctuation for stable, human-readable preference checks."""
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(character for character in text if not unicodedata.combining(character))
+    text = re.sub(r"[^a-z0-9]+", " ", text.casefold())
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _preference_values(value: Any) -> list[str]:
+    if not value:
+        return []
+    if isinstance(value, (list, tuple)):
+        values = value
+    else:
+        values = [value]
+    return [
+        normalized
+        for item in values
+        if (normalized := _normalized_search_text(item))
+    ]
+
+
+def _contains_preference(text: Any, preferences: Any) -> bool:
+    normalized_text = _normalized_search_text(text)
+    return bool(normalized_text) and any(
+        preference in normalized_text
+        for preference in _preference_values(preferences)
+    )
+
+
+def _workplace_kind(job: dict[str, Any]) -> str:
+    workplace = _normalized_search_text(job.get("workplace_type"))
+    location = _normalized_search_text(job.get("location_raw"))
+    if job.get("is_remote") or "remote" in workplace or "remote" in location:
+        return "remote"
+    if "hybrid" in workplace or "hybrid" in location:
+        return "hybrid"
+    return "onsite"
+
+
+def _region_excluded(job: dict[str, Any], user: dict[str, Any]) -> bool:
+    return _contains_preference(job.get("location_raw"), user.get("excluded_regions"))
+
+
+def _location_matches(job: dict[str, Any], user: dict[str, Any]) -> bool:
+    """Match locations textually; numeric distance requires verified coordinates."""
+    location = _normalized_search_text(job.get("location_raw"))
+    kind = _workplace_kind(job)
+    if kind == "remote":
+        # A remote posting with no geographic qualifier is usable when remote is
+        # allowed. If a preferred region is supplied, a qualifier must identify it.
+        preferred_regions = _preference_values(user.get("preferred_regions"))
+        return not preferred_regions or any(
+            region in location for region in preferred_regions
+        ) or location in {"remote", "work from home", "anywhere"}
+
+    candidates: list[str] = []
+    base_city = _normalized_search_text(user.get("base_city"))
+    base_country = _normalized_search_text(user.get("base_country"))
+    if base_city:
+        candidates.append(base_city)
+    if base_country:
+        candidates.append(base_country)
+    if user.get("willing_to_relocate"):
+        candidates.extend(_preference_values(user.get("relocation_cities")))
+        candidates.extend(_preference_values(user.get("relocation_countries")))
+    preferred_regions = _preference_values(user.get("preferred_regions"))
+    candidates.extend(preferred_regions)
+    return bool(location) and any(candidate in location for candidate in candidates)
+
+
+def _workplace_matches(job: dict[str, Any], user: dict[str, Any]) -> bool:
+    kind = _workplace_kind(job)
+    preference_field = {
+        "remote": "remote_allowed",
+        "onsite": "onsite_allowed",
+        "hybrid": "hybrid_allowed",
+    }[kind]
+    configured = any(
+        user.get(field) is not None
+        for field in ("remote_allowed", "onsite_allowed", "hybrid_allowed")
+    )
+    return not configured or bool(user.get(preference_field))
+
+
+def evaluate_job_match(
+    user: dict[str, Any],
+    job: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Return a deterministic preference score, or None for a hard exclusion.
+
+    The score is 100 points: role 40, industry 25, workplace 20, and location
+    15. Empty preference dimensions are treated as unconstrained and receive
+    their full weight. Closed jobs and excluded regions are hard exclusions.
+    The SQL candidate query also filters closed jobs so a matching run does not
+    load them.
+    """
+    if (
+        job.get("closed_at") is not None
+        or _region_excluded(job, user)
+        or not _workplace_matches(job, user)
+    ):
+        return None
+
+    role_text = " ".join(
+        str(job.get(field) or "")
+        for field in ("title", "department", "team")
+    )
+    industry_text = " ".join(
+        str(job.get(field) or "")
+        for field in (
+            "industry",
+            "category",
+            "company",
+            "title",
+            "department",
+            "team",
+            "description_text",
+        )
+    )
+    target_roles = _preference_values(user.get("target_roles"))
+    target_industries = _preference_values(user.get("target_industries"))
+    role_match = not target_roles or _contains_preference(role_text, target_roles)
+    industry_match = not target_industries or _contains_preference(
+        industry_text, target_industries
+    )
+    location_configured = any(
+        _preference_values(user.get(field))
+        for field in (
+            "base_city",
+            "base_country",
+            "relocation_cities",
+            "relocation_countries",
+            "preferred_regions",
+        )
+    )
+    location_match = not location_configured or _location_matches(job, user)
+    score = (
+        (MATCH_SCORE_WEIGHTS["role"] if role_match else 0)
+        + (MATCH_SCORE_WEIGHTS["industry"] if industry_match else 0)
+        + MATCH_SCORE_WEIGHTS["workplace"]
+        + (MATCH_SCORE_WEIGHTS["location"] if location_match else 0)
+    )
+    threshold = user.get("min_match_score")
+    qualifies = threshold is None or score >= int(threshold)
+    return {
+        "score": score,
+        "qualifies": qualifies,
+        "role_match": role_match,
+        "industry_match": industry_match,
+        "workplace_match": True,
+        "location_match": location_match,
+    }
+
+
+def run_matching(
+    conn: psycopg.Connection,
+    *,
+    user_id: int | None = None,
+    user_email: str | None = None,
+    now: datetime | None = None,
+    model_name: str = MATCH_MODEL_NAME,
+    model_version: str = MATCH_MODEL_VERSION,
+) -> dict[str, int]:
+    """Evaluate open jobs against active profiles and upsert qualifying matches.
+
+    Existing matches that no longer qualify are retained as ``rejected`` rows
+    for auditability. Closed or excluded jobs are not evaluated or inserted;
+    any existing match for one remains unchanged.
+    """
+    if user_id is not None and user_email is not None:
+        raise ValueError("pass either user_id or user_email, not both")
+    run_at = now or datetime.now(timezone.utc)
+    user_filter = ""
+    user_params: tuple[Any, ...] = ()
+    if user_id is not None:
+        user_filter = " AND user_id = %s"
+        user_params = (user_id,)
+    elif user_email is not None:
+        user_filter = " AND email = %s"
+        user_params = (user_email,)
+
+    with conn.transaction():
+        users = conn.execute(
+            f"""
+            SELECT user_id, target_roles, target_industries, base_city,
+                   base_country, remote_allowed, onsite_allowed,
+                   hybrid_allowed, willing_to_relocate, relocation_cities,
+                   relocation_countries, preferred_regions, excluded_regions,
+                   min_match_score
+            FROM users
+            WHERE active{user_filter}
+            ORDER BY user_id
+            """,
+            user_params,
+        ).fetchall()
+        jobs = conn.execute(
+            """
+            SELECT j.job_id, j.title, j.department, j.team, j.company,
+                   j.description_text, j.location_raw, j.is_remote,
+                   j.workplace_type, c.industry, c.category
+            FROM jobs AS j
+            LEFT JOIN job_boards AS b ON b.board_id = j.board_id
+            LEFT JOIN companies AS c ON c.company_id = b.company_id
+            WHERE j.closed_at IS NULL
+            ORDER BY j.job_id
+            """
+        ).fetchall()
+
+        user_columns = (
+            "user_id", "target_roles", "target_industries", "base_city",
+            "base_country", "remote_allowed", "onsite_allowed",
+            "hybrid_allowed", "willing_to_relocate", "relocation_cities",
+            "relocation_countries", "preferred_regions", "excluded_regions",
+            "min_match_score",
+        )
+        job_columns = (
+            "job_id", "title", "department", "team", "company",
+            "description_text", "location_raw", "is_remote",
+            "workplace_type", "industry", "category",
+        )
+        stats = {"evaluated": 0, "matched": 0, "rejected": 0, "skipped": 0}
+        for user_row in users:
+            user = dict(zip(user_columns, user_row))
+            for job_row in jobs:
+                job = dict(zip(job_columns, job_row))
+                if _region_excluded(job, user) or not _workplace_matches(job, user):
+                    stats["skipped"] += 1
+                    continue
+                result = evaluate_job_match(user, job)
+                if result is None:
+                    stats["skipped"] += 1
+                    continue
+                stats["evaluated"] += 1
+                if result["qualifies"]:
+                    conn.execute(
+                        """
+                        INSERT INTO job_matches (
+                            user_id, job_id, score, match_status,
+                            model_name, model_version, updated_at
+                        ) VALUES (%s, %s, %s, 'matched', %s, %s, %s)
+                        ON CONFLICT (user_id, job_id) DO UPDATE SET
+                            score = EXCLUDED.score,
+                            match_status = EXCLUDED.match_status,
+                            model_name = EXCLUDED.model_name,
+                            model_version = EXCLUDED.model_version,
+                            updated_at = EXCLUDED.updated_at
+                        """,
+                        (
+                            user["user_id"],
+                            job["job_id"],
+                            result["score"],
+                            model_name,
+                            model_version,
+                            run_at,
+                        ),
+                    )
+                    stats["matched"] += 1
+                else:
+                    conn.execute(
+                        """
+                        UPDATE job_matches
+                        SET score = %s, match_status = 'rejected',
+                            model_name = %s, model_version = %s, updated_at = %s
+                        WHERE user_id = %s AND job_id = %s
+                        """,
+                        (
+                            result["score"],
+                            model_name,
+                            model_version,
+                            run_at,
+                            user["user_id"],
+                            job["job_id"],
+                        ),
+                    )
+                    stats["rejected"] += 1
+    return stats
+
+
 def run(args: argparse.Namespace) -> int:
-    specs = _board_specs(args)
+    match_requested = getattr(args, "match", False)
+    matching_only = match_requested and not args.board and not args.boards_from
+    specs = [] if matching_only else _board_specs(args)
     published_after = _timestamp(args.published_after) if args.published_after else None
     if args.published_after and published_after is None:
         raise SystemExit(
@@ -792,11 +1084,28 @@ def run(args: argparse.Namespace) -> int:
                     file=sys.stderr,
                 )
 
-    print(
-        f"\nPostgreSQL import complete: {total_jobs} current jobs, "
-        f"{total_new} new, {total_updated} updated, {total_closed} closed, "
-        f"{failed} failed boards"
-    )
+        if match_requested:
+            match_stats = run_matching(conn)
+            print(
+                "\nMatching complete: "
+                f"{match_stats['evaluated']} evaluated, "
+                f"{match_stats['matched']} matched, "
+                f"{match_stats['rejected']} below threshold, "
+                f"{match_stats['skipped']} excluded"
+            )
+
+    if specs:
+        print(
+            f"\nPostgreSQL import complete: {total_jobs} current jobs, "
+            f"{total_new} new, {total_updated} updated, {total_closed} closed, "
+            f"{failed} failed boards"
+        )
+    elif not match_requested:
+        print(
+            f"\nPostgreSQL import complete: {total_jobs} current jobs, "
+            f"{total_new} new, {total_updated} updated, {total_closed} closed, "
+            f"{failed} failed boards"
+        )
     return 1 if failed else 0
 
 
@@ -836,6 +1145,14 @@ def main() -> None:
         help=(
             "request Greenhouse content=true and persist full plain-text "
             "descriptions; use with a scoped board list because responses are larger"
+        ),
+    )
+    parser.add_argument(
+        "--match",
+        action="store_true",
+        help=(
+            "run deterministic preference matching after import; when used "
+            "alone, do not fetch any boards"
         ),
     )
     args = parser.parse_args()
