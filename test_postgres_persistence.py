@@ -859,14 +859,14 @@ def test_profile_json_produces_granular_score_components():
     }
     result = persistence.evaluate_job_match(user, job)
     assert result is not None
-    assert result["score"] == 76
+    assert result["score"] == 71
     assert result["score_parts"] == {
-        "role": 20,
+        "role": 15,
         "industry": 25,
         "capabilities": 20,
         "seniority": 11,
     }
-    assert 0 < result["score"] < 100
+    assert result["qualifies"] is False
 
 
 def test_profile_generation_failure_preserves_existing_profile():

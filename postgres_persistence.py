@@ -343,6 +343,14 @@ _PROFILE_RECENCY_WEIGHTS = {
     "older": 0.75,
     "unknown": 0.85,
 }
+_MATCH_WORD_ALIASES = {
+    "management": "manager",
+    "managerial": "manager",
+    "leadership": "leader",
+    "engineering": "engineer",
+    "operations": "operation",
+    "operational": "operation",
+}
 _SENIORITY_RANKS = (
     ("chief executive officer", 7),
     ("chief operating officer", 7),
@@ -822,8 +830,8 @@ def _contains_preference(text: Any, preferences: Any) -> bool:
 
 def _text_similarity(value: Any, text: Any) -> float:
     """Return a conservative deterministic phrase/token similarity in [0, 1]."""
-    normalized_value = _normalized_search_text(value)
-    normalized_text = _normalized_search_text(text)
+    normalized_value = _normalized_match_text(value)
+    normalized_text = _normalized_match_text(text)
     if not normalized_value or not normalized_text:
         return 0.0
     padded_text = f" {normalized_text} "
@@ -834,6 +842,14 @@ def _text_similarity(value: Any, text: Any) -> float:
     if not value_tokens:
         return 0.0
     return len(value_tokens & text_tokens) / len(value_tokens)
+
+
+def _normalized_match_text(value: Any) -> str:
+    normalized = _normalized_search_text(value)
+    return " ".join(
+        _MATCH_WORD_ALIASES.get(token, token)
+        for token in normalized.split()
+    )
 
 
 def _best_text_similarity(values: Any, text: Any) -> float:
@@ -904,18 +920,41 @@ def _weighted_profile_similarity(
     )
 
 
+def _experience_years_weight(item: dict[str, Any]) -> float:
+    years = item.get("years")
+    if isinstance(years, (int, float)) and not isinstance(years, bool):
+        return min(1.0, 0.4 + (max(0.0, float(years)) * 0.06))
+    return 0.75
+
+
+def _profile_role_similarity(
+    user: dict[str, Any],
+    role_text: str,
+) -> float:
+    scores = []
+    for item in _profile_items(user, "experience_areas"):
+        similarity = _text_similarity(item.get("area"), role_text)
+        if similarity:
+            scores.append(
+                similarity
+                * _profile_item_weight(item)
+                * _experience_years_weight(item)
+            )
+    return max(scores, default=0.0)
+
+
 def _role_fit(user: dict[str, Any], job: dict[str, Any], role_text: str) -> float:
     target_values = _preference_values(user.get("target_roles"))
     target_score = _best_text_similarity(target_values, role_text)
     profile_items = _profile_items(user, "experience_areas")
-    profile_score = _weighted_profile_similarity(
-        profile_items,
-        "area",
-        role_text,
-    )
+    profile_score = _profile_role_similarity(user, role_text)
     if not target_values and not profile_items:
         return 1.0
-    return max(target_score, profile_score)
+    if target_values and profile_items:
+        # Explicit target roles establish intent, while demonstrated functional
+        # depth breaks ties between equally preferred role titles.
+        return (target_score * 0.4) + (profile_score * 0.6)
+    return target_score or profile_score
 
 
 def _industry_fit(
@@ -1020,10 +1059,25 @@ def _seniority_fit(user: dict[str, Any], role_text: str) -> float:
     profile = user.get("profile_json")
     if not isinstance(profile, dict):
         return 1.0
-    seniority = profile.get("seniority")
-    profile_rank = _seniority_rank(
-        seniority.get("level") if isinstance(seniority, dict) else None
+    experience_items = _profile_items(user, "experience_areas")
+    best_experience = max(
+        experience_items,
+        key=lambda item: (
+            _text_similarity(item.get("area"), role_text),
+            _profile_role_similarity(
+                {"profile_json": {"experience_areas": [item]}},
+                role_text,
+            ),
+        ),
+        default=None,
     )
+    if best_experience and _text_similarity(best_experience.get("area"), role_text):
+        profile_rank = _seniority_rank(best_experience.get("seniority"))
+    else:
+        seniority = profile.get("seniority")
+        profile_rank = _seniority_rank(
+            seniority.get("level") if isinstance(seniority, dict) else None
+        )
     if profile_rank is None:
         return 1.0
     job_rank = _seniority_rank(role_text)
