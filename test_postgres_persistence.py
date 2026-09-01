@@ -713,6 +713,160 @@ def test_matching_normalizes_accents_for_relocation_locations():
     assert result is not None
     assert result["qualifies"] is True
     assert result["score"] == 100
+    assert persistence.evaluate_job_match(
+        user,
+        job | {"location_raw": "Berlin, Germany"},
+    ) is None
+
+
+def test_location_filter_rejects_stale_match_rows():
+    with _temporary_postgres() as dsn:
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    board_id = persistence._ensure_board(
+                        cur,
+                        "ashby",
+                        "stale-location-fixtures",
+                        datetime(2026, 8, 10, tzinfo=timezone.utc),
+                    )
+                    row = _row(
+                        "stale-location",
+                        title="Program Manager",
+                        description="Technology delivery",
+                    ) | {
+                        "location_raw": "Berlin, Germany",
+                        "is_remote": False,
+                        "workplace_type": "onsite",
+                    }
+                    persistence._upsert_board_jobs(
+                        cur,
+                        board_id,
+                        "stale-location-fixtures",
+                        [row],
+                        datetime(2026, 8, 10, tzinfo=timezone.utc),
+                    )
+                    cur.execute(
+                        "UPDATE companies SET industry = 'Technology' "
+                        "WHERE display_name = 'stale-location-fixtures'"
+                    )
+                    user_id = cur.execute(
+                        "SELECT user_id FROM users WHERE email = %s",
+                        (persistence.KONSTANTIN_EMAIL,),
+                    ).fetchone()[0]
+                    job_id = cur.execute(
+                        "SELECT job_id FROM jobs WHERE external_id = %s",
+                        ("stale-location",),
+                    ).fetchone()[0]
+                    cur.execute(
+                        """
+                        INSERT INTO job_matches (
+                            user_id, job_id, score, match_status,
+                            model_name, model_version
+                        ) VALUES (%s, %s, 85, 'matched', 'old-model', 'v1')
+                        """,
+                        (user_id, job_id),
+                    )
+
+            stats = persistence.run_matching(
+                conn,
+                user_email=persistence.KONSTANTIN_EMAIL,
+                now=datetime(2026, 8, 12, tzinfo=timezone.utc),
+            )
+            assert stats["evaluated"] == 0
+            assert stats["skipped"] == 1
+            assert conn.execute(
+                """
+                SELECT score, match_status, model_name, model_version
+                FROM job_matches
+                WHERE user_id = %s AND job_id = %s
+                """,
+                (user_id, job_id),
+            ).fetchone() == (
+                None,
+                "rejected",
+                persistence.MATCH_MODEL_NAME,
+                persistence.MATCH_MODEL_VERSION,
+            )
+
+
+def test_profile_json_produces_granular_score_components():
+    user = {
+        "target_roles": [],
+        "target_industries": [],
+        "base_city": "Estepona",
+        "base_country": "Spain",
+        "remote_allowed": True,
+        "onsite_allowed": True,
+        "hybrid_allowed": True,
+        "willing_to_relocate": True,
+        "relocation_cities": ["Madrid"],
+        "relocation_countries": ["Spain"],
+        "preferred_regions": ["Europe"],
+        "excluded_regions": [],
+        "min_match_score": 75,
+        "profile_json": {
+            "schema_version": "v1",
+            "professional_summary": "Senior data professional.",
+            "seniority": {"level": "senior", "evidence": "Led analytics work."},
+            "experience_areas": [
+                {
+                    "area": "Data Engineering",
+                    "strength": "strong",
+                    "years": 6,
+                    "recency": "current",
+                    "seniority": "senior",
+                    "evidence": "Built data systems.",
+                }
+            ],
+            "industries": [
+                {
+                    "industry": "Healthcare",
+                    "strength": "strong",
+                    "years": 6,
+                    "recency": "current",
+                    "depth": "deep",
+                    "evidence": "Worked in healthcare analytics.",
+                }
+            ],
+            "skills": [
+                {
+                    "skill": "SQL",
+                    "category": "technical",
+                    "strength": "strong",
+                    "evidence": "Used SQL daily.",
+                }
+            ],
+            "technologies_tools_methodologies": [],
+            "leadership_and_responsibility": [],
+            "strengths": [],
+            "gaps_or_limited_evidence": [],
+            "transferable_capabilities": [],
+        },
+    }
+    job = {
+        "title": "Data Analyst",
+        "department": None,
+        "team": None,
+        "company": "healthcare-co",
+        "description_text": "Healthcare reporting and SQL analysis.",
+        "location_raw": "Madrid, Spain",
+        "is_remote": False,
+        "workplace_type": "onsite",
+        "industry": "Healthcare",
+        "category": None,
+    }
+    result = persistence.evaluate_job_match(user, job)
+    assert result is not None
+    assert result["score"] == 76
+    assert result["score_parts"] == {
+        "role": 20,
+        "industry": 25,
+        "capabilities": 20,
+        "seniority": 11,
+    }
+    assert 0 < result["score"] < 100
 
 
 def test_profile_generation_failure_preserves_existing_profile():

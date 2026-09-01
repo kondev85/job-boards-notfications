@@ -315,13 +315,54 @@ KONSTANTIN_PREFERRED_REGIONS = ("Europe", "EU", "EEA", "EMEA")
 KONSTANTIN_EXCLUDED_REGIONS = ("US-only",)
 
 MATCH_MODEL_NAME = "deterministic-preferences"
-MATCH_MODEL_VERSION = "v1"
+MATCH_MODEL_VERSION = "v2-profile-aware"
 MATCH_SCORE_WEIGHTS = {
     "role": 40,
     "industry": 25,
-    "workplace": 20,
-    "location": 15,
+    "capabilities": 20,
+    "seniority": 15,
 }
+
+_PROFILE_STRENGTH_WEIGHTS = {
+    "strong": 1.0,
+    "moderate": 0.8,
+    "limited": 0.55,
+    "incidental": 0.3,
+    "exposure": 0.45,
+    "evidence_only": 0.65,
+}
+_PROFILE_PROFICIENCY_WEIGHTS = {
+    "strong": 1.0,
+    "working_knowledge": 0.8,
+    "exposure": 0.45,
+    "training_only": 0.25,
+}
+_PROFILE_RECENCY_WEIGHTS = {
+    "current": 1.0,
+    "recent": 0.95,
+    "older": 0.75,
+    "unknown": 0.85,
+}
+_SENIORITY_RANKS = (
+    ("chief executive officer", 7),
+    ("chief operating officer", 7),
+    ("chief product officer", 7),
+    ("chief technology officer", 7),
+    ("vice president", 6),
+    ("vp", 6),
+    ("director", 6),
+    ("head", 6),
+    ("principal", 5),
+    ("staff", 5),
+    ("lead", 5),
+    ("senior", 4),
+    ("manager", 4),
+    ("mid", 3),
+    ("associate", 2),
+    ("junior", 1),
+    ("entry", 1),
+    ("intern", 0),
+)
 
 
 def _sql_literal(value: str) -> str:
@@ -779,6 +820,233 @@ def _contains_preference(text: Any, preferences: Any) -> bool:
     )
 
 
+def _text_similarity(value: Any, text: Any) -> float:
+    """Return a conservative deterministic phrase/token similarity in [0, 1]."""
+    normalized_value = _normalized_search_text(value)
+    normalized_text = _normalized_search_text(text)
+    if not normalized_value or not normalized_text:
+        return 0.0
+    padded_text = f" {normalized_text} "
+    if f" {normalized_value} " in padded_text:
+        return 1.0
+    value_tokens = set(normalized_value.split())
+    text_tokens = set(normalized_text.split())
+    if not value_tokens:
+        return 0.0
+    return len(value_tokens & text_tokens) / len(value_tokens)
+
+
+def _best_text_similarity(values: Any, text: Any) -> float:
+    return max(
+        (_text_similarity(value, text) for value in _preference_values(values)),
+        default=0.0,
+    )
+
+
+def _profile_items(user: dict[str, Any], key: str) -> list[dict[str, Any]]:
+    profile = user.get("profile_json")
+    if not isinstance(profile, dict):
+        return []
+    values = profile.get(key)
+    if not isinstance(values, list):
+        return []
+    return [value for value in values if isinstance(value, dict)]
+
+
+def _profile_item_weight(item: dict[str, Any], field: str = "strength") -> float:
+    weight = _PROFILE_STRENGTH_WEIGHTS.get(str(item.get(field) or "").casefold(), 0.5)
+    recency = _PROFILE_RECENCY_WEIGHTS.get(
+        str(item.get("recency") or "unknown").casefold(),
+        1.0,
+    )
+    return weight * recency
+
+
+def _weighted_profile_similarity(
+    items: list[dict[str, Any]],
+    value_key: str,
+    text: Any,
+    *,
+    weight_field: str = "strength",
+) -> float:
+    scores = []
+    for item in items:
+        value = item.get(value_key)
+        similarity = _text_similarity(value, text)
+        if similarity:
+            scores.append(
+                (
+                    similarity
+                    * (
+                        _PROFILE_PROFICIENCY_WEIGHTS.get(
+                            str(item.get(weight_field) or "").casefold(),
+                            _profile_item_weight(item, weight_field),
+                        )
+                        if weight_field == "proficiency"
+                        else _profile_item_weight(item, weight_field)
+                    ),
+                    _PROFILE_PROFICIENCY_WEIGHTS.get(
+                        str(item.get(weight_field) or "").casefold(),
+                        0.5,
+                    )
+                    if weight_field == "proficiency"
+                    else _PROFILE_STRENGTH_WEIGHTS.get(
+                        str(item.get(weight_field) or "").casefold(),
+                        0.5,
+                    ),
+                )
+            )
+    if not scores:
+        return 0.0
+    top_scores = sorted(scores, reverse=True)[:3]
+    return sum(score for score, _ in top_scores) / sum(
+        weight for _, weight in top_scores
+    )
+
+
+def _role_fit(user: dict[str, Any], job: dict[str, Any], role_text: str) -> float:
+    target_values = _preference_values(user.get("target_roles"))
+    target_score = _best_text_similarity(target_values, role_text)
+    profile_items = _profile_items(user, "experience_areas")
+    profile_score = _weighted_profile_similarity(
+        profile_items,
+        "area",
+        role_text,
+    )
+    if not target_values and not profile_items:
+        return 1.0
+    return max(target_score, profile_score)
+
+
+def _industry_fit(
+    user: dict[str, Any],
+    job: dict[str, Any],
+    metadata_text: str,
+    full_text: str,
+) -> float:
+    target_values = user.get("target_industries")
+    target_metadata = _best_text_similarity(target_values, metadata_text)
+    target_text = _best_text_similarity(target_values, full_text)
+    profile_metadata = _weighted_profile_similarity(
+        _profile_items(user, "industries"),
+        "industry",
+        metadata_text,
+    )
+    profile_text = _weighted_profile_similarity(
+        _profile_items(user, "industries"),
+        "industry",
+        full_text,
+    )
+    has_industry_evidence = bool(
+        _preference_values(target_values)
+        or _profile_items(user, "industries")
+    )
+    if not has_industry_evidence:
+        return 1.0
+    # Explicit company metadata is strongest. Text-only matches are useful but
+    # discounted because a job description can mention an industry incidentally.
+    return max(
+        target_metadata,
+        profile_metadata,
+        target_text * 0.8,
+        profile_text * 0.8,
+    )
+
+
+def _capability_fit(user: dict[str, Any], capability_text: str) -> float:
+    profile = user.get("profile_json")
+    if not isinstance(profile, dict):
+        return 1.0
+    signals: list[tuple[str, float]] = []
+    for item in _profile_items(user, "skills"):
+        value = item.get("skill")
+        if value:
+            signals.append(
+                (
+                    str(value),
+                    _PROFILE_STRENGTH_WEIGHTS.get(
+                        str(item.get("strength") or "").casefold(),
+                        0.5,
+                    ),
+                )
+            )
+    for item in _profile_items(user, "technologies_tools_methodologies"):
+        value = item.get("name")
+        if value:
+            signals.append(
+                (
+                    str(value),
+                    _PROFILE_PROFICIENCY_WEIGHTS.get(
+                        str(item.get("proficiency") or "").casefold(),
+                        0.5,
+                    ),
+                )
+            )
+    for item in _profile_items(user, "transferable_capabilities"):
+        value = item.get("capability")
+        if value:
+            signals.append((str(value), 0.7))
+    if not signals:
+        return 1.0
+    matches = [
+        (_text_similarity(value, capability_text), weight)
+        for value, weight in signals
+        if _text_similarity(value, capability_text)
+    ]
+    if not matches:
+        return 0.0
+    top_matches = sorted(
+        matches,
+        key=lambda pair: pair[0] * pair[1],
+        reverse=True,
+    )[:3]
+    return sum(score * weight for score, weight in top_matches) / sum(
+        weight for _, weight in top_matches
+    )
+
+
+def _seniority_rank(value: Any) -> int | None:
+    normalized = _normalized_search_text(value)
+    if not normalized:
+        return None
+    padded = f" {normalized} "
+    for term, rank in _SENIORITY_RANKS:
+        if f" {term} " in padded:
+            return rank
+    return None
+
+
+def _seniority_fit(user: dict[str, Any], role_text: str) -> float:
+    profile = user.get("profile_json")
+    if not isinstance(profile, dict):
+        return 1.0
+    seniority = profile.get("seniority")
+    profile_rank = _seniority_rank(
+        seniority.get("level") if isinstance(seniority, dict) else None
+    )
+    if profile_rank is None:
+        return 1.0
+    job_rank = _seniority_rank(role_text)
+    if job_rank is None:
+        level_fit = 0.65
+    else:
+        distance = abs(profile_rank - job_rank)
+        level_fit = {0: 1.0, 1: 0.8, 2: 0.55}.get(distance, 0.3)
+
+    leadership_items = _profile_items(user, "leadership_and_responsibility")
+    has_profile_leadership = bool(leadership_items)
+    has_job_leadership = any(
+        term in f" {_normalized_search_text(role_text)} "
+        for term in ("manager", "lead", "director", "head", "supervisor")
+    )
+    leadership_fit = (
+        1.0
+        if has_profile_leadership == has_job_leadership
+        else 0.6
+    )
+    return (level_fit * 0.75) + (leadership_fit * 0.25)
+
+
 def _workplace_kind(job: dict[str, Any]) -> str:
     workplace = _normalized_search_text(job.get("workplace_type"))
     location = _normalized_search_text(job.get("location_raw"))
@@ -791,6 +1059,19 @@ def _workplace_kind(job: dict[str, Any]) -> str:
 
 def _region_excluded(job: dict[str, Any], user: dict[str, Any]) -> bool:
     return _contains_preference(job.get("location_raw"), user.get("excluded_regions"))
+
+
+def _location_is_configured(user: dict[str, Any]) -> bool:
+    return any(
+        _preference_values(user.get(field))
+        for field in (
+            "base_city",
+            "base_country",
+            "relocation_cities",
+            "relocation_countries",
+            "preferred_regions",
+        )
+    )
 
 
 def _location_matches(job: dict[str, Any], user: dict[str, Any]) -> bool:
@@ -840,17 +1121,16 @@ def evaluate_job_match(
 ) -> dict[str, Any] | None:
     """Return a deterministic preference score, or None for a hard exclusion.
 
-    The score is 100 points: role 40, industry 25, workplace 20, and location
-    15. Empty preference dimensions are treated as unconstrained and receive
-    their full weight. Closed jobs and excluded regions are hard exclusions.
+    The score is 100 points: role 40, industry 25, profile capabilities 20, and
+    seniority 15. Workplace and location are hard filters, not score components.
+    Empty preference dimensions are treated as unconstrained and receive their
+    full weight. Closed jobs and excluded regions are hard exclusions.
     The SQL candidate query also filters closed jobs so a matching run does not
     load them.
     """
-    if (
-        job.get("closed_at") is not None
-        or _region_excluded(job, user)
-        or not _workplace_matches(job, user)
-    ):
+    if job.get("closed_at") is not None or _region_excluded(job, user):
+        return None
+    if not _workplace_matches(job, user):
         return None
 
     role_text = " ".join(
@@ -869,38 +1149,59 @@ def evaluate_job_match(
             "description_text",
         )
     )
-    target_roles = _preference_values(user.get("target_roles"))
-    target_industries = _preference_values(user.get("target_industries"))
-    role_match = not target_roles or _contains_preference(role_text, target_roles)
-    industry_match = not target_industries or _contains_preference(
-        industry_text, target_industries
+    metadata_text = " ".join(
+        str(job.get(field) or "")
+        for field in ("industry", "category")
     )
-    location_configured = any(
-        _preference_values(user.get(field))
-        for field in (
-            "base_city",
-            "base_country",
-            "relocation_cities",
-            "relocation_countries",
-            "preferred_regions",
-        )
-    )
+    location_configured = _location_is_configured(user)
     location_match = not location_configured or _location_matches(job, user)
-    score = (
-        (MATCH_SCORE_WEIGHTS["role"] if role_match else 0)
-        + (MATCH_SCORE_WEIGHTS["industry"] if industry_match else 0)
-        + MATCH_SCORE_WEIGHTS["workplace"]
-        + (MATCH_SCORE_WEIGHTS["location"] if location_match else 0)
-    )
+    if not location_match:
+        return None
+
+    role_fit = _role_fit(user, job, role_text)
+    industry_fit = _industry_fit(user, job, metadata_text, industry_text)
+    profile = user.get("profile_json")
+    if isinstance(profile, dict):
+        capability_fit = _capability_fit(user, industry_text + " " + role_text)
+        seniority_fit = _seniority_fit(user, role_text)
+    else:
+        # Preserve the old preference-only behavior for users whose profile has
+        # not been generated yet: role and industry remain binary, while the
+        # unavailable profile dimensions are neutral.
+        target_roles = _preference_values(user.get("target_roles"))
+        target_industries = _preference_values(user.get("target_industries"))
+        role_fit = (
+            1.0
+            if not target_roles
+            else float(_contains_preference(role_text, target_roles))
+        )
+        industry_fit = (
+            1.0
+            if not target_industries
+            else float(_contains_preference(industry_text, target_industries))
+        )
+        capability_fit = 1.0
+        seniority_fit = 1.0
+
+    score_parts = {
+        "role": round(MATCH_SCORE_WEIGHTS["role"] * role_fit),
+        "industry": round(MATCH_SCORE_WEIGHTS["industry"] * industry_fit),
+        "capabilities": round(
+            MATCH_SCORE_WEIGHTS["capabilities"] * capability_fit
+        ),
+        "seniority": round(MATCH_SCORE_WEIGHTS["seniority"] * seniority_fit),
+    }
+    score = sum(score_parts.values())
     threshold = user.get("min_match_score")
     qualifies = threshold is None or score >= int(threshold)
     return {
         "score": score,
         "qualifies": qualifies,
-        "role_match": role_match,
-        "industry_match": industry_match,
+        "score_parts": score_parts,
+        "role_match": role_fit > 0,
+        "industry_match": industry_fit > 0,
         "workplace_match": True,
-        "location_match": location_match,
+        "location_match": True,
     }
 
 
@@ -967,8 +1268,9 @@ def run_matching(
     """Evaluate open jobs against active profiles and upsert qualifying matches.
 
     Existing matches that no longer qualify are retained as ``rejected`` rows
-    for auditability. Closed or excluded jobs are not evaluated or inserted;
-    any existing match for one remains unchanged.
+    for auditability. A previously matched job that now fails the hard location
+    filter is also marked rejected with a NULL score. Closed or excluded jobs
+    are not evaluated or inserted; any existing match for one remains unchanged.
     """
     if user_id is not None and user_email is not None:
         raise ValueError("pass either user_id or user_email, not both")
@@ -989,7 +1291,7 @@ def run_matching(
                    base_country, remote_allowed, onsite_allowed,
                    hybrid_allowed, willing_to_relocate, relocation_cities,
                    relocation_countries, preferred_regions, excluded_regions,
-                   min_match_score
+                   min_match_score, profile_json
             FROM users
             WHERE active{user_filter}
             ORDER BY user_id
@@ -1014,7 +1316,7 @@ def run_matching(
             "base_country", "remote_allowed", "onsite_allowed",
             "hybrid_allowed", "willing_to_relocate", "relocation_cities",
             "relocation_countries", "preferred_regions", "excluded_regions",
-            "min_match_score",
+            "min_match_score", "profile_json",
         )
         job_columns = (
             "job_id", "title", "department", "team", "company",
@@ -1027,6 +1329,24 @@ def run_matching(
             for job_row in jobs:
                 job = dict(zip(job_columns, job_row))
                 if _region_excluded(job, user) or not _workplace_matches(job, user):
+                    stats["skipped"] += 1
+                    continue
+                if _location_is_configured(user) and not _location_matches(job, user):
+                    conn.execute(
+                        """
+                        UPDATE job_matches
+                        SET score = NULL, match_status = 'rejected',
+                            model_name = %s, model_version = %s, updated_at = %s
+                        WHERE user_id = %s AND job_id = %s
+                        """,
+                        (
+                            model_name,
+                            model_version,
+                            run_at,
+                            user["user_id"],
+                            job["job_id"],
+                        ),
+                    )
                     stats["skipped"] += 1
                     continue
                 result = evaluate_job_match(user, job)

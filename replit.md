@@ -100,25 +100,33 @@ uv run postgres_persistence.py --match
 ```
 
 The matcher considers active users and jobs whose `closed_at` is NULL. It first
-rejects jobs whose text location contains an excluded region or whose workplace
-type is not allowed. Remaining jobs receive a deterministic 100-point score:
-role fit is 40 points, industry fit 25, workplace fit 20, and textual location
-fit 15. Empty preference dimensions are unconstrained and receive their full
-weight. Role matches search the title, department, and team; industry matches
-search company industry/category plus job text. Remote, onsite, and hybrid
-preferences are honored. City, country, and region preferences use the stored
-location text; numeric distance limits are not calculated because the schema
-does not contain verified job coordinates.
+rejects jobs whose text location contains an excluded region, whose workplace
+type is not allowed, or whose location is incompatible with the user's configured
+city/country/region rules. Location is a hard filter and contributes no points,
+so a location-incompatible job cannot enter the ranking. Generic `Remote`,
+`Anywhere`, and `Work from home` postings remain eligible when remote work is
+allowed. Numeric distance limits are not calculated because the schema does not
+contain verified job coordinates.
+
+Remaining jobs receive a deterministic 100-point score: role fit is 40 points,
+industry fit 25, profile capabilities/tools/transferable evidence 20, and
+seniority/leadership alignment 15. When `profile_json` exists, role and industry
+fit combine explicit user preferences with the profile's evidence, while
+capability and seniority components use only structured profile data. Users
+without `profile_json` retain the legacy preference-only score behavior. Industry
+fit uses explicit company metadata first and conservative title/description text
+as a fallback.
 
 Only jobs at or above `min_match_score` create or update a `matched` row. A
 below-threshold job does not create a new row; if it already has a match, that
 row is updated to `rejected` with the latest score and matcher metadata.
 Closed or excluded jobs are skipped and do not create or alter match rows.
 Matching writes `model_name = 'deterministic-preferences'` and
-`model_version = 'v1'` because those values identify this scoring workflow.
-Rerunning the command updates the same `(user_id, job_id)` row and does not
-create duplicates. This workflow does not call an AI model, send notifications,
-or schedule notification delivery.
+`model_version = 'v2-profile-aware'` because those values identify this scoring
+workflow. Rerunning the command updates the same `(user_id, job_id)` row and does
+not create duplicates. The matched-role CSV and JSON reports order roles by score
+descending and include a recalculated per-report rank. This workflow does not call
+an AI model, send notifications, or schedule notification delivery.
 
 ### AI profile extraction
 

@@ -28,6 +28,7 @@ JSON_PATH = REPORTS_DIR / "matched_roles.json"
 DEFAULT_EMAIL = "infobettor@gmail.com"
 
 FIELDS = (
+    "rank",
     "match_id",
     "score",
     "match_status",
@@ -67,6 +68,14 @@ def _export() -> int:
 
     query = """
         SELECT
+            ROW_NUMBER() OVER (
+                ORDER BY
+                    jm.score DESC,
+                    j.published_at DESC NULLS LAST,
+                    j.company,
+                    j.title,
+                    j.job_id
+            ) AS rank,
             jm.match_id,
             jm.score,
             jm.match_status,
