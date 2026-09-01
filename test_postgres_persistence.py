@@ -715,6 +715,53 @@ def test_matching_normalizes_accents_for_relocation_locations():
     assert result["score"] == 100
 
 
+def test_profile_generation_failure_preserves_existing_profile():
+    with _temporary_postgres() as dsn:
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            original = conn.execute(
+                """
+                SELECT profile_text, cv_text, profile_json,
+                       profile_generated_at, profile_model,
+                       profile_version, profile_source_hash
+                FROM users
+                WHERE email = %s
+                """,
+                (persistence.KONSTANTIN_EMAIL,),
+            ).fetchone()
+
+            original_generator = persistence.gemini_service.generate_user_profile
+
+            def fail_generation(*args, **kwargs):
+                raise persistence.gemini_service.GeminiAPIError("test failure")
+
+            persistence.gemini_service.generate_user_profile = fail_generation
+            try:
+                try:
+                    persistence.generate_profile_for_user(
+                        conn,
+                        user_email=persistence.KONSTANTIN_EMAIL,
+                    )
+                except persistence.gemini_service.GeminiAPIError:
+                    pass
+                else:
+                    raise AssertionError("profile generation should have failed")
+            finally:
+                persistence.gemini_service.generate_user_profile = original_generator
+
+            current = conn.execute(
+                """
+                SELECT profile_text, cv_text, profile_json,
+                       profile_generated_at, profile_model,
+                       profile_version, profile_source_hash
+                FROM users
+                WHERE email = %s
+                """,
+                (persistence.KONSTANTIN_EMAIL,),
+            ).fetchone()
+            assert current == original
+
+
 if __name__ == "__main__":
     tests = [value for name, value in sorted(globals().items()) if name.startswith("test_")]
     for test in tests:

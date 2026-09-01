@@ -39,7 +39,9 @@ from pathlib import Path
 from typing import Any
 
 import psycopg
+from psycopg.types.json import Jsonb
 
+import gemini_service
 import job_boards
 
 
@@ -200,6 +202,11 @@ CREATE TABLE IF NOT EXISTS users (
     is_default              BOOLEAN NOT NULL DEFAULT FALSE,
     profile_text            TEXT,
     cv_text                 TEXT,
+    profile_json            JSONB,
+    profile_generated_at    TIMESTAMPTZ,
+    profile_model           TEXT,
+    profile_version         TEXT,
+    profile_source_hash     TEXT,
     target_roles            TEXT[],
     target_industries       TEXT[],
     base_city               TEXT,
@@ -220,6 +227,12 @@ CREATE TABLE IF NOT EXISTS users (
     created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_json JSONB;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_generated_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_model TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_version TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_source_hash TEXT;
 
 CREATE TABLE IF NOT EXISTS job_matches (
     match_id       BIGSERIAL PRIMARY KEY,
@@ -356,8 +369,6 @@ ON CONFLICT (email) DO UPDATE SET
     name = EXCLUDED.name,
     active = EXCLUDED.active,
     is_default = EXCLUDED.is_default,
-    profile_text = EXCLUDED.profile_text,
-    cv_text = EXCLUDED.cv_text,
     target_roles = EXCLUDED.target_roles,
     target_industries = EXCLUDED.target_industries,
     base_city = EXCLUDED.base_city,
@@ -893,6 +904,57 @@ def evaluate_job_match(
     }
 
 
+def generate_profile_for_user(
+    conn: psycopg.Connection,
+    *,
+    user_email: str,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Generate and persist one profile only after Gemini returns valid data."""
+    row = conn.execute(
+        """
+        SELECT user_id, cv_text, profile_text
+        FROM users
+        WHERE email = %s
+        """,
+        (user_email,),
+    ).fetchone()
+    if row is None:
+        raise ValueError(f"No user exists with email {user_email}")
+    user_id, cv_text, existing_profile_text = row
+
+    generated = gemini_service.generate_user_profile(
+        cv_text,
+        existing_profile_text=existing_profile_text,
+    )
+    generated_at = now or datetime.now(timezone.utc)
+    with conn.transaction():
+        conn.execute(
+            """
+            UPDATE users
+            SET profile_text = %s,
+                profile_json = %s,
+                profile_generated_at = %s,
+                profile_model = %s,
+                profile_version = %s,
+                profile_source_hash = %s,
+                updated_at = %s
+            WHERE user_id = %s
+            """,
+            (
+                generated["profile_text"],
+                Jsonb(generated["profile_json"]),
+                generated_at,
+                generated["profile_model"],
+                generated["profile_version"],
+                generated["profile_source_hash"],
+                generated_at,
+                user_id,
+            ),
+        )
+    return {**generated, "profile_generated_at": generated_at}
+
+
 def run_matching(
     conn: psycopg.Connection,
     *,
@@ -1019,8 +1081,10 @@ def run_matching(
 
 def run(args: argparse.Namespace) -> int:
     match_requested = getattr(args, "match", False)
+    profile_requested = getattr(args, "generate_profile", False)
     matching_only = match_requested and not args.board and not args.boards_from
-    specs = [] if matching_only else _board_specs(args)
+    profile_only = profile_requested and not args.board and not args.boards_from
+    specs = [] if matching_only or profile_only else _board_specs(args)
     published_after = _timestamp(args.published_after) if args.published_after else None
     if args.published_after and published_after is None:
         raise SystemExit(
@@ -1041,6 +1105,22 @@ def run(args: argparse.Namespace) -> int:
 
     with psycopg.connect(dsn) as conn:
         conn.execute(SCHEMA_SQL)
+        if profile_requested:
+            try:
+                generated = generate_profile_for_user(
+                    conn,
+                    user_email=args.user_email,
+                )
+            except (ValueError, gemini_service.GeminiProfileError) as exc:
+                print(f"Profile generation failed: {exc}", file=sys.stderr)
+                return 1
+            print(
+                "Profile generation complete: "
+                f"{generated['profile_model']} {generated['profile_version']} "
+                f"for {args.user_email}"
+            )
+            return 0
+
         for index, (ats, slug) in enumerate(specs, 1):
             try:
                 rows, skipped = _fetch_normalized(
@@ -1155,9 +1235,35 @@ def main() -> None:
             "alone, do not fetch any boards"
         ),
     )
+    parser.add_argument(
+        "--generate-profile",
+        action="store_true",
+        help=(
+            "generate and save an evidence-based AI profile from a user's CV; "
+            "use with --user-email and no board/import options"
+        ),
+    )
+    parser.add_argument(
+        "--user-email",
+        help="user email for --generate-profile",
+    )
     args = parser.parse_args()
     if args.limit is not None and args.limit < 1:
         parser.error("--limit must be at least 1")
+    if args.generate_profile:
+        if not args.user_email:
+            parser.error("--generate-profile requires --user-email")
+        if (
+            args.match
+            or args.board
+            or args.boards_from
+            or args.limit is not None
+            or args.published_after
+            or args.greenhouse_content
+        ):
+            parser.error(
+                "--generate-profile cannot be combined with import or --match options"
+            )
     raise SystemExit(run(args))
 
 

@@ -82,6 +82,12 @@ import updates that profile instead of creating a duplicate. Estepona's latitude
 and longitude remain NULL because the supplied `36.xxxxxx` and `-5.xxxxxx` values
 are placeholders, not verified coordinates.
 
+`users.profile_json` stores the generic, evidence-based AI profile extracted from
+`cv_text`. `profile_text` is the concise readable summary from that profile.
+Normal imports preserve a generated or manually edited `profile_text` and `cv_text`;
+only an explicit profile-generation action updates them. The extraction layer does
+not infer job preferences or alter matching scores.
+
 `job_matches` links a user to a job with a nullable score, match status, optional
 feedback/model metadata, notification timestamp, and audit timestamps. A
 `(user_id, job_id)` unique constraint prevents duplicate matches; deleting either
@@ -113,6 +119,24 @@ Matching writes `model_name = 'deterministic-preferences'` and
 Rerunning the command updates the same `(user_id, job_id)` row and does not
 create duplicates. This workflow does not call an AI model, send notifications,
 or schedule notification delivery.
+
+### AI profile extraction
+
+Generate a profile manually for a user whose CV is already stored in
+`users.cv_text`:
+
+```bash
+uv run postgres_persistence.py \
+  --generate-profile \
+  --user-email user@example.com
+```
+
+This requires the `GEMINI_API_KEY` secret. `GEMINI_MODEL` is optional and defaults
+to `gemini-2.5-flash`. The command stores the validated `profile_json`, its concise
+`profile_text`, the model/version, generation timestamp, and a hash of the CV source.
+It does not run during ordinary job imports or matching. Failed requests and invalid
+responses leave the existing profile unchanged. The profile schema is profession- and
+industry-agnostic; explicit job preferences remain separate from CV-derived evidence.
 
 ### Safe smoke import
 
