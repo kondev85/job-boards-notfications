@@ -1,0 +1,555 @@
+We are now implementing the **AI-powered user profile extraction layer**.
+
+The purpose of this feature is to make the application completely **user-agnostic**.
+
+Do NOT design the profile around Project Management, Product Management, Technology, Gambling, or any other specific profession or industry.
+
+The system must be able to analyze ANY professional CV and discover the person's actual experience, expertise, industries, strengths, gaps, and transferable capabilities.
+
+For example, one user might be a Project Manager, another might be a DevOps Engineer, another might have Construction Management experience, another might be a Financial Analyst, and another might be a Product Manager.
+
+Gemini must discover this from the CV rather than being given a predefined list of expected skills.
+
+---
+
+## 1. Database changes
+
+We already have a `users` table and a `profile_text` column.
+
+Add a new column:
+
+`profile_json JSONB`
+
+Do not create another table for this.
+
+The two fields have different purposes:
+
+### profile_text
+
+A concise, readable professional profile generated from the CV.
+
+It should summarize the person's background, experience, expertise, industries, strengths and relevant characteristics in natural language.
+
+### profile_json
+
+The structured representation of the person's professional profile.
+
+This will later be used by the matching engine.
+
+---
+
+## 2. Gemini's job
+
+Gemini should read the user's CV and extract the person's professional profile WITHOUT assuming any particular profession.
+
+The analysis should discover:
+
+### Professional identity
+
+Identify the main professional areas represented in the CV.
+
+Examples could include:
+
+* Project Management
+* Product Management
+* Software Engineering
+* DevOps
+* Cybersecurity
+* Finance
+* Accounting
+* Sales
+* Marketing
+* Construction Management
+* Architecture
+* Legal
+* Operations
+* Data Analysis
+* HR
+* Procurement
+* Customer Success
+* Compliance
+* Engineering
+* or any other area actually supported by the CV.
+
+Do not restrict the output to these examples.
+
+### Experience areas
+
+Identify the distinct areas in which the person has meaningful professional experience.
+
+For each area, determine:
+
+* area name
+* strength of experience
+* approximate years of experience where reasonably supported
+* evidence from the CV
+* recency
+* seniority/responsibility
+* whether the experience appears core, secondary, or incidental
+
+Do not invent years or experience.
+
+### Skills and capabilities
+
+Extract the person's meaningful professional skills.
+
+Group them where useful into categories such as:
+
+* technical
+* managerial
+* operational
+* analytical
+* commercial
+* communication
+* leadership
+* domain-specific
+* tools/software
+* methodologies
+
+Do not use a fixed predefined skills list. Discover the skills from the CV.
+
+### Industry/domain experience
+
+Identify the industries and business domains in which the person has worked.
+
+Examples might include:
+
+* gambling / gaming
+* fintech
+* cryptocurrency / blockchain
+* banking
+* insurance
+* software
+* SaaS
+* telecommunications
+* construction
+* real estate
+* healthcare
+* manufacturing
+* retail
+* logistics
+* consulting
+* government
+* etc.
+
+Again, these are examples only.
+
+For each significant industry/domain, assess:
+
+* strength of experience
+* approximate duration where reasonably clear
+* recency
+* depth of exposure
+* evidence
+
+Distinguish between someone who spent years working in an industry and someone who merely worked on one project involving that industry.
+
+### Technologies, tools and methodologies
+
+Extract technologies, software, platforms, tools, frameworks, certifications and methodologies that are genuinely supported by the CV.
+
+Examples could include:
+
+* Python
+* AWS
+* Kubernetes
+* Jira
+* Salesforce
+* SQL
+* SAP
+* Agile
+* Scrum
+* PMP
+* etc.
+
+Do not assume technical proficiency simply because a technology is mentioned.
+
+Where possible, distinguish between:
+
+* strong practical experience
+* working knowledge
+* exposure
+* certification/training only
+
+### Leadership and responsibility
+
+Identify evidence of:
+
+* people management
+* team leadership
+* project/program leadership
+* budget responsibility
+* strategic responsibility
+* decision-making
+* stakeholder management
+* client management
+* vendor management
+* cross-functional leadership
+* ownership/accountability
+
+Only classify something as demonstrated when supported by the CV.
+
+### Seniority
+
+Estimate the person's professional seniority based on the actual career history.
+
+Use categories such as:
+
+* entry
+* junior
+* mid
+* senior
+* lead
+* manager
+* senior manager
+* director
+* executive
+
+If uncertain, indicate the uncertainty rather than inventing precision.
+
+### Strengths
+
+Identify the person's strongest demonstrated professional areas.
+
+These should emerge from the CV.
+
+For example, a person might have:
+
+* very strong project delivery
+* strong stakeholder management
+* moderate technical knowledge
+* limited people management
+* deep gambling industry experience
+
+Another person could have a completely different profile.
+
+### Gaps / limitations
+
+Identify areas where the CV provides weak or no evidence that might matter for employment matching.
+
+IMPORTANT:
+
+A lack of evidence is NOT proof that the person lacks the skill.
+
+Use language such as:
+
+* "No clear evidence in CV"
+* "Limited evidence"
+* "Some exposure"
+* "Strong evidence"
+
+Do not state that someone cannot do something unless the CV clearly supports that conclusion.
+
+### Transferable capabilities
+
+Identify capabilities that could reasonably transfer between industries or professional roles.
+
+For example:
+
+* complex project delivery
+* stakeholder management
+* process optimization
+* technical troubleshooting
+* financial analysis
+* team leadership
+* regulatory knowledge
+
+Explain why the capability appears transferable where useful.
+
+---
+
+## 3. Important principle
+
+The AI must distinguish between:
+
+**What the person has actually demonstrated**
+
+and
+
+**What the person might potentially be capable of doing.**
+
+The profile must be evidence-based.
+
+Do not inflate experience.
+
+Do not assume that similar job titles mean identical responsibilities.
+
+Do not treat a mention of a technology as professional expertise.
+
+Do not treat a single project as deep industry experience.
+
+Do not invent missing information.
+
+---
+
+## 4. JSON output
+
+Gemini must return valid JSON using the following general structure:
+
+{
+"professional_summary": "",
+"seniority": {
+"level": "",
+"evidence": ""
+},
+
+"experience_areas": [
+{
+"area": "",
+"strength": "strong|moderate|limited|incidental",
+"years": null,
+"recency": "current|recent|older|unknown",
+"seniority": "",
+"evidence": ""
+}
+],
+
+"industries": [
+{
+"industry": "",
+"strength": "strong|moderate|limited|incidental",
+"years": null,
+"recency": "current|recent|older|unknown",
+"depth": "deep|moderate|surface|unknown",
+"evidence": ""
+}
+],
+
+"skills": [
+{
+"skill": "",
+"category": "technical|managerial|operational|analytical|commercial|communication|leadership|domain|other",
+"strength": "strong|moderate|limited|exposure",
+"evidence": ""
+}
+],
+
+"technologies_tools_methodologies": [
+{
+"name": "",
+"type": "technology|tool|platform|methodology|certification|other",
+"proficiency": "strong|working_knowledge|exposure|training_only",
+"evidence": ""
+}
+],
+
+"leadership_and_responsibility": [
+{
+"area": "",
+"strength": "strong|moderate|limited|evidence_only",
+"evidence": ""
+}
+],
+
+"strengths": [
+{
+"area": "",
+"reason": ""
+}
+],
+
+"gaps_or_limited_evidence": [
+{
+"area": "",
+"assessment": "limited_evidence|no_clear_evidence",
+"reason": ""
+}
+],
+
+"transferable_capabilities": [
+{
+"capability": "",
+"evidence": "",
+"potential_applications": []
+}
+]
+}
+
+The JSON structure itself should remain generic and should not contain hardcoded role categories.
+
+For example, do NOT create fields such as:
+
+`project_management_score`
+
+`product_management_score`
+
+`gambling_experience_score`
+
+because these are user-specific and should emerge from the CV.
+
+---
+
+## 5. profile_text generation
+
+After extracting the JSON, generate `profile_text`.
+
+It should be a concise but information-rich natural-language summary suitable for later job matching.
+
+It should describe:
+
+* who the person is professionally
+* their strongest experience areas
+* industries/domains where they have meaningful experience
+* important technical/tools knowledge
+* leadership/responsibility
+* transferable capabilities
+* relevant limitations or weaker areas
+
+Do not write it as a CV or cover letter.
+
+It is an internal professional profile for an employment matching system.
+
+---
+
+## 6. Gemini API implementation
+
+Use:
+
+`GEMINI_API_KEY`
+
+from environment variables.
+
+Never hard-code the API key.
+
+Create a reusable Gemini service/module appropriate to the existing codebase, for example:
+
+`gemini_service.py`
+
+Implement something similar to:
+
+`generate_user_profile(cv_text, existing_profile_text=None)`
+
+The function should return:
+
+* `profile_text`
+* `profile_json`
+
+---
+
+## 7. When Gemini should run
+
+Do NOT call Gemini every time the job scraper runs.
+
+Profile generation should happen only when:
+
+1. A user explicitly requests "Generate/Update Profile", OR
+2. The user's CV has been uploaded or changed.
+
+Do not automatically regenerate profiles during normal job scraping.
+
+---
+
+## 8. Existing profile protection
+
+If Gemini fails:
+
+* do not overwrite the existing `profile_text`
+* do not overwrite the existing `profile_json`
+
+If Gemini returns invalid JSON:
+
+* attempt safe parsing/repair if appropriate
+* otherwise treat the request as failed
+* preserve the existing profile
+
+---
+
+## 9. Cost control
+
+The profile generation is a relatively infrequent operation.
+
+Do not send unnecessary repeated requests.
+
+Store the generated profile in the database so it can be reused by the matching engine.
+
+Also store metadata if practical:
+
+* `profile_generated_at`
+* `profile_model`
+* `profile_version`
+
+If these columns are easy to add, add them to `users`.
+
+Do not create another table.
+
+---
+
+## 10. Security and logging
+
+Never log:
+
+* Gemini API keys
+* complete CV contents
+* complete profile contents
+
+It is fine to log:
+
+* user ID
+* request started
+* request succeeded/failed
+* model name
+* timestamp
+
+---
+
+## 11. Testing
+
+Add tests for:
+
+1. Missing Gemini API key
+2. Successful profile extraction
+3. Valid structured JSON response
+4. Invalid Gemini JSON response
+5. Gemini API failure
+6. Existing profile remains unchanged after failure
+7. A CV containing a completely different profession than Project/Product Management
+8. A CV containing multiple industries and multiple professional disciplines
+
+The test suite must demonstrate that the implementation is genuinely generic and does not contain hardcoded assumptions about Project Management or Product Management.
+
+---
+
+## 12. UI / manual testing
+
+If there is already a user profile/admin page, add a simple action:
+
+**"Generate AI Profile"**
+
+When clicked:
+
+1. Take the user's CV text.
+2. Send it to Gemini.
+3. Generate `profile_json`.
+4. Generate `profile_text`.
+5. Save both to the user.
+6. Display the generated profile or a success confirmation.
+
+Do not build the job matching UI yet.
+
+---
+
+## 13. Before implementation
+
+First inspect the existing codebase and identify:
+
+* users table/schema
+* current CV storage
+* profile_text implementation
+* existing API/service structure
+* existing UI for users/profile
+* current environment variable handling
+* test structure
+
+Then implement this feature using the existing architecture rather than creating unnecessary new structures.
+
+At the end, report:
+
+1. Files changed
+2. Database changes
+3. Gemini model/API implementation
+4. Environment variable required
+5. How to generate a profile manually
+6. Tests added and results
+7. Example of the resulting `profile_json` structure using a test CV
+
+Do not implement job matching, job scoring, role matching, embeddings, or daily email notifications in this task.
