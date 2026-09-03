@@ -86,7 +86,8 @@ UA = f"job-boards-scraper/1.0 (public posting APIs; contact: {_CONTACT})".encode
 # it came from. `matched` holds --grep context and is empty without it.
 FIELDS = [
     "ats", "company", "id", "title", "department", "team", "employmentType",
-    "location", "isRemote", "workplaceType", "publishedAt", "jobUrl", "matched",
+    "location", "isRemote", "workplaceType", "address", "publishedAt", "jobUrl",
+    "matched",
 ]
 
 _HTML_TAG = re.compile(r"<[^>]+>")
@@ -271,6 +272,11 @@ def plain_text(value: str) -> str:
 def normalize_ashby(job: dict) -> dict | None:
     if not job.get("isListed"):
         return None
+    address = {}
+    if job.get("address") is not None:
+        address["primary"] = job["address"]
+    if job.get("secondaryLocations") is not None:
+        address["secondaryLocations"] = job["secondaryLocations"]
     return {
         "id": str(job.get("id", "")),
         "title": job.get("title") or "",
@@ -280,6 +286,7 @@ def normalize_ashby(job: dict) -> dict | None:
         "location": job.get("location") or "",
         "isRemote": bool(job.get("isRemote")),
         "workplaceType": job.get("workplaceType") or "",
+        "address": address or None,
         "publishedAt": job.get("publishedAt") or "",
         "jobUrl": job.get("jobUrl") or "",
         "_description": job.get("descriptionPlain") or job.get("descriptionHtml") or "",
@@ -293,6 +300,13 @@ def normalize_greenhouse(job: dict) -> dict | None:
     # `or ""` rather than a get() default: Greenhouse sends {"name": null}, where
     # the key exists so the default never applies and the value stays None.
     name = (loc.get("name") or "") if isinstance(loc, dict) else str(loc)
+    address = {}
+    if job.get("location") is not None:
+        address["location"] = job["location"]
+    if job.get("offices") is not None:
+        address["offices"] = job["offices"]
+    if job.get("metadata") is not None:
+        address["metadata"] = job["metadata"]
     return {
         "id": str(job.get("id", "")),
         "title": job.get("title") or "",
@@ -302,6 +316,7 @@ def normalize_greenhouse(job: dict) -> dict | None:
         "location": name,
         "isRemote": "remote" in name.lower(),
         "workplaceType": "",
+        "address": address or None,
         "publishedAt": job.get("first_published") or job.get("updated_at") or "",
         "jobUrl": job.get("absolute_url") or "",
         # Absent unless the request asked for ?content=true — see SOURCES.
@@ -321,6 +336,13 @@ def normalize_lever(job: dict) -> dict | None:
             created / 1000, timezone.utc
         ).isoformat(timespec="seconds")
     workplace = job.get("workplaceType") or ""
+    address = {}
+    if job.get("country") is not None:
+        address["country"] = job["country"]
+    if cat.get("location") is not None:
+        address["location"] = cat["location"]
+    if cat.get("allLocations") is not None:
+        address["allLocations"] = cat["allLocations"]
     return {
         "id": str(job.get("id", "")),
         "title": job.get("text") or "",
@@ -330,6 +352,7 @@ def normalize_lever(job: dict) -> dict | None:
         "location": cat.get("location") or "",
         "isRemote": workplace.lower() == "remote",
         "workplaceType": workplace,
+        "address": address or None,
         "publishedAt": published,
         "jobUrl": job.get("hostedUrl") or "",
         "_description": " ".join(
@@ -377,6 +400,15 @@ def _clean(row: dict) -> dict:
         k: (_SPACE.sub(" ", v).strip() if isinstance(v, str) and k != "_description" else v)
         for k, v in row.items()
     }
+
+
+def _sqlite_value(value: object) -> str:
+    """Serialize structured normalized fields for the legacy SQLite export."""
+    if value is None:
+        return ""
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return str(value)
 
 
 def board_url(ats: str, slug: str, want_content: bool = False) -> str:
@@ -950,7 +982,7 @@ def save(
             "THEN excluded.matched ELSE jobs.matched END"
             ", last_seen=excluded.last_seen",
             [
-                [str(r.get(c, "")) for c in cols] + [seen_at, seen_at]
+                [_sqlite_value(r.get(c, "")) for c in cols] + [seen_at, seen_at]
                 for r in keyed.values()
             ],
         )

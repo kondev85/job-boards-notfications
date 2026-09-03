@@ -279,12 +279,21 @@ def test_normalize_ashby():
         "id": "2b401986", "title": "Senior Software Engineer, Data",
         "department": "Builder", "team": "Data", "employmentType": "FullTime",
         "location": "Remote - US", "isRemote": True, "workplaceType": "Remote",
+        "address": {
+            "postalAddress": {
+                "addressCountry": "United States",
+                "addressRegion": "CA",
+            }
+        },
+        "secondaryLocations": [],
         "publishedAt": "2026-06-30T19:02:11.162+00:00",
         "jobUrl": "https://jobs.ashbyhq.com/abridge/2b401986",
         "isListed": True, "descriptionPlain": "we use Rust",
     })
     assert row["title"] == "Senior Software Engineer, Data"
     assert row["isRemote"] is True
+    assert row["address"]["primary"]["postalAddress"]["addressCountry"] == "United States"
+    assert row["address"]["secondaryLocations"] == []
     assert row["publishedAt"].startswith("2026-06-30")
     assert row["_description"] == "we use Rust"
     # unlisted postings are dropped by the normaliser, not downstream
@@ -299,12 +308,16 @@ def test_normalize_greenhouse():
         "absolute_url": "https://stripe.com/jobs/search?gh_jid=7954688",
         "first_published": "2026-06-02T08:58:57-04:00",
         "updated_at": "2026-07-27T11:17:30-04:00",
+        "offices": [{"name": "San Francisco", "location": {"name": "California"}}],
+        "metadata": [{"name": "team", "value": "Sales"}],
     })
     assert row["id"] == "7954688", "integer ids must become strings for the TEXT key"
     assert row["location"] == "San Francisco, CA"
     assert row["jobUrl"].endswith("gh_jid=7954688")
     assert row["publishedAt"] == "2026-06-02T08:58:57-04:00"
     assert row["isRemote"] is False
+    assert row["address"]["offices"][0]["location"]["name"] == "California"
+    assert row["address"]["metadata"][0]["name"] == "team"
     assert normalize_greenhouse(
         {"id": 1, "title": "T", "location": {"name": "Remote - US"}}
     )["isRemote"] is True
@@ -315,7 +328,8 @@ def test_normalize_lever():
     row = normalize_lever({
         "id": "f25a6c49", "text": "Compounding Pharmacy Technician",
         "categories": {"commitment": "Full-time", "location": "Romeoville, IL",
-                       "team": "Pharmacy"},
+                       "team": "Pharmacy", "allLocations": ["Romeoville, IL"]},
+        "country": "US",
         "createdAt": 1750119882479,
         "workplaceType": "onsite",
         "hostedUrl": "https://jobs.lever.co/ro/f25a6c49",
@@ -325,6 +339,8 @@ def test_normalize_lever():
     assert row["employmentType"] == "Full-time"
     assert row["team"] == "Pharmacy"
     assert row["isRemote"] is False
+    assert row["address"]["country"] == "US"
+    assert row["address"]["allLocations"] == ["Romeoville, IL"]
     # epoch ms -> ISO, or it sorts wrongly against the other platforms
     assert row["publishedAt"].startswith("2025-06-17T"), row["publishedAt"]
     assert "T" in row["publishedAt"] and row["publishedAt"].endswith("+00:00")

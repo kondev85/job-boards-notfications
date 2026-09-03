@@ -57,6 +57,7 @@ def _row(
         "team": "Platform",
         "employment_type": "Full-time",
         "location_raw": "Remote",
+        "address": None,
         "is_remote": True,
         "workplace_type": "remote",
         "published_at": published_at,
@@ -571,12 +572,30 @@ def test_matching_is_repeatable_and_applies_open_location_and_threshold_rules():
                             "match",
                             title="Program Manager",
                             description="Technology delivery",
-                        ),
+                        )
+                        | {
+                            "address": {
+                                "primary": {
+                                    "postalAddress": {
+                                        "addressCountry": "Portugal"
+                                    }
+                                }
+                            }
+                        },
                         _row(
                             "below-threshold",
                             title="Backend Engineer",
                             description="Build reliable systems.",
-                        ),
+                        )
+                        | {
+                            "address": {
+                                "primary": {
+                                    "postalAddress": {
+                                        "addressCountry": "Portugal"
+                                    }
+                                }
+                            }
+                        },
                         _row(
                             "excluded-region",
                             title="Program Manager",
@@ -717,6 +736,98 @@ def test_matching_normalizes_accents_for_relocation_locations():
         user,
         job | {"location_raw": "Berlin, Germany"},
     ) is None
+
+
+def test_remote_location_evidence_is_user_specific_and_conservative():
+    europe_user = {
+        "base_city": "Estepona",
+        "base_country": "Spain",
+        "remote_allowed": True,
+        "onsite_allowed": True,
+        "hybrid_allowed": True,
+        "willing_to_relocate": True,
+        "relocation_countries": ["Portugal"],
+        "preferred_regions": ["Europe"],
+        "excluded_regions": [],
+    }
+    remote_job = {
+        "location_raw": "Remote",
+        "is_remote": True,
+        "workplace_type": "remote",
+        "address": None,
+        "description_text": None,
+    }
+
+    # A generic remote role is not safe for a configured European user.
+    assert persistence._location_matches(remote_job, europe_user) is False
+
+    # Structured provider evidence makes a European remote role eligible.
+    assert persistence._location_matches(
+        remote_job
+        | {
+            "address": {
+                "primary": {
+                    "postalAddress": {"addressCountry": "Portugal"}
+                }
+            }
+        },
+        europe_user,
+    ) is True
+
+    # Any eligible secondary location is sufficient when the provider lists
+    # multiple hiring locations.
+    assert persistence._location_matches(
+        remote_job
+        | {
+            "address": {
+                "primary": {
+                    "postalAddress": {"addressCountry": "United States"}
+                },
+                "secondaryLocations": [
+                    {
+                        "location": "Spain",
+                        "address": {
+                            "postalAddress": {"addressCountry": "Spain"}
+                        },
+                    }
+                ],
+            }
+        },
+        europe_user,
+    ) is True
+
+    # The same unknown remote role is useful for a user explicitly targeting
+    # the United States, even though the posting carries no country evidence.
+    us_user = europe_user | {
+        "base_city": None,
+        "base_country": "United States",
+        "relocation_countries": [],
+        "preferred_regions": ["United States"],
+    }
+    assert persistence._location_matches(remote_job, us_user) is True
+    assert persistence._location_matches(
+        remote_job
+        | {
+            "address": {
+                "primary": {
+                    "postalAddress": {"addressCountry": "Portugal"}
+                }
+            }
+        },
+        us_user,
+    ) is False
+
+    # Description evidence is used when Greenhouse content is available.
+    assert persistence._location_matches(
+        remote_job
+        | {
+            "description_text": (
+                "This role is remote, but applicants must be located in "
+                "the United States."
+            )
+        },
+        europe_user,
+    ) is False
 
 
 def test_location_filter_rejects_stale_match_rows():

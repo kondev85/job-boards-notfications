@@ -2,3 +2,4 @@
 - [Greenhouse discovery quirks](greenhouse-discovery-quirks.md) — HEAD validation can pass while content GETs return 406 after a large discovery sweep.
 - [PostgreSQL test harness](postgres-test-harness.md) — temporary local clusters need an explicit writable Unix socket directory.
 - [Profile-aware role ranking](profile-aware-role-ranking.md) — role-specific functional depth should outweigh ambiguous top-level title seniority.
+- [Remote location evidence](remote-location-evidence.md) — prefer structured provider geography; treat unknown remote scope conservatively per user preference.

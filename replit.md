@@ -67,6 +67,9 @@ Jobs are unique by `(ats, external_id)`. Ashby and Lever descriptions are stored
 as normalized plain text; Greenhouse descriptions are populated when the
 scoped `--greenhouse-content` enrichment option is used. `source_updated_at` is
 populated only when an upstream payload supplies an updated/modified timestamp.
+`jobs.address` is JSONB provider evidence: Ashby stores primary and secondary
+locations, Greenhouse stores location/offices/metadata, and Lever stores country
+and all listed locations.
 
 `jobs.company` is a denormalized display snapshot of the related
 `companies.display_name`, while `jobs.board_id` and
@@ -100,13 +103,18 @@ uv run postgres_persistence.py --match
 ```
 
 The matcher considers active users and jobs whose `closed_at` is NULL. It first
-rejects jobs whose text location contains an excluded region, whose workplace
+rejects jobs whose location evidence contains an excluded region, whose workplace
 type is not allowed, or whose location is incompatible with the user's configured
 city/country/region rules. Location is a hard filter and contributes no points,
-so a location-incompatible job cannot enter the ranking. Generic `Remote`,
-`Anywhere`, and `Work from home` postings remain eligible when remote work is
-allowed. Numeric distance limits are not calculated because the schema does not
-contain verified job coordinates.
+so a location-incompatible job cannot enter the ranking. For remote jobs, explicit
+provider address evidence and explicit location labels are preferred over text.
+European evidence (such as an EU country, Europe, or EMEA) can match a European
+user; explicit US evidence cannot. A plain Remote/Anywhere/Work from home posting
+with no geographic evidence is rejected for configured non-US users, but remains
+eligible for an explicitly US-targeting user. Users with no location preference
+remain unconstrained. Greenhouse description evidence is used when content has
+been enriched. Numeric distance limits are not calculated because the schema does
+not contain verified job coordinates.
 
 Remaining jobs receive a deterministic 100-point score: role fit is 40 points,
 industry fit 25, profile capabilities/tools/transferable evidence 20, and

@@ -178,6 +178,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     team               TEXT,
     employment_type    TEXT,
     location_raw       TEXT,
+    address            JSONB,
     is_remote          BOOLEAN NOT NULL DEFAULT FALSE,
     workplace_type     TEXT,
     published_at       TIMESTAMPTZ,
@@ -193,6 +194,7 @@ CREATE TABLE IF NOT EXISTS jobs (
 );
 
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS company TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS address JSONB;
 
 CREATE TABLE IF NOT EXISTS users (
     user_id                 BIGSERIAL PRIMARY KEY,
@@ -646,6 +648,7 @@ def _fetch_normalized(
             ),
             "employment_type": _optional(normalized.get("employmentType")),
             "location_raw": _optional(normalized.get("location")),
+            "address": normalized.get("address"),
             "is_remote": bool(normalized.get("isRemote")),
             "workplace_type": _optional(normalized.get("workplaceType")),
             "published_at": published_at,
@@ -735,12 +738,13 @@ def _upsert_board_jobs(
             INSERT INTO jobs (
                 board_id, company, ats, external_id, title, department, team,
                 employment_type, location_raw, is_remote, workplace_type,
-                published_at, source_updated_at, job_url, description_text,
+                address, published_at, source_updated_at, job_url, description_text,
                 first_seen, last_seen, updated_at
             ) VALUES (
                 %(board_id)s, %(company)s, %(ats)s, %(external_id)s, %(title)s,
                 %(department)s, %(team)s, %(employment_type)s,
                 %(location_raw)s, %(is_remote)s, %(workplace_type)s,
+                %(address)s,
                 %(published_at)s, %(source_updated_at)s, %(job_url)s,
                 %(description_text)s, %(seen_at)s, %(seen_at)s, %(seen_at)s
             )
@@ -754,6 +758,7 @@ def _upsert_board_jobs(
                 location_raw = EXCLUDED.location_raw,
                 is_remote = EXCLUDED.is_remote,
                 workplace_type = EXCLUDED.workplace_type,
+                address = EXCLUDED.address,
                 published_at = COALESCE(EXCLUDED.published_at, jobs.published_at),
                 source_updated_at = COALESCE(
                     EXCLUDED.source_updated_at, jobs.source_updated_at
@@ -766,7 +771,17 @@ def _upsert_board_jobs(
                 closed_at = NULL,
                 updated_at = EXCLUDED.updated_at
             """,
-            {**row, "board_id": board_id, "company": company, "seen_at": seen_at},
+            {
+                **row,
+                "address": (
+                    Jsonb(row["address"])
+                    if row.get("address") is not None
+                    else None
+                ),
+                "board_id": board_id,
+                "company": company,
+                "seen_at": seen_at,
+            },
         )
 
     closed = 0
@@ -1111,8 +1126,201 @@ def _workplace_kind(job: dict[str, Any]) -> str:
     return "onsite"
 
 
+_LOCATION_COUNTRY_ALIASES = {
+    "us": {"us", "usa", "united states", "united states of america"},
+    "ca": {"ca", "canada"},
+    "gb": {"gb", "uk", "united kingdom", "great britain", "england"},
+    "es": {"es", "spain"},
+    "pt": {"pt", "portugal"},
+    "de": {"de", "germany"},
+    "fr": {"fr", "france"},
+    "it": {"it", "italy"},
+    "nl": {"nl", "netherlands", "holland"},
+    "pl": {"pl", "poland"},
+    "ie": {"ie", "ireland"},
+    "se": {"se", "sweden"},
+    "no": {"no", "norway"},
+    "dk": {"dk", "denmark"},
+    "fi": {"fi", "finland"},
+    "at": {"at", "austria"},
+    "be": {"be", "belgium"},
+    "ch": {"ch", "switzerland"},
+    "cz": {"cz", "czechia", "czech republic"},
+    "ro": {"ro", "romania"},
+    "bg": {"bg", "bulgaria"},
+    "gr": {"gr", "greece"},
+    "hu": {"hu", "hungary"},
+    "ee": {"ee", "estonia"},
+    "lv": {"lv", "latvia"},
+    "lt": {"lt", "lithuania"},
+    "hr": {"hr", "croatia"},
+    "si": {"si", "slovenia"},
+    "sk": {"sk", "slovakia"},
+    "cy": {"cy", "cyprus"},
+    "mt": {"mt", "malta"},
+    "lu": {"lu", "luxembourg"},
+    "is": {"is", "iceland"},
+    "al": {"al", "albania"},
+    "ba": {"ba", "bosnia and herzegovina"},
+    "me": {"me", "montenegro"},
+    "mk": {"mk", "north macedonia"},
+    "rs": {"rs", "serbia"},
+    "ua": {"ua", "ukraine"},
+    "md": {"md", "moldova"},
+    "ge": {"ge", "georgia"},
+    "tr": {"tr", "turkey"},
+}
+_EUROPE_REGION_ALIASES = {"europe", "eu", "eea", "emea"}
+_REMOTE_TIMEZONE_TERMS = {
+    "eastern time",
+    "central time",
+    "mountain time",
+    "pacific time",
+    "eastern timezone",
+    "central timezone",
+    "mountain timezone",
+    "pacific timezone",
+}
+_DESCRIPTION_LOCATION_TRIGGERS = (
+    "based",
+    "located",
+    "reside",
+    "resident",
+    "work from",
+    "working from",
+    "hire in",
+    "hiring in",
+    "must be",
+    "required to",
+    "work authorization",
+    "authorized to work",
+    "time zone",
+    "timezone",
+)
+
+
+def _phrase_in_text(phrase: Any, text: str) -> bool:
+    normalized = _normalized_search_text(phrase)
+    return bool(normalized) and f" {normalized} " in f" {text} "
+
+
+def _address_text(value: Any) -> str:
+    """Flatten JSONB address evidence without depending on one ATS shape."""
+    if isinstance(value, dict):
+        parts = []
+        for key, item in value.items():
+            item_text = _address_text(item)
+            if str(key).casefold() in {"country", "addresscountry"}:
+                parts.append(f"country {item_text}")
+            else:
+                parts.append(item_text)
+        return " ".join(parts)
+    if isinstance(value, (list, tuple)):
+        return " ".join(_address_text(item) for item in value)
+    return _normalized_search_text(value)
+
+
+def _description_location_evidence(value: Any) -> str:
+    """Keep only restrictive-looking description sentences, not EEO boilerplate."""
+    text = str(value or "")
+    sentences = re.split(r"(?<=[.!?])\s+|\n+", text)
+    evidence = []
+    geo_terms = set(_EUROPE_REGION_ALIASES)
+    geo_terms.update(
+        alias
+        for aliases in _LOCATION_COUNTRY_ALIASES.values()
+        for alias in aliases
+    )
+    geo_terms.update(_REMOTE_TIMEZONE_TERMS)
+    for sentence in sentences:
+        normalized = _normalized_search_text(sentence)
+        if not normalized:
+            continue
+        has_geo = any(_phrase_in_text(term, normalized) for term in geo_terms)
+        has_trigger = any(trigger in normalized for trigger in _DESCRIPTION_LOCATION_TRIGGERS)
+        if has_geo and has_trigger:
+            evidence.append(normalized)
+    return " ".join(evidence)
+
+
+def _location_evidence_text(job: dict[str, Any]) -> str:
+    parts = [
+        _normalized_search_text(job.get("location_raw")),
+        _address_text(job.get("address")),
+        _description_location_evidence(job.get("description_text")),
+    ]
+    return " ".join(part for part in parts if part)
+
+
+def _location_groups(text: Any) -> set[str]:
+    normalized = _normalized_search_text(text)
+    padded = f" {normalized} "
+    groups = set()
+    for country, aliases in _LOCATION_COUNTRY_ALIASES.items():
+        long_aliases = [alias for alias in aliases if len(alias) > 2]
+        short_aliases = [alias for alias in aliases if len(alias) == 2]
+        has_long_alias = any(_phrase_in_text(alias, normalized) for alias in long_aliases)
+        has_country_code = any(
+            _phrase_in_text(f"country {alias}", normalized)
+            for alias in short_aliases
+        )
+        # US is common in human-readable labels ("Remote - US"); other
+        # two-letter codes are only trusted in a country-labelled JSON field
+        # or when the entire preference/evidence value is that code. This
+        # prevents words such as "is" and "be" from becoming countries.
+        has_us_label = country == "us" and _phrase_in_text("us", normalized)
+        has_exact_code = normalized in short_aliases
+        if has_long_alias or has_country_code or has_us_label or has_exact_code:
+            groups.add(country)
+    if any(_phrase_in_text(region, normalized) for region in _EUROPE_REGION_ALIASES):
+        groups.add("europe")
+    if any(_phrase_in_text(term, normalized) for term in _REMOTE_TIMEZONE_TERMS):
+        groups.add("us")
+    if groups & set(_LOCATION_COUNTRY_ALIASES) - {"us", "ca"}:
+        groups.add("europe")
+    return groups
+
+
+def _has_explicit_location_evidence(text: Any) -> bool:
+    return bool(_location_groups(text))
+
+
+def _location_preferences(user: dict[str, Any]) -> list[str]:
+    values: list[str] = []
+    for field in ("base_city", "base_country"):
+        values.extend(_preference_values(user.get(field)))
+    if user.get("willing_to_relocate"):
+        for field in ("relocation_cities", "relocation_countries"):
+            values.extend(_preference_values(user.get(field)))
+    values.extend(_preference_values(user.get("preferred_regions")))
+    return values
+
+
+def _location_preference_matches(preferences: list[str], evidence: str) -> bool:
+    if not evidence:
+        return False
+    evidence_groups = _location_groups(evidence)
+    for preference in preferences:
+        if _phrase_in_text(preference, evidence):
+            return True
+        preference_groups = _location_groups(preference)
+        if preference_groups & evidence_groups:
+            return True
+        if "europe" in preference_groups and "europe" in evidence_groups:
+            return True
+    return False
+
+
+def _generic_remote_allowed_for_user(user: dict[str, Any]) -> bool:
+    """Unknown remote geography is conservative except for an explicit US preference."""
+    return any("us" in _location_groups(value) for value in _location_preferences(user))
+
+
 def _region_excluded(job: dict[str, Any], user: dict[str, Any]) -> bool:
-    return _contains_preference(job.get("location_raw"), user.get("excluded_regions"))
+    return _contains_preference(
+        _location_evidence_text(job),
+        user.get("excluded_regions"),
+    )
 
 
 def _location_is_configured(user: dict[str, Any]) -> bool:
@@ -1129,16 +1337,18 @@ def _location_is_configured(user: dict[str, Any]) -> bool:
 
 
 def _location_matches(job: dict[str, Any], user: dict[str, Any]) -> bool:
-    """Match locations textually; numeric distance requires verified coordinates."""
-    location = _normalized_search_text(job.get("location_raw"))
+    """Match structured and textual location evidence to a user's preferences."""
+    evidence = _location_evidence_text(job)
+    preferences = _location_preferences(user)
     kind = _workplace_kind(job)
     if kind == "remote":
-        # A remote posting with no geographic qualifier is usable when remote is
-        # allowed. If a preferred region is supplied, a qualifier must identify it.
-        preferred_regions = _preference_values(user.get("preferred_regions"))
-        return not preferred_regions or any(
-            region in location for region in preferred_regions
-        ) or location in {"remote", "work from home", "anywhere"}
+        if not preferences:
+            return True
+        if _location_preference_matches(preferences, evidence):
+            return True
+        if not _has_explicit_location_evidence(evidence):
+            return _generic_remote_allowed_for_user(user)
+        return False
 
     candidates: list[str] = []
     base_city = _normalized_search_text(user.get("base_city"))
@@ -1152,6 +1362,7 @@ def _location_matches(job: dict[str, Any], user: dict[str, Any]) -> bool:
         candidates.extend(_preference_values(user.get("relocation_countries")))
     preferred_regions = _preference_values(user.get("preferred_regions"))
     candidates.extend(preferred_regions)
+    location = _normalized_search_text(job.get("location_raw"))
     return bool(location) and any(candidate in location for candidate in candidates)
 
 
@@ -1355,7 +1566,7 @@ def run_matching(
         jobs = conn.execute(
             """
             SELECT j.job_id, j.title, j.department, j.team, j.company,
-                   j.description_text, j.location_raw, j.is_remote,
+                   j.description_text, j.location_raw, j.address, j.is_remote,
                    j.workplace_type, c.industry, c.category
             FROM jobs AS j
             LEFT JOIN job_boards AS b ON b.board_id = j.board_id
@@ -1374,7 +1585,7 @@ def run_matching(
         )
         job_columns = (
             "job_id", "title", "department", "team", "company",
-            "description_text", "location_raw", "is_remote",
+            "description_text", "location_raw", "address", "is_remote",
             "workplace_type", "industry", "category",
         )
         stats = {"evaluated": 0, "matched": 0, "rejected": 0, "skipped": 0}

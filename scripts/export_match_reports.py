@@ -45,6 +45,7 @@ FIELDS = (
     "team",
     "employment_type",
     "location",
+    "address",
     "is_remote",
     "workplace_type",
     "published_at",
@@ -92,6 +93,7 @@ def _export() -> int:
             j.team,
             j.employment_type,
             j.location_raw,
+            j.address,
             j.is_remote,
             j.workplace_type,
             j.published_at,
@@ -123,10 +125,21 @@ def _export() -> int:
         records.append({key: _json_value(value) for key, value in record.items()})
 
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    csv_records = [
+        record
+        | {
+            "address": (
+                json.dumps(record["address"], ensure_ascii=False, sort_keys=True)
+                if record["address"] is not None
+                else ""
+            )
+        }
+        for record in records
+    ]
     with CSV_PATH.open("w", newline="", encoding="utf-8-sig") as handle:
         writer = csv.DictWriter(handle, fieldnames=FIELDS)
         writer.writeheader()
-        writer.writerows(records)
+        writer.writerows(csv_records)
     JSON_PATH.write_text(
         json.dumps(records, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
