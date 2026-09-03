@@ -125,16 +125,17 @@ without `profile_json` retain the legacy preference-only score behavior. Industr
 fit uses explicit company metadata first and conservative title/description text
 as a fallback.
 
-Only jobs at or above `min_match_score` create or update a `matched` row. A
-below-threshold job does not create a new row; if it already has a match, that
-row is updated to `rejected` with the latest score and matcher metadata.
-Closed or excluded jobs are skipped and do not create or alter match rows.
-Matching writes `model_name = 'deterministic-preferences'` and
-`model_version = 'v2-profile-aware'` because those values identify this scoring
-workflow. Rerunning the command updates the same `(user_id, job_id)` row and does
-not create duplicates. The matched-role CSV and JSON reports order roles by score
-descending and include a recalculated per-report rank. This workflow does not call
-an AI model, send notifications, or schedule notification delivery.
+Every open job that passes the hard workplace and location filters creates or
+updates a `matched` row, regardless of `min_match_score`. The deterministic
+score is retained so reports can be reviewed and a useful threshold can be
+chosen later. Closed or excluded jobs are skipped and do not create or alter
+match rows. Matching writes `model_name = 'deterministic-preferences'` and
+`model_version = 'v3-concrete-location'` because those values identify this
+scoring workflow. Rerunning the command updates the same `(user_id, job_id)` row
+and does not create duplicates. The matched-role CSV and JSON reports order
+roles by score descending and include a recalculated per-report rank. This
+workflow does not call an AI model, send notifications, or schedule notification
+delivery.
 
 ### AI profile extraction
 

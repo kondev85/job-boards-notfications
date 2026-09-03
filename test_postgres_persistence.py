@@ -654,7 +654,7 @@ def test_postgres_schema_constraints_repeat_import_and_lifecycle():
             assert conn.execute("SELECT COUNT(*) FROM job_matches").fetchone()[0] == 0
 
 
-def test_matching_is_repeatable_and_applies_open_location_and_threshold_rules():
+def test_matching_is_repeatable_and_applies_open_location_rules_without_score_filter():
     with _temporary_postgres() as dsn:
         with psycopg.connect(dsn) as conn:
             conn.execute(persistence.SCHEMA_SQL)
@@ -731,8 +731,8 @@ def test_matching_is_repeatable_and_applies_open_location_and_threshold_rules():
             )
             assert first == {
                 "evaluated": 2,
-                "matched": 1,
-                "rejected": 1,
+                "matched": 2,
+                "rejected": 0,
                 "skipped": 1,
             }
             match = conn.execute(
@@ -769,10 +769,10 @@ def test_matching_is_repeatable_and_applies_open_location_and_threshold_rules():
                 WHERE u.email = %s
                 """,
                 (persistence.KONSTANTIN_EMAIL,),
-            ).fetchone() == (1, match_id, match_id)
+            ).fetchone() == (2, match_id, match_id + 1)
 
-            # If a previously matched role falls below the threshold, its score
-            # and deterministic model provenance are updated in the audit row.
+            # A lower-scoring role remains visible and its score/provenance are
+            # updated on subsequent runs.
             conn.execute(
                 """
                 UPDATE jobs SET title = 'Backend Engineer'
@@ -793,7 +793,7 @@ def test_matching_is_repeatable_and_applies_open_location_and_threshold_rules():
                 (match_id,),
             ).fetchone() == (
                 60,
-                "rejected",
+                "matched",
                 persistence.MATCH_MODEL_NAME,
                 persistence.MATCH_MODEL_VERSION,
             )
@@ -1125,7 +1125,7 @@ def test_profile_json_produces_granular_score_components():
         "capabilities": 20,
         "seniority": 11,
     }
-    assert result["qualifies"] is False
+    assert result["qualifies"] is True
 
 
 def test_profile_generation_failure_preserves_existing_profile():

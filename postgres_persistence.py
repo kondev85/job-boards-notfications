@@ -1574,7 +1574,9 @@ def evaluate_job_match(
     The score is 100 points: role 40, industry 25, profile capabilities 20, and
     seniority 15. Workplace and location are hard filters, not score components.
     Empty preference dimensions are treated as unconstrained and receive their
-    full weight. Closed jobs are hard exclusions.
+    full weight. All hard-filter-eligible jobs are returned regardless of score;
+    ``min_match_score`` is retained as profile metadata for later analysis.
+    Closed jobs are hard exclusions.
     The SQL candidate query also filters closed jobs so a matching run does not
     load them.
     """
@@ -1642,11 +1644,9 @@ def evaluate_job_match(
         "seniority": round(MATCH_SCORE_WEIGHTS["seniority"] * seniority_fit),
     }
     score = sum(score_parts.values())
-    threshold = user.get("min_match_score")
-    qualifies = threshold is None or score >= int(threshold)
     return {
         "score": score,
-        "qualifies": qualifies,
+        "qualifies": True,
         "score_parts": score_parts,
         "role_match": role_fit > 0,
         "industry_match": industry_fit > 0,
@@ -1716,12 +1716,13 @@ def run_matching(
     model_name: str = MATCH_MODEL_NAME,
     model_version: str = MATCH_MODEL_VERSION,
 ) -> dict[str, int]:
-    """Evaluate open jobs against active profiles and upsert qualifying matches.
+    """Evaluate open jobs against active profiles and upsert eligible matches.
 
-    Existing matches that no longer qualify are retained as ``rejected`` rows
-    for auditability. A previously matched job that now fails the hard location
-    filter is also marked rejected with a NULL score. Closed or excluded jobs
-    are not evaluated or inserted; any existing match for one remains unchanged.
+    All jobs that pass the hard workplace and location filters are upserted as
+    ``matched`` with their deterministic score. A previously matched job that
+    now fails the hard location filter is marked rejected with a NULL score.
+    Closed or excluded jobs are not evaluated or inserted; any existing match
+    for one remains unchanged.
     When ``published_after`` is supplied, only jobs in that inclusive window are
     loaded for this run. This keeps recent daily scans bounded without changing
     historical match rows.
@@ -1813,48 +1814,29 @@ def run_matching(
                     stats["skipped"] += 1
                     continue
                 stats["evaluated"] += 1
-                if result["qualifies"]:
-                    conn.execute(
-                        """
-                        INSERT INTO job_matches (
-                            user_id, job_id, score, match_status,
-                            model_name, model_version, updated_at
-                        ) VALUES (%s, %s, %s, 'matched', %s, %s, %s)
-                        ON CONFLICT (user_id, job_id) DO UPDATE SET
-                            score = EXCLUDED.score,
-                            match_status = EXCLUDED.match_status,
-                            model_name = EXCLUDED.model_name,
-                            model_version = EXCLUDED.model_version,
-                            updated_at = EXCLUDED.updated_at
-                        """,
-                        (
-                            user["user_id"],
-                            job["job_id"],
-                            result["score"],
-                            model_name,
-                            model_version,
-                            run_at,
-                        ),
-                    )
-                    stats["matched"] += 1
-                else:
-                    conn.execute(
-                        """
-                        UPDATE job_matches
-                        SET score = %s, match_status = 'rejected',
-                            model_name = %s, model_version = %s, updated_at = %s
-                        WHERE user_id = %s AND job_id = %s
-                        """,
-                        (
-                            result["score"],
-                            model_name,
-                            model_version,
-                            run_at,
-                            user["user_id"],
-                            job["job_id"],
-                        ),
-                    )
-                    stats["rejected"] += 1
+                conn.execute(
+                    """
+                    INSERT INTO job_matches (
+                        user_id, job_id, score, match_status,
+                        model_name, model_version, updated_at
+                    ) VALUES (%s, %s, %s, 'matched', %s, %s, %s)
+                    ON CONFLICT (user_id, job_id) DO UPDATE SET
+                        score = EXCLUDED.score,
+                        match_status = EXCLUDED.match_status,
+                        model_name = EXCLUDED.model_name,
+                        model_version = EXCLUDED.model_version,
+                        updated_at = EXCLUDED.updated_at
+                    """,
+                    (
+                        user["user_id"],
+                        job["job_id"],
+                        result["score"],
+                        model_name,
+                        model_version,
+                        run_at,
+                    ),
+                )
+                stats["matched"] += 1
     return stats
 
 
@@ -1994,7 +1976,6 @@ def run(args: argparse.Namespace) -> int:
                 "\nMatching complete: "
                 f"{match_stats['evaluated']} evaluated, "
                 f"{match_stats['matched']} matched, "
-                f"{match_stats['rejected']} below threshold, "
                 f"{match_stats['skipped']} excluded"
             )
 
