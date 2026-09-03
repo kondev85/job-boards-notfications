@@ -326,7 +326,7 @@ KONSTANTIN_PREFERRED_REGIONS = ("Europe", "EU", "EEA", "EMEA")
 KONSTANTIN_EXCLUDED_REGIONS = ("US-only",)
 
 MATCH_MODEL_NAME = "deterministic-preferences"
-MATCH_MODEL_VERSION = "v2-profile-aware"
+MATCH_MODEL_VERSION = "v3-concrete-location"
 MATCH_SCORE_WEIGHTS = {
     "role": 40,
     "industry": 25,
@@ -1383,6 +1383,105 @@ def _location_preferences(user: dict[str, Any]) -> list[str]:
     return values
 
 
+def _concrete_location_preferences(user: dict[str, Any]) -> list[str]:
+    """Return places where the user can actually be based for work."""
+    values: list[str] = []
+    for field in ("base_city", "base_country"):
+        values.extend(_preference_values(user.get(field)))
+    if user.get("willing_to_relocate"):
+        for field in ("relocation_cities", "relocation_countries"):
+            values.extend(_preference_values(user.get(field)))
+    return values
+
+
+def _location_scope_groups(text: Any) -> tuple[set[str], bool, bool]:
+    """Return location groups and distinguish Europe from broad EMEA scope."""
+    normalized = _normalized_search_text(text)
+    groups = _location_groups(normalized)
+    has_europe_scope = any(
+        _phrase_in_text(term, normalized)
+        for term in (
+            "europe",
+            "eu",
+            "eea",
+            "european union",
+            "european economic area",
+        )
+    )
+    has_emea_scope = _phrase_in_text("emea", normalized)
+    return groups, has_europe_scope, has_emea_scope
+
+
+def _location_matches_concrete_scope(
+    job: dict[str, Any],
+    user: dict[str, Any],
+) -> bool:
+    """Require a remote role to permit work from a concrete user location."""
+    concrete_preferences = _concrete_location_preferences(user)
+    if not concrete_preferences:
+        return _location_preference_matches(
+            _preference_values(user.get("preferred_regions")),
+            _location_evidence_text(job),
+        )
+
+    allowed_groups: set[str] = set()
+    allowed_terms: set[str] = set()
+    for preference in concrete_preferences:
+        allowed_groups.update(_location_groups(preference))
+        allowed_terms.add(preference)
+    allowed_country_groups = allowed_groups & set(_LOCATION_COUNTRY_ALIASES)
+
+    primary_text = " ".join(
+        part
+        for part in (
+            _normalized_search_text(job.get("location_raw")),
+            _address_text(job.get("address")),
+        )
+        if part
+    )
+    primary_groups, primary_europe, primary_emea = _location_scope_groups(
+        primary_text
+    )
+    explicit_primary_countries = primary_groups & set(_LOCATION_COUNTRY_ALIASES)
+    if (
+        any(_phrase_in_text(term, primary_text) for term in allowed_terms)
+        or primary_groups & allowed_country_groups
+    ):
+        return True
+    if explicit_primary_countries:
+        return False
+
+    # Europe/EU/EEA is acceptable because it includes the user's concrete
+    # countries. EMEA is intentionally not equivalent: it includes Africa and
+    # the Middle East as well.
+    if _workplace_kind(job) == "remote" and primary_europe and not primary_emea:
+        return True
+
+    # A generic "Remote" label may still be clarified by restrictive sentences
+    # in an enriched description.
+    description_text = _description_location_evidence(job.get("description_text"))
+    description_groups, description_europe, description_emea = (
+        _location_scope_groups(description_text)
+    )
+    if (
+        any(_phrase_in_text(term, description_text) for term in allowed_terms)
+        or description_groups & allowed_country_groups
+    ):
+        return True
+    if description_groups & set(_LOCATION_COUNTRY_ALIASES):
+        return False
+    if (
+        _workplace_kind(job) == "remote"
+        and description_europe
+        and not description_emea
+    ):
+        return True
+    return (
+        _workplace_kind(job) == "remote"
+        and _generic_remote_allowed_for_user(user)
+    )
+
+
 def _location_preference_matches(preferences: list[str], evidence: str) -> bool:
     if not evidence:
         return False
@@ -1425,32 +1524,9 @@ def _location_is_configured(user: dict[str, Any]) -> bool:
 
 def _location_matches(job: dict[str, Any], user: dict[str, Any]) -> bool:
     """Match structured and textual location evidence to a user's preferences."""
-    evidence = _location_evidence_text(job)
-    preferences = _location_preferences(user)
-    kind = _workplace_kind(job)
-    if kind == "remote":
-        if not preferences:
-            return True
-        if _location_preference_matches(preferences, evidence):
-            return True
-        if not _has_explicit_location_evidence(evidence):
-            return _generic_remote_allowed_for_user(user)
-        return False
-
-    candidates: list[str] = []
-    base_city = _normalized_search_text(user.get("base_city"))
-    base_country = _normalized_search_text(user.get("base_country"))
-    if base_city:
-        candidates.append(base_city)
-    if base_country:
-        candidates.append(base_country)
-    if user.get("willing_to_relocate"):
-        candidates.extend(_preference_values(user.get("relocation_cities")))
-        candidates.extend(_preference_values(user.get("relocation_countries")))
-    preferred_regions = _preference_values(user.get("preferred_regions"))
-    candidates.extend(preferred_regions)
-    location = _normalized_search_text(job.get("location_raw"))
-    return bool(location) and any(candidate in location for candidate in candidates)
+    if not _location_is_configured(user):
+        return True
+    return _location_matches_concrete_scope(job, user)
 
 
 def _workplace_matches(job: dict[str, Any], user: dict[str, Any]) -> bool:

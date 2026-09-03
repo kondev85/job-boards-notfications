@@ -920,6 +920,54 @@ def test_remote_location_evidence_is_user_specific_and_conservative():
     ) is False
 
 
+def test_concrete_location_scope_rejects_other_european_countries():
+    user = {
+        "base_city": "Estepona",
+        "base_country": "Spain",
+        "remote_allowed": True,
+        "onsite_allowed": True,
+        "hybrid_allowed": True,
+        "willing_to_relocate": True,
+        "relocation_cities": ["Madrid", "Málaga"],
+        "relocation_countries": ["Spain", "Portugal"],
+        "preferred_regions": ["Europe", "EU", "EEA", "EMEA"],
+    }
+
+    def job(location, workplace_type="remote", is_remote=True):
+        return {
+            "location_raw": location,
+            "is_remote": is_remote,
+            "workplace_type": workplace_type,
+            "address": None,
+            "description_text": None,
+        }
+
+    assert persistence._location_matches(job("Spain"), user) is True
+    assert persistence._location_matches(job("Portugal"), user) is True
+    assert persistence._location_matches(
+        job("Madrid", workplace_type="hybrid", is_remote=False),
+        user,
+    ) is True
+    assert persistence._location_matches(job("Remote Europe"), user) is True
+    assert persistence._location_matches(job("Germany"), user) is False
+    assert persistence._location_matches(job("Hungary"), user) is False
+    assert persistence._location_matches(
+        job("İstanbul Office", workplace_type="hybrid", is_remote=True),
+        user,
+    ) is False
+    assert persistence._location_matches(job("Remote, US"), user) is False
+    assert persistence._location_matches(job("Remote"), user) is False
+
+    # A broad preference must not override an explicit US restriction in the
+    # job's primary location.
+    assert persistence._location_matches(
+        job("United States") | {
+            "description_text": "This role can be performed remotely in Europe."
+        },
+        user,
+    ) is False
+
+
 def test_location_filter_rejects_stale_match_rows():
     with _temporary_postgres() as dsn:
         with psycopg.connect(dsn) as conn:
