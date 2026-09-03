@@ -203,8 +203,8 @@ upserts jobs by `(ats, external_id)`.
 
 ### Daily Ashby + Greenhouse scan
 
-Run the lightweight daily scan, deterministic matching, and Konstantin report
-export as one command:
+Run the lightweight daily scan, deterministic matching, Gemini recommendations,
+and both Konstantin reports as one command:
 
 ```bash
 uv run postgres_persistence.py \
@@ -215,9 +215,20 @@ uv run postgres_persistence.py \
 `--daily` selects the cached Ashby and Greenhouse boards, defaults to the last
 seven days when no cutoff is supplied, runs the deterministic matcher, and writes
 `reports/matched_roles.csv` and `reports/matched_roles.json` for
-`infobettor@gmail.com`. It never requests Greenhouse `content=true`, so
-Greenhouse descriptions remain deferred. Matching and report export use the
-same inclusive cutoff, so the daily report contains only roles in that window.
+`infobettor@gmail.com`. It also reviews score-floor candidates with Gemini and
+It writes the top-five recommendation files:
+`reports/konstantin_recommendations.csv` and
+`reports/konstantin_recommendations.json`. It never requests Greenhouse
+`content=true`, so Greenhouse descriptions remain deferred. Matching and report
+export use the same inclusive cutoff, so the reports contain only roles in that
+window.
+
+The `--recommend` command runs the same recommendation layer without importing
+boards. It uses the user's `min_match_score` as the candidate floor (55 for the
+default Konstantin profile), sends candidates in batches rather than making one
+Gemini request per job, caches reviews by profile/job content, and compares a
+deduplicated shortlist. Location and workplace rules remain deterministic hard
+filters; Gemini only ranks profile fit.
 
 PostgreSQL stores the latest board ETag and the cutoff covered by that response.
 If the board is unchanged, a later compatible scan receives `304 Not Modified`

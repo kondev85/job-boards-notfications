@@ -343,6 +343,8 @@ def test_postgres_schema_constraints_repeat_import_and_lifecycle():
                 "jobs",
                 "users",
                 "job_matches",
+                "profile_recommendation_runs",
+                "job_profile_reviews",
             }
             board_columns = {
                 row[0]
@@ -398,7 +400,7 @@ def test_postgres_schema_constraints_repeat_import_and_lifecycle():
                 True,
                 list(persistence.KONSTANTIN_RELOCATION_CITIES),
                 list(persistence.KONSTANTIN_RELOCATION_COUNTRIES),
-                75,
+                55,
             )
             user_columns = {
                 row[0]
@@ -922,6 +924,25 @@ def test_remote_location_evidence_is_user_specific_and_conservative():
         },
         europe_user,
     ) is False
+
+
+def test_recommendation_role_key_collapses_location_variants():
+    portugal_variant = {
+        "company": "EverAI",
+        "title": "Senior Affiliate Manager (Full Remote - Portugal)",
+    }
+    spain_variant = {
+        "company": "EverAI",
+        "title": "Senior Affiliate Manager (Full Remote - Spain)",
+    }
+    assert persistence._recommendation_role_key(portugal_variant) == (
+        persistence._recommendation_role_key(spain_variant)
+    )
+    assert persistence._recommendation_role_key(
+        {"company": "Bjakcareer", "title": "Product Lead - AI Stockbroking App"}
+    ) == persistence._recommendation_role_key(
+        {"company": "Bjakcareer", "title": "Product Lead - AI Stockbroking"}
+    )
 
 
 def test_concrete_location_scope_rejects_other_european_countries():

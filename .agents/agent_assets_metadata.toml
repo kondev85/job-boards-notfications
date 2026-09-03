@@ -84,3 +84,31 @@ mtime_ms = 1788432874611
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:b17893c0-756e-48f3-9c59-d0c65ca48ee2/ea963162-bdbd-4d4f-bd24-8fa16d4e29ce/49835eb6-5abb-47cc-8ba8-79c5be57990d"
 storage_version_token = "1788432975816649"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "y-pe31MOaiK4w9GccV0RD"
+uri = "file://reports/konstantin_recommendations.csv"
+type = "table"
+title = "Konstantin top-five recommendations (CSV)"
+description = "Gemini-ranked, location-eligible recommendations with deterministic and final fit evidence."
+logical_id = "47b1257a-553e-44a0-9914-ae53208b29ed"
+content_hash = "sha256:d56b56fd6f749a12980dd96fefeb6ab6df88b14624088cc5ca0b7e758d75b565"
+size = 32813
+mtime_ms = 1788439714846
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:b17893c0-756e-48f3-9c59-d0c65ca48ee2/47b1257a-553e-44a0-9914-ae53208b29ed/dfe275c5-03e5-4d85-af5a-75e252c29bd2"
+storage_version_token = "1788439793560077"
+content_type = "text/csv"
+
+[[outputs]]
+id = "zagBwSE5WGJzy4G0zZeRO"
+uri = "file://reports/konstantin_recommendations.json"
+type = "unspecified"
+title = "Konstantin top-five recommendations (JSON)"
+description = "Structured Gemini-ranked recommendation results for programmatic use."
+logical_id = "a1cc814e-839f-4bcd-ac20-0b1e64e36c8e"
+content_hash = "sha256:e7d14a210d5df64b9a45d6f91ee71905c669fb429f57b7eea94d125416825fa0"
+size = 35419
+mtime_ms = 1788439714847
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:b17893c0-756e-48f3-9c59-d0c65ca48ee2/a1cc814e-839f-4bcd-ac20-0b1e64e36c8e/2731582a-97eb-4025-9592-45c7c2ceb73c"
+storage_version_token = "1788439794113558"
+content_type = "application/octet-stream"

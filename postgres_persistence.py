@@ -31,6 +31,7 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -293,6 +294,58 @@ CREATE INDEX IF NOT EXISTS job_matches_match_status_idx
 CREATE INDEX IF NOT EXISTS job_matches_notified_at_idx
     ON job_matches (notified_at);
 
+CREATE TABLE IF NOT EXISTS profile_recommendation_runs (
+    run_id              BIGSERIAL PRIMARY KEY,
+    user_id             BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    profile_source_hash TEXT NOT NULL,
+    published_after     TIMESTAMPTZ,
+    candidate_floor     INTEGER NOT NULL,
+    top_n               INTEGER NOT NULL,
+    candidate_count     INTEGER NOT NULL,
+    shortlist_hash      TEXT NOT NULL,
+    model_name          TEXT NOT NULL,
+    model_version       TEXT NOT NULL,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS profile_recommendation_runs_user_idx
+    ON profile_recommendation_runs (user_id, created_at DESC);
+ALTER TABLE profile_recommendation_runs
+    ADD COLUMN IF NOT EXISTS published_after TIMESTAMPTZ;
+
+CREATE TABLE IF NOT EXISTS job_profile_reviews (
+    review_id              BIGSERIAL PRIMARY KEY,
+    user_id                BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    job_id                 BIGINT NOT NULL REFERENCES jobs(job_id) ON DELETE CASCADE,
+    profile_source_hash    TEXT NOT NULL,
+    job_source_hash        TEXT NOT NULL,
+    prompt_version         TEXT NOT NULL,
+    gemini_model           TEXT NOT NULL,
+    batch_fit_score        INTEGER CHECK (batch_fit_score BETWEEN 0 AND 100),
+    batch_recommendation   TEXT,
+    batch_strengths        JSONB,
+    batch_concerns         JSONB,
+    batch_rationale        TEXT,
+    batch_reviewed_at      TIMESTAMPTZ,
+    recommendation_run_id  BIGINT REFERENCES profile_recommendation_runs(run_id)
+                           ON DELETE SET NULL,
+    final_fit_score        INTEGER CHECK (final_fit_score BETWEEN 0 AND 100),
+    final_rank              INTEGER,
+    final_recommendation   TEXT,
+    final_strengths        JSONB,
+    final_concerns         JSONB,
+    final_rationale        TEXT,
+    final_reviewed_at      TIMESTAMPTZ,
+    created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT job_profile_reviews_user_job_key UNIQUE (user_id, job_id)
+);
+
+CREATE INDEX IF NOT EXISTS job_profile_reviews_user_idx
+    ON job_profile_reviews (user_id);
+CREATE INDEX IF NOT EXISTS job_profile_reviews_run_idx
+    ON job_profile_reviews (recommendation_run_id);
+
 UPDATE jobs AS j
 SET company = c.display_name
 FROM job_boards AS b
@@ -325,6 +378,12 @@ KONSTANTIN_RELOCATION_COUNTRIES = ("Spain", "Portugal")
 
 MATCH_MODEL_NAME = "deterministic-preferences"
 MATCH_MODEL_VERSION = "v3-concrete-location"
+RECOMMENDATION_MODEL_NAME = "gemini-profile-reranker"
+RECOMMENDATION_MODEL_VERSION = gemini_service.JOB_REVIEW_VERSION
+DEFAULT_RECOMMENDATION_FLOOR = 55
+RECOMMENDATION_BATCH_SIZE = 10
+RECOMMENDATION_SHORTLIST_SIZE = 5
+RECOMMENDATION_TOP_N = 5
 MATCH_SCORE_WEIGHTS = {
     "role": 40,
     "industry": 25,
@@ -419,7 +478,7 @@ INSERT INTO users (
     TRUE,
     {_sql_text_array(KONSTANTIN_RELOCATION_CITIES)},
     {_sql_text_array(KONSTANTIN_RELOCATION_COUNTRIES)},
-    75
+    55
 )
 ON CONFLICT (email) DO UPDATE SET
     name = EXCLUDED.name,
@@ -1840,10 +1899,453 @@ def run_matching(
     return stats
 
 
+def _recommendation_job_hash(job: dict[str, Any]) -> str:
+    relevant = {
+        field: job.get(field)
+        for field in (
+            "job_id",
+            "title",
+            "department",
+            "team",
+            "company",
+            "employment_type",
+            "location_raw",
+            "address",
+            "workplace_type",
+            "description_text",
+            "job_url",
+        )
+    }
+    serialized = json.dumps(relevant, ensure_ascii=False, sort_keys=True, default=str)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _recommendation_job_payload(
+    job: dict[str, Any],
+    *,
+    batch_fit_score: int | None = None,
+) -> dict[str, Any]:
+    description = str(job.get("description_text") or "").strip()
+    if len(description) > 2200:
+        description = (
+            description[:1500]
+            + "\n...[description truncated for batch review]...\n"
+            + description[-600:]
+        )
+    payload = {
+        "job_id": job["job_id"],
+        "company": job.get("company"),
+        "title": job.get("title"),
+        "department": job.get("department"),
+        "team": job.get("team"),
+        "employment_type": job.get("employment_type"),
+        "location": job.get("location_raw"),
+        "workplace_type": job.get("workplace_type"),
+        "description": description[:5000],
+        "deterministic_score": job.get("score"),
+    }
+    if batch_fit_score is not None:
+        payload["batch_fit_score"] = batch_fit_score
+    return payload
+
+
+def _recommendation_role_key(job: dict[str, Any]) -> str:
+    """Group country-specific ATS variants of the same company role."""
+    company = _normalized_search_text(job.get("company"))
+    title = _normalized_search_text(job.get("title"))
+    title = re.sub(r"\([^)]*\)", " ", title)
+    title = re.sub(r"\b(full remote|remote|europe|spain|portugal|app)\b", " ", title)
+    title = " ".join(title.split())
+    return f"{company}|{title}"
+
+
+def _review_batch_with_split(
+    profile: dict[str, Any],
+    jobs: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Retry malformed multi-job responses as smaller independently validated batches."""
+    try:
+        return gemini_service.review_job_batch(
+            profile,
+            [_recommendation_job_payload(job) for job in jobs],
+        )
+    except gemini_service.GeminiResponseError:
+        if len(jobs) == 1:
+            raise
+        midpoint = len(jobs) // 2
+        return _review_batch_with_split(profile, jobs[:midpoint]) + _review_batch_with_split(
+            profile, jobs[midpoint:]
+        )
+
+
+def run_recommendations(
+    conn: psycopg.Connection,
+    *,
+    user_id: int | None = None,
+    user_email: str | None = None,
+    now: datetime | None = None,
+    published_after: datetime | None = None,
+    top_n: int = RECOMMENDATION_TOP_N,
+    batch_size: int = RECOMMENDATION_BATCH_SIZE,
+    shortlist_size: int = RECOMMENDATION_SHORTLIST_SIZE,
+    force: bool = False,
+) -> dict[str, int]:
+    """Review score-floor candidates with Gemini and persist a top recommendation set."""
+    if user_id is not None and user_email is not None:
+        raise ValueError("pass either user_id or user_email, not both")
+    if top_n < 1 or batch_size < 1 or shortlist_size < top_n:
+        raise ValueError("invalid recommendation sizing")
+
+    user_filter = ""
+    user_params: tuple[Any, ...] = ()
+    if user_id is not None:
+        user_filter = " AND user_id = %s"
+        user_params = (user_id,)
+    elif user_email is not None:
+        user_filter = " AND email = %s"
+        user_params = (user_email,)
+
+    user_row = conn.execute(
+        f"""
+        SELECT user_id, profile_json, profile_source_hash, min_match_score
+        FROM users
+        WHERE active{user_filter}
+        ORDER BY user_id
+        LIMIT 1
+        """,
+        user_params,
+    ).fetchone()
+    if user_row is None:
+        raise ValueError("No active user found for recommendation run")
+    user_id_value, profile, profile_source_hash, configured_floor = user_row
+    if not isinstance(profile, dict) or not profile:
+        raise gemini_service.GeminiConfigurationError(
+            "Cannot recommend jobs without a generated profile_json"
+        )
+    if not profile_source_hash:
+        raise gemini_service.GeminiConfigurationError(
+            "Cannot recommend jobs without a profile source hash"
+        )
+    candidate_floor = (
+        DEFAULT_RECOMMENDATION_FLOOR
+        if configured_floor is None
+        else max(0, min(100, int(configured_floor)))
+    )
+    job_cutoff = ""
+    job_params: tuple[datetime, ...] = ()
+    if published_after is not None:
+        job_cutoff = " AND j.published_at >= %s"
+        job_params = (published_after,)
+    rows = conn.execute(
+        f"""
+        SELECT j.job_id, j.title, j.department, j.team, j.company,
+               j.employment_type, j.location_raw, j.address, j.is_remote,
+               j.workplace_type, j.published_at, j.job_url,
+               j.description_text, jm.score
+        FROM job_matches AS jm
+        JOIN jobs AS j ON j.job_id = jm.job_id
+        WHERE jm.user_id = %s
+          AND jm.match_status = 'matched'
+          AND j.closed_at IS NULL
+          AND jm.score >= %s
+          {job_cutoff}
+        ORDER BY jm.score DESC, j.published_at DESC NULLS LAST, j.job_id
+        """,
+        (user_id_value, candidate_floor, *job_params),
+    ).fetchall()
+    columns = (
+        "job_id", "title", "department", "team", "company",
+        "employment_type", "location_raw", "address", "is_remote",
+        "workplace_type", "published_at", "job_url", "description_text", "score",
+    )
+    candidates = [dict(zip(columns, row)) for row in rows]
+    if not candidates:
+        return {
+            "candidate_floor": candidate_floor,
+            "candidates": 0,
+            "batch_reviewed": 0,
+            "batch_cached": 0,
+            "final_candidates": 0,
+            "recommendations": 0,
+            "run_id": 0,
+        }
+
+    model_name = os.environ.get("GEMINI_MODEL", gemini_service.DEFAULT_MODEL)
+    prompt_version = gemini_service.JOB_REVIEW_VERSION
+    existing_rows = {
+        row[0]: row
+        for row in conn.execute(
+            """
+            SELECT job_id, profile_source_hash, job_source_hash,
+                   prompt_version, gemini_model, batch_fit_score,
+                   batch_recommendation, batch_strengths, batch_concerns,
+                   batch_rationale
+            FROM job_profile_reviews
+            WHERE user_id = %s
+            """,
+            (user_id_value,),
+        ).fetchall()
+    }
+    pending: list[dict[str, Any]] = []
+    cached = 0
+    for job in candidates:
+        job["job_source_hash"] = _recommendation_job_hash(job)
+        old = existing_rows.get(job["job_id"])
+        if (
+            not force
+            and old is not None
+            and old[1] == profile_source_hash
+            and old[2] == job["job_source_hash"]
+            and old[3] == prompt_version
+            and old[4] == model_name
+            and old[5] is not None
+        ):
+            job["batch_review"] = {
+                "fit_score": old[5],
+                "recommendation": old[6],
+                "strengths": old[7] or [],
+                "concerns": old[8] or [],
+                "rationale": old[9] or "",
+            }
+            cached += 1
+        else:
+            pending.append(job)
+
+    # Do not hold the read transaction open while waiting for Gemini. Each
+    # successful batch is committed independently below.
+    conn.commit()
+    run_at = now or datetime.now(timezone.utc)
+    for start in range(0, len(pending), batch_size):
+        batch = pending[start : start + batch_size]
+        reviews = _review_batch_with_split(profile, batch)
+        reviews_by_id = {review["job_id"]: review for review in reviews}
+        with conn.transaction():
+            for job in batch:
+                review = reviews_by_id[job["job_id"]]
+                conn.execute(
+                    """
+                    INSERT INTO job_profile_reviews (
+                        user_id, job_id, profile_source_hash, job_source_hash,
+                        prompt_version, gemini_model, batch_fit_score,
+                        batch_recommendation, batch_strengths, batch_concerns,
+                        batch_rationale, batch_reviewed_at, updated_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (user_id, job_id) DO UPDATE SET
+                        profile_source_hash = EXCLUDED.profile_source_hash,
+                        job_source_hash = EXCLUDED.job_source_hash,
+                        prompt_version = EXCLUDED.prompt_version,
+                        gemini_model = EXCLUDED.gemini_model,
+                        batch_fit_score = EXCLUDED.batch_fit_score,
+                        batch_recommendation = EXCLUDED.batch_recommendation,
+                        batch_strengths = EXCLUDED.batch_strengths,
+                        batch_concerns = EXCLUDED.batch_concerns,
+                        batch_rationale = EXCLUDED.batch_rationale,
+                        batch_reviewed_at = EXCLUDED.batch_reviewed_at,
+                        recommendation_run_id = NULL,
+                        final_fit_score = NULL,
+                        final_rank = NULL,
+                        final_recommendation = NULL,
+                        final_strengths = NULL,
+                        final_concerns = NULL,
+                        final_rationale = NULL,
+                        final_reviewed_at = NULL,
+                        updated_at = EXCLUDED.updated_at
+                    """,
+                    (
+                        user_id_value,
+                        job["job_id"],
+                        profile_source_hash,
+                        job["job_source_hash"],
+                        prompt_version,
+                        model_name,
+                        review["fit_score"],
+                        review["recommendation"],
+                        Jsonb(review["strengths"]),
+                        Jsonb(review["concerns"]),
+                        review["rationale"],
+                        run_at,
+                        run_at,
+                    ),
+                )
+                job["batch_review"] = review
+
+    for job in candidates:
+        if "batch_review" not in job:
+            raise RuntimeError(f"Missing cached review for job {job['job_id']}")
+    ordered_candidates = sorted(
+        candidates,
+        key=lambda job: (
+            -job["batch_review"]["fit_score"],
+            -job["score"],
+            -(job["published_at"].timestamp() if job["published_at"] else 0),
+            job["job_id"],
+        ),
+    )
+    shortlist: list[dict[str, Any]] = []
+    selected_role_keys: set[str] = set()
+    selected_company_counts: dict[str, int] = {}
+    for job in ordered_candidates:
+        role_key = _recommendation_role_key(job)
+        company_key = _normalized_search_text(job.get("company"))
+        if (
+            role_key in selected_role_keys
+            or selected_company_counts.get(company_key, 0) >= 2
+        ):
+            continue
+        selected_role_keys.add(role_key)
+        selected_company_counts[company_key] = (
+            selected_company_counts.get(company_key, 0) + 1
+        )
+        shortlist.append(job)
+        if len(shortlist) == shortlist_size:
+            break
+    if len(shortlist) < shortlist_size:
+        for job in ordered_candidates:
+            role_key = _recommendation_role_key(job)
+            if role_key in selected_role_keys:
+                continue
+            selected_role_keys.add(role_key)
+            shortlist.append(job)
+            if len(shortlist) == shortlist_size:
+                break
+    shortlist_signature = [
+        (
+            job["job_id"],
+            job["job_source_hash"],
+            job["score"],
+            job["batch_review"]["fit_score"],
+        )
+        for job in shortlist
+    ]
+    shortlist_hash = hashlib.sha256(
+        json.dumps(
+            {
+                "profile_source_hash": profile_source_hash,
+                "candidate_floor": candidate_floor,
+                "top_n": top_n,
+                "shortlist": shortlist_signature,
+            },
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()
+    existing_run = None
+    if not force:
+        existing_run = conn.execute(
+            """
+            SELECT run_id
+            FROM profile_recommendation_runs
+            WHERE user_id = %s
+              AND profile_source_hash = %s
+              AND published_after IS NOT DISTINCT FROM %s
+              AND candidate_floor = %s
+              AND top_n = %s
+              AND shortlist_hash = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (
+                user_id_value,
+                profile_source_hash,
+                published_after,
+                candidate_floor,
+                top_n,
+                shortlist_hash,
+            ),
+        ).fetchone()
+    if existing_run:
+        return {
+            "candidate_floor": candidate_floor,
+            "candidates": len(candidates),
+            "batch_reviewed": len(pending),
+            "batch_cached": cached,
+            "final_candidates": len(shortlist),
+            "recommendations": min(top_n, len(shortlist)),
+            "run_id": existing_run[0],
+        }
+
+    final_reviews = gemini_service.compare_job_shortlist(
+        profile,
+        [
+            _recommendation_job_payload(
+                job,
+                batch_fit_score=job["batch_review"]["fit_score"],
+            )
+            for job in shortlist
+        ],
+    )
+    final_by_id = {review["job_id"]: review for review in final_reviews}
+    with conn.transaction():
+        run_id = conn.execute(
+            """
+            INSERT INTO profile_recommendation_runs (
+                user_id, profile_source_hash, candidate_floor, top_n,
+                published_after, candidate_count, shortlist_hash,
+                model_name, model_version
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING run_id
+            """,
+            (
+                user_id_value,
+                profile_source_hash,
+                candidate_floor,
+                top_n,
+                published_after,
+                len(candidates),
+                shortlist_hash,
+                model_name,
+                prompt_version,
+            ),
+        ).fetchone()[0]
+        for job in shortlist:
+            review = final_by_id[job["job_id"]]
+            conn.execute(
+                """
+                UPDATE job_profile_reviews
+                SET recommendation_run_id = %s,
+                    final_fit_score = %s,
+                    final_rank = %s,
+                    final_recommendation = %s,
+                    final_strengths = %s,
+                    final_concerns = %s,
+                    final_rationale = %s,
+                    final_reviewed_at = %s,
+                    updated_at = %s
+                WHERE user_id = %s AND job_id = %s
+                """,
+                (
+                    run_id,
+                    review["fit_score"],
+                    review["rank"],
+                    review["recommendation"],
+                    Jsonb(review["strengths"]),
+                    Jsonb(review["concerns"]),
+                    review["rationale"],
+                    run_at,
+                    run_at,
+                    user_id_value,
+                    job["job_id"],
+                ),
+            )
+    return {
+        "candidate_floor": candidate_floor,
+        "candidates": len(candidates),
+        "batch_reviewed": len(pending),
+        "batch_cached": cached,
+        "final_candidates": len(shortlist),
+        "recommendations": min(top_n, len(shortlist)),
+        "run_id": run_id,
+    }
+
+
 def run(args: argparse.Namespace) -> int:
     match_requested = getattr(args, "match", False)
+    recommend_requested = getattr(args, "recommend", False)
     profile_requested = getattr(args, "generate_profile", False)
     export_requested = getattr(args, "export_report", False)
+    recommendation_export_requested = (
+        getattr(args, "export_recommendations", False) or recommend_requested
+    )
+    match_requested = match_requested or recommend_requested
     matching_only = (
         match_requested
         and not args.board
@@ -1873,6 +2375,7 @@ def run(args: argparse.Namespace) -> int:
 
     with psycopg.connect(dsn) as conn:
         conn.execute(SCHEMA_SQL)
+        conn.commit()
         if profile_requested:
             try:
                 generated = generate_profile_for_user(
@@ -1978,6 +2481,25 @@ def run(args: argparse.Namespace) -> int:
                 f"{match_stats['matched']} matched, "
                 f"{match_stats['skipped']} excluded"
             )
+        if recommend_requested:
+            try:
+                recommendation_stats = run_recommendations(
+                    conn,
+                    published_after=published_after,
+                    batch_size=args.recommend_batch_size,
+                )
+            except (ValueError, gemini_service.GeminiProfileError) as exc:
+                print(f"\nRecommendation generation failed: {exc}", file=sys.stderr)
+                failed += 1
+            else:
+                print(
+                    "\nRecommendations complete: "
+                    f"{recommendation_stats['candidates']} candidates at or above "
+                    f"{recommendation_stats['candidate_floor']}, "
+                    f"{recommendation_stats['batch_reviewed']} Gemini-reviewed, "
+                    f"{recommendation_stats['batch_cached']} cached, "
+                    f"{recommendation_stats['recommendations']} top recommendations"
+                )
 
     if export_requested:
         try:
@@ -1987,6 +2509,17 @@ def run(args: argparse.Namespace) -> int:
         except Exception as exc:
             print(f"\nReport export failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             failed += 1
+    if recommendation_export_requested:
+        try:
+            from scripts.export_match_reports import _export_recommendations
+
+            _export_recommendations(published_after=published_after)
+        except Exception as exc:
+            print(
+                f"\nRecommendation export failed: {type(exc).__name__}: {exc}",
+                file=sys.stderr,
+            )
+            failed += 1
 
     if specs:
         print(
@@ -1994,7 +2527,7 @@ def run(args: argparse.Namespace) -> int:
             f"{total_new} new, {total_updated} updated, {total_closed} closed, "
             f"{unchanged} unchanged, {failed} failed boards"
         )
-    elif not match_requested:
+    elif not match_requested and not recommend_requested:
         print(
             f"\nPostgreSQL import complete: {total_jobs} current jobs, "
             f"{total_new} new, {total_updated} updated, {total_closed} closed, "
@@ -2050,6 +2583,20 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--recommend",
+        action="store_true",
+        help=(
+            "match eligible jobs, review score-floor candidates with Gemini, and "
+            "export Konstantin's cached top recommendations"
+        ),
+    )
+    parser.add_argument(
+        "--recommend-batch-size",
+        type=int,
+        default=RECOMMENDATION_BATCH_SIZE,
+        help="number of jobs sent to Gemini per batch during recommendations",
+    )
+    parser.add_argument(
         "--daily",
         action="store_true",
         help=(
@@ -2061,6 +2608,11 @@ def main() -> None:
         "--export-report",
         action="store_true",
         help="export the matched-role CSV and JSON report for Konstantin after matching",
+    )
+    parser.add_argument(
+        "--export-recommendations",
+        action="store_true",
+        help="export the latest Gemini-ranked recommendation report for Konstantin",
     )
     parser.add_argument(
         "--generate-profile",
@@ -2088,7 +2640,9 @@ def main() -> None:
             )
         args.ats = "ashby,greenhouse"
         args.match = True
+        args.recommend = True
         args.export_report = True
+        args.export_recommendations = True
         if not args.published_after:
             args.published_after = (
                 datetime.now(timezone.utc) - timedelta(days=7)
@@ -2097,11 +2651,14 @@ def main() -> None:
         args.ats = "all"
     if args.limit is not None and args.limit < 1:
         parser.error("--limit must be at least 1")
+    if args.recommend_batch_size < 1:
+        parser.error("--recommend-batch-size must be at least 1")
     if args.generate_profile:
         if not args.user_email:
             parser.error("--generate-profile requires --user-email")
         if (
             args.match
+            or args.recommend
             or args.board
             or args.boards_from
             or args.limit is not None
@@ -2109,6 +2666,7 @@ def main() -> None:
             or args.greenhouse_content
             or args.daily
             or args.export_report
+            or args.export_recommendations
         ):
             parser.error(
                 "--generate-profile cannot be combined with import or --match options"

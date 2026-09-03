@@ -38,6 +38,14 @@ def _response(profile: dict) -> dict:
     }
 
 
+def _review_response(reviews: list[dict]) -> dict:
+    return {
+        "candidates": [
+            {"content": {"parts": [{"text": json.dumps({"reviews": reviews})}]}}
+        ]
+    }
+
+
 def _raises(error_type, fn):
     try:
         fn()
@@ -206,6 +214,104 @@ def test_source_hash_is_stable_and_does_not_contain_cv_text():
     digest = gemini_service.cv_source_hash(cv_text)
     assert digest == gemini_service.cv_source_hash(cv_text)
     assert cv_text not in digest
+
+
+def test_job_review_batch_validates_every_job_and_preserves_evidence():
+    calls = []
+    jobs = [
+        {"job_id": 11, "title": "Product Manager", "description": "Own payments."},
+        {"job_id": 12, "title": "Program Manager", "description": "Lead delivery."},
+    ]
+    reviews = [
+        {
+            "job_id": 11,
+            "fit_score": 91,
+            "recommendation": "strong_match",
+            "strengths": ["Direct product ownership."],
+            "concerns": [],
+            "rationale": "Strong evidence match.",
+        },
+        {
+            "job_id": 12,
+            "fit_score": 68,
+            "recommendation": "good_match",
+            "strengths": ["Delivery leadership."],
+            "concerns": ["Industry is unclear."],
+            "rationale": "Good transferable fit.",
+        },
+    ]
+
+    def transport(api_key, model_name, payload, timeout):
+        calls.append(payload)
+        return _review_response(reviews)
+
+    result = gemini_service.review_job_batch(
+        _profile(),
+        jobs,
+        api_key="test-key",
+        model_name="test-model",
+        transport=transport,
+    )
+    assert result[0]["job_id"] == 11
+    assert result[0]["fit_score"] == 91
+    assert result[1]["concerns"] == ["Industry is unclear."]
+    assert "Do not reject or accept a job based on geography" in (
+        calls[0]["contents"][0]["parts"][0]["text"]
+    )
+
+
+def test_final_job_comparison_requires_unique_consecutive_ranks():
+    jobs = [{"job_id": 11}, {"job_id": 12}]
+    reviews = [
+        {
+            "job_id": 11,
+            "fit_score": 88,
+            "rank": 2,
+            "recommendation": "strong_match",
+            "strengths": ["Strong fit."],
+            "concerns": [],
+            "rationale": "Best evidence is present.",
+        },
+        {
+            "job_id": 12,
+            "fit_score": 72,
+            "rank": 1,
+            "recommendation": "good_match",
+            "strengths": ["Relevant delivery."],
+            "concerns": [],
+            "rationale": "Good but less direct.",
+        },
+    ]
+    result = gemini_service.compare_job_shortlist(
+        _profile(),
+        jobs,
+        api_key="test-key",
+        transport=lambda *args: _review_response(reviews),
+    )
+    assert [item["rank"] for item in result] == [2, 1]
+
+
+def test_job_review_rejects_missing_job_review():
+    jobs = [{"job_id": 11}, {"job_id": 12}]
+    reviews = [
+        {
+            "job_id": 11,
+            "fit_score": 88,
+            "recommendation": "strong_match",
+            "strengths": [],
+            "concerns": [],
+            "rationale": "Strong fit.",
+        }
+    ]
+    _raises(
+        gemini_service.GeminiResponseError,
+        lambda: gemini_service.review_job_batch(
+            _profile(),
+            jobs,
+            api_key="test-key",
+            transport=lambda *args: _review_response(reviews),
+        ),
+    )
 
 
 if __name__ == "__main__":

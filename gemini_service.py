@@ -17,6 +17,7 @@ from urllib.request import Request, urlopen
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 PROFILE_VERSION = "v1"
+JOB_REVIEW_VERSION = "v3-batch-reranker"
 PROFILE_REQUIRED_KEYS = (
     "schema_version",
     "professional_summary",
@@ -410,3 +411,280 @@ def generate_user_profile(
         "profile_version": PROFILE_VERSION,
         "profile_source_hash": cv_source_hash(cv_text),
     }
+
+
+_REVIEW_RECOMMENDATIONS = {
+    "strong_match",
+    "good_match",
+    "possible_match",
+    "weak_match",
+}
+
+
+def _job_review_prompt(
+    profile: dict[str, Any],
+    jobs: list[dict[str, Any]],
+    *,
+    final_comparison: bool,
+) -> str:
+    task = (
+        "Compare these finalists and rank them from best to weakest for the person."
+        if final_comparison
+        else "Score each candidate independently against the person's evidence-based profile."
+    )
+    rank_instruction = (
+        ' Include a unique integer "rank" from 1 to the number of jobs.'
+        if final_comparison
+        else ""
+    )
+    return f"""
+You are evaluating job fit for one candidate using an evidence-based professional
+profile. {task}
+
+Location and workplace eligibility have already been checked by deterministic
+rules. Do not reject or accept a job based on geography, remote status, or
+location wording. Do not invent experience or treat a title alone as proof of
+responsibilities. Prefer demonstrated evidence over generic keyword overlap.
+Consider product, project, program, delivery, operations, implementation,
+fintech, gambling, payments, regulated-market, platform, technical, leadership,
+and transferable experience when relevant.
+
+Return valid JSON only with exactly this structure:
+{{
+  "reviews": [
+    {{
+      "job_id": 123,
+      "fit_score": 0,
+      "recommendation": "strong_match|good_match|possible_match|weak_match",
+      "strengths": ["specific evidence-based reason"],
+      "concerns": ["specific gap or uncertainty"],
+      "rationale": "concise explanation"{rank_instruction}
+    }}
+  ]
+}}
+
+fit_score is an independent 0-100 profile-fit score, not a probability of
+getting hired. Strong match is normally 80-100, good match 65-79, possible
+match 50-64, and weak match below 50, but use professional judgment. Return
+exactly one review for every supplied job, preserve every job_id, and do not
+return any other jobs. Keep each review concise: at most 3 strengths, at most
+3 concerns, and a rationale of no more than 300 characters.
+
+PROFILE:
+---
+{json.dumps(profile, ensure_ascii=False, sort_keys=True)}
+---
+
+JOBS:
+---
+{json.dumps(jobs, ensure_ascii=False, sort_keys=True)}
+---
+""".strip()
+
+
+def _validate_job_reviews(
+    payload: dict[str, Any],
+    expected_job_ids: list[int],
+    *,
+    final_comparison: bool,
+) -> list[dict[str, Any]]:
+    reviews = payload.get("reviews")
+    if not isinstance(reviews, list):
+        raise GeminiResponseError("Gemini job review response must contain reviews")
+    expected = set(expected_job_ids)
+    seen: set[int] = set()
+    validated: list[dict[str, Any]] = []
+    for index, item in enumerate(reviews):
+        if not isinstance(item, dict):
+            raise GeminiResponseError(f"reviews[{index}] must be an object")
+        job_id = item.get("job_id")
+        if isinstance(job_id, bool) or not isinstance(job_id, int) or job_id not in expected:
+            raise GeminiResponseError(f"reviews[{index}] contains an unexpected job_id")
+        if job_id in seen:
+            raise GeminiResponseError(f"Gemini returned duplicate review for job {job_id}")
+        seen.add(job_id)
+        fit_score = item.get("fit_score")
+        if (
+            isinstance(fit_score, bool)
+            or not isinstance(fit_score, (int, float))
+            or not 0 <= fit_score <= 100
+        ):
+            raise GeminiResponseError(f"reviews[{index}].fit_score must be between 0 and 100")
+        recommendation = item.get("recommendation")
+        if recommendation not in _REVIEW_RECOMMENDATIONS:
+            raise GeminiResponseError(f"reviews[{index}] has an invalid recommendation")
+        strengths = item.get("strengths")
+        concerns = item.get("concerns")
+        if (
+            not isinstance(strengths, list)
+            or not all(isinstance(value, str) for value in strengths)
+            or not isinstance(concerns, list)
+            or not all(isinstance(value, str) for value in concerns)
+        ):
+            raise GeminiResponseError(f"reviews[{index}] strengths and concerns must be string arrays")
+        rationale = item.get("rationale")
+        if not isinstance(rationale, str) or not rationale.strip():
+            raise GeminiResponseError(f"reviews[{index}].rationale must be a non-empty string")
+        validated_item = {
+            "job_id": job_id,
+            "fit_score": round(float(fit_score)),
+            "recommendation": recommendation,
+            "strengths": strengths,
+            "concerns": concerns,
+            "rationale": rationale.strip(),
+        }
+        if final_comparison:
+            rank = item.get("rank")
+            if (
+                isinstance(rank, bool)
+                or not isinstance(rank, int)
+                or not 1 <= rank <= len(expected_job_ids)
+            ):
+                raise GeminiResponseError(f"reviews[{index}].rank is invalid")
+            validated_item["rank"] = rank
+        validated.append(validated_item)
+    if seen != expected:
+        missing = sorted(expected - seen)
+        raise GeminiResponseError(
+            "Gemini did not review every supplied job; missing job IDs: "
+            + ", ".join(str(value) for value in missing)
+        )
+    if final_comparison and {item["rank"] for item in validated} != set(
+        range(1, len(expected_job_ids) + 1)
+    ):
+        raise GeminiResponseError("Gemini final ranks must be unique and consecutive")
+    return validated
+
+
+def _review_jobs(
+    profile: dict[str, Any],
+    jobs: list[dict[str, Any]],
+    *,
+    final_comparison: bool,
+    api_key: str | None,
+    model_name: str | None,
+    timeout: float,
+    transport: Transport | None,
+) -> list[dict[str, Any]]:
+    if not isinstance(profile, dict) or not profile:
+        raise GeminiConfigurationError("Cannot review jobs without profile JSON")
+    if not jobs:
+        return []
+    key = api_key or os.environ.get("GEMINI_API_KEY")
+    if not key:
+        raise GeminiConfigurationError(
+            "GEMINI_API_KEY is not configured in the environment"
+        )
+    selected_model = model_name or os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
+    expected_job_ids = [job.get("job_id") for job in jobs]
+    if any(
+        isinstance(job_id, bool) or not isinstance(job_id, int)
+        for job_id in expected_job_ids
+    ) or len(set(expected_job_ids)) != len(expected_job_ids):
+        raise GeminiConfigurationError("Job review inputs must have unique integer job IDs")
+    payload = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {
+                        "text": _job_review_prompt(
+                            profile,
+                            jobs,
+                            final_comparison=final_comparison,
+                        )
+                    }
+                ],
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.1,
+            "responseMimeType": "application/json",
+            "maxOutputTokens": 8192,
+            "responseSchema": {
+                "type": "OBJECT",
+                "properties": {
+                    "reviews": {
+                        "type": "ARRAY",
+                        "items": {
+                            "type": "OBJECT",
+                            "properties": {
+                                "job_id": {"type": "INTEGER"},
+                                "fit_score": {"type": "NUMBER"},
+                                "recommendation": {"type": "STRING"},
+                                "strengths": {
+                                    "type": "ARRAY",
+                                    "items": {"type": "STRING"},
+                                },
+                                "concerns": {
+                                    "type": "ARRAY",
+                                    "items": {"type": "STRING"},
+                                },
+                                "rationale": {"type": "STRING"},
+                                "rank": {"type": "INTEGER"},
+                            },
+                            "required": [
+                                "job_id",
+                                "fit_score",
+                                "recommendation",
+                                "strengths",
+                                "concerns",
+                                "rationale",
+                            ]
+                            + (["rank"] if final_comparison else []),
+                        },
+                    }
+                },
+                "required": ["reviews"],
+            },
+        },
+    }
+    caller = transport or _default_transport
+    response = caller(key, selected_model, payload, timeout)
+    return _validate_job_reviews(
+        _parse_json(_response_text(response)),
+        expected_job_ids,
+        final_comparison=final_comparison,
+    )
+
+
+def review_job_batch(
+    profile: dict[str, Any],
+    jobs: list[dict[str, Any]],
+    *,
+    api_key: str | None = None,
+    model_name: str | None = None,
+    timeout: float = 90.0,
+    transport: Transport | None = None,
+) -> list[dict[str, Any]]:
+    """Review a batch of jobs against a profile without making location decisions."""
+    return _review_jobs(
+        profile,
+        jobs,
+        final_comparison=False,
+        api_key=api_key,
+        model_name=model_name,
+        timeout=timeout,
+        transport=transport,
+    )
+
+
+def compare_job_shortlist(
+    profile: dict[str, Any],
+    jobs: list[dict[str, Any]],
+    *,
+    api_key: str | None = None,
+    model_name: str | None = None,
+    timeout: float = 90.0,
+    transport: Transport | None = None,
+) -> list[dict[str, Any]]:
+    """Rank a shortlist of already reviewed jobs against a profile."""
+    return _review_jobs(
+        profile,
+        jobs,
+        final_comparison=True,
+        api_key=api_key,
+        model_name=model_name,
+        timeout=timeout,
+        transport=transport,
+    )
