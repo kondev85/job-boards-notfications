@@ -232,8 +232,6 @@ CREATE TABLE IF NOT EXISTS users (
     willing_to_relocate     BOOLEAN,
     relocation_cities       TEXT[],
     relocation_countries    TEXT[],
-    preferred_regions       TEXT[],
-    excluded_regions        TEXT[],
     min_match_score         INTEGER,
     created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -244,6 +242,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_generated_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_model TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_version TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_source_hash TEXT;
+ALTER TABLE users DROP COLUMN IF EXISTS preferred_regions;
+ALTER TABLE users DROP COLUMN IF EXISTS excluded_regions;
 
 CREATE TABLE IF NOT EXISTS job_matches (
     match_id       BIGSERIAL PRIMARY KEY,
@@ -322,8 +322,6 @@ KONSTANTIN_TARGET_INDUSTRIES = (
 )
 KONSTANTIN_RELOCATION_CITIES = ("Madrid", "Málaga")
 KONSTANTIN_RELOCATION_COUNTRIES = ("Spain", "Portugal")
-KONSTANTIN_PREFERRED_REGIONS = ("Europe", "EU", "EEA", "EMEA")
-KONSTANTIN_EXCLUDED_REGIONS = ("US-only",)
 
 MATCH_MODEL_NAME = "deterministic-preferences"
 MATCH_MODEL_VERSION = "v3-concrete-location"
@@ -399,7 +397,7 @@ INSERT INTO users (
     target_industries, base_city, base_country, base_latitude, base_longitude,
     remote_allowed, onsite_allowed, onsite_max_distance_km, hybrid_allowed,
     hybrid_max_distance_km, willing_to_relocate, relocation_cities,
-    relocation_countries, preferred_regions, excluded_regions, min_match_score
+    relocation_countries, min_match_score
 ) VALUES (
     {_sql_literal("Konstantin Kondev")},
     {_sql_literal(KONSTANTIN_EMAIL)},
@@ -421,8 +419,6 @@ INSERT INTO users (
     TRUE,
     {_sql_text_array(KONSTANTIN_RELOCATION_CITIES)},
     {_sql_text_array(KONSTANTIN_RELOCATION_COUNTRIES)},
-    {_sql_text_array(KONSTANTIN_PREFERRED_REGIONS)},
-    {_sql_text_array(KONSTANTIN_EXCLUDED_REGIONS)},
     75
 )
 ON CONFLICT (email) DO UPDATE SET
@@ -443,8 +439,6 @@ ON CONFLICT (email) DO UPDATE SET
     willing_to_relocate = EXCLUDED.willing_to_relocate,
     relocation_cities = EXCLUDED.relocation_cities,
     relocation_countries = EXCLUDED.relocation_countries,
-    preferred_regions = EXCLUDED.preferred_regions,
-    excluded_regions = EXCLUDED.excluded_regions,
     min_match_score = EXCLUDED.min_match_score,
     updated_at = now();
 """
@@ -1206,10 +1200,16 @@ def _seniority_fit(user: dict[str, Any], role_text: str) -> float:
 def _workplace_kind(job: dict[str, Any]) -> str:
     workplace = _normalized_search_text(job.get("workplace_type"))
     location = _normalized_search_text(job.get("location_raw"))
-    if job.get("is_remote") or "remote" in workplace or "remote" in location:
-        return "remote"
     if "hybrid" in workplace or "hybrid" in location:
         return "hybrid"
+    if (
+        "onsite" in workplace
+        or "on site" in workplace
+        or "on site" in location
+    ):
+        return "onsite"
+    if job.get("is_remote") or "remote" in workplace or "remote" in location:
+        return "remote"
     return "onsite"
 
 
@@ -1256,6 +1256,44 @@ _LOCATION_COUNTRY_ALIASES = {
     "md": {"md", "moldova"},
     "ge": {"ge", "georgia"},
     "tr": {"tr", "turkey"},
+    "au": {"au", "australia"},
+    "cn": {"cn", "china"},
+    "hk": {"hk", "hong kong"},
+    "in": {"in", "india"},
+    "jp": {"jp", "japan"},
+    "sg": {"sg", "singapore"},
+}
+_LOCATION_CITY_COUNTRIES = {
+    "madrid": "es",
+    "malaga": "es",
+    "barcelona": "es",
+    "valencia": "es",
+    "seville": "es",
+    "lisbon": "pt",
+    "porto": "pt",
+    "faro": "pt",
+    "paris": "fr",
+    "berlin": "de",
+    "hamburg": "de",
+    "munich": "de",
+    "istanbul": "tr",
+    "budapest": "hu",
+    "london": "gb",
+    "belfast": "gb",
+    "krakow": "pl",
+    "warsaw": "pl",
+    "stockholm": "se",
+    "toronto": "ca",
+    "san francisco": "us",
+    "new york": "us",
+    "boston": "us",
+    "sydney": "au",
+}
+_EUROPE_COUNTRY_GROUPS = {
+    "al", "at", "ba", "be", "bg", "ch", "cy", "cz", "de", "dk", "ee",
+    "es", "fi", "fr", "gb", "gr", "hr", "hu", "ie", "is", "it", "lt",
+    "lu", "lv", "me", "mk", "mt", "nl", "no", "pl", "pt", "ro", "rs",
+    "se", "si", "sk", "ua",
 }
 _EUROPE_REGION_ALIASES = {"europe", "eu", "eea", "emea"}
 _REMOTE_TIMEZONE_TERMS = {
@@ -1363,24 +1401,12 @@ def _location_groups(text: Any) -> set[str]:
         groups.add("europe")
     if any(_phrase_in_text(term, normalized) for term in _REMOTE_TIMEZONE_TERMS):
         groups.add("us")
-    if groups & set(_LOCATION_COUNTRY_ALIASES) - {"us", "ca"}:
+    for city, country in _LOCATION_CITY_COUNTRIES.items():
+        if _phrase_in_text(city, normalized):
+            groups.add(country)
+    if groups & _EUROPE_COUNTRY_GROUPS:
         groups.add("europe")
     return groups
-
-
-def _has_explicit_location_evidence(text: Any) -> bool:
-    return bool(_location_groups(text))
-
-
-def _location_preferences(user: dict[str, Any]) -> list[str]:
-    values: list[str] = []
-    for field in ("base_city", "base_country"):
-        values.extend(_preference_values(user.get(field)))
-    if user.get("willing_to_relocate"):
-        for field in ("relocation_cities", "relocation_countries"):
-            values.extend(_preference_values(user.get(field)))
-    values.extend(_preference_values(user.get("preferred_regions")))
-    return values
 
 
 def _concrete_location_preferences(user: dict[str, Any]) -> list[str]:
@@ -1419,10 +1445,7 @@ def _location_matches_concrete_scope(
     """Require a remote role to permit work from a concrete user location."""
     concrete_preferences = _concrete_location_preferences(user)
     if not concrete_preferences:
-        return _location_preference_matches(
-            _preference_values(user.get("preferred_regions")),
-            _location_evidence_text(job),
-        )
+        return True
 
     allowed_groups: set[str] = set()
     allowed_terms: set[str] = set()
@@ -1431,30 +1454,49 @@ def _location_matches_concrete_scope(
         allowed_terms.add(preference)
     allowed_country_groups = allowed_groups & set(_LOCATION_COUNTRY_ALIASES)
 
-    primary_text = " ".join(
-        part
-        for part in (
-            _normalized_search_text(job.get("location_raw")),
-            _address_text(job.get("address")),
-        )
-        if part
+    location_text = _normalized_search_text(job.get("location_raw"))
+    address_text = _address_text(job.get("address"))
+    location_groups, location_europe, location_emea = _location_scope_groups(
+        location_text
     )
-    primary_groups, primary_europe, primary_emea = _location_scope_groups(
-        primary_text
-    )
-    explicit_primary_countries = primary_groups & set(_LOCATION_COUNTRY_ALIASES)
+    explicit_location_countries = location_groups & set(_LOCATION_COUNTRY_ALIASES)
     if (
-        any(_phrase_in_text(term, primary_text) for term in allowed_terms)
-        or primary_groups & allowed_country_groups
+        any(_phrase_in_text(term, location_text) for term in allowed_terms)
+        or location_groups & allowed_country_groups
     ):
         return True
-    if explicit_primary_countries:
+    if explicit_location_countries:
         return False
 
-    # Europe/EU/EEA is acceptable because it includes the user's concrete
-    # countries. EMEA is intentionally not equivalent: it includes Africa and
-    # the Middle East as well.
-    if _workplace_kind(job) == "remote" and primary_europe and not primary_emea:
+    # A city/country in the job's primary location wins over unrelated
+    # secondary offices in the provider address. A broad remote label is the
+    # exception: its address may list the actual countries where hiring is
+    # allowed.
+    has_primary_location = bool(location_text)
+    is_generic_remote = location_text in {
+        "",
+        "remote",
+        "anywhere",
+        "work from home",
+        "work from anywhere",
+    }
+    if has_primary_location and not is_generic_remote:
+        if _workplace_kind(job) == "remote" and location_europe and not location_emea:
+            return True
+        return False
+
+    address_groups, address_europe, address_emea = _location_scope_groups(
+        address_text
+    )
+    if address_groups & allowed_country_groups:
+        return True
+    if address_groups & set(_LOCATION_COUNTRY_ALIASES):
+        return False
+    if (
+        _workplace_kind(job) == "remote"
+        and (location_europe or address_europe)
+        and not (location_emea or address_emea)
+    ):
         return True
 
     # A generic "Remote" label may still be clarified by restrictive sentences
@@ -1482,30 +1524,11 @@ def _location_matches_concrete_scope(
     )
 
 
-def _location_preference_matches(preferences: list[str], evidence: str) -> bool:
-    if not evidence:
-        return False
-    evidence_groups = _location_groups(evidence)
-    for preference in preferences:
-        if _phrase_in_text(preference, evidence):
-            return True
-        preference_groups = _location_groups(preference)
-        if preference_groups & evidence_groups:
-            return True
-        if "europe" in preference_groups and "europe" in evidence_groups:
-            return True
-    return False
-
-
 def _generic_remote_allowed_for_user(user: dict[str, Any]) -> bool:
     """Unknown remote geography is conservative except for an explicit US preference."""
-    return any("us" in _location_groups(value) for value in _location_preferences(user))
-
-
-def _region_excluded(job: dict[str, Any], user: dict[str, Any]) -> bool:
-    return _contains_preference(
-        _location_evidence_text(job),
-        user.get("excluded_regions"),
+    return any(
+        "us" in _location_groups(value)
+        for value in _concrete_location_preferences(user)
     )
 
 
@@ -1517,7 +1540,6 @@ def _location_is_configured(user: dict[str, Any]) -> bool:
             "base_country",
             "relocation_cities",
             "relocation_countries",
-            "preferred_regions",
         )
     )
 
@@ -1552,11 +1574,11 @@ def evaluate_job_match(
     The score is 100 points: role 40, industry 25, profile capabilities 20, and
     seniority 15. Workplace and location are hard filters, not score components.
     Empty preference dimensions are treated as unconstrained and receive their
-    full weight. Closed jobs and excluded regions are hard exclusions.
+    full weight. Closed jobs are hard exclusions.
     The SQL candidate query also filters closed jobs so a matching run does not
     load them.
     """
-    if job.get("closed_at") is not None or _region_excluded(job, user):
+    if job.get("closed_at") is not None:
         return None
     if not _workplace_matches(job, user):
         return None
@@ -1722,8 +1744,7 @@ def run_matching(
             SELECT user_id, target_roles, target_industries, base_city,
                    base_country, remote_allowed, onsite_allowed,
                    hybrid_allowed, willing_to_relocate, relocation_cities,
-                   relocation_countries, preferred_regions, excluded_regions,
-                   min_match_score, profile_json
+                   relocation_countries, min_match_score, profile_json
             FROM users
             WHERE active{user_filter}
             ORDER BY user_id
@@ -1754,8 +1775,7 @@ def run_matching(
             "user_id", "target_roles", "target_industries", "base_city",
             "base_country", "remote_allowed", "onsite_allowed",
             "hybrid_allowed", "willing_to_relocate", "relocation_cities",
-            "relocation_countries", "preferred_regions", "excluded_regions",
-            "min_match_score", "profile_json",
+            "relocation_countries", "min_match_score", "profile_json",
         )
         job_columns = (
             "job_id", "title", "department", "team", "company",
@@ -1767,7 +1787,7 @@ def run_matching(
             user = dict(zip(user_columns, user_row))
             for job_row in jobs:
                 job = dict(zip(job_columns, job_row))
-                if _region_excluded(job, user) or not _workplace_matches(job, user):
+                if not _workplace_matches(job, user):
                     stats["skipped"] += 1
                     continue
                 if _location_is_configured(user) and not _location_matches(job, user):

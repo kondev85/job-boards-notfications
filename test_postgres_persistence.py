@@ -368,8 +368,7 @@ def test_postgres_schema_constraints_repeat_import_and_lifecycle():
                        base_latitude, base_longitude, remote_allowed,
                        onsite_allowed, onsite_max_distance_km, hybrid_allowed,
                        hybrid_max_distance_km, willing_to_relocate,
-                       relocation_cities, relocation_countries, preferred_regions,
-                       excluded_regions, min_match_score
+                       relocation_cities, relocation_countries, min_match_score
                 FROM users
                 WHERE email = %s
                 """,
@@ -399,10 +398,20 @@ def test_postgres_schema_constraints_repeat_import_and_lifecycle():
                 True,
                 list(persistence.KONSTANTIN_RELOCATION_CITIES),
                 list(persistence.KONSTANTIN_RELOCATION_COUNTRIES),
-                list(persistence.KONSTANTIN_PREFERRED_REGIONS),
-                list(persistence.KONSTANTIN_EXCLUDED_REGIONS),
                 75,
             )
+            user_columns = {
+                row[0]
+                for row in conn.execute(
+                    """
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_schema = current_schema()
+                      AND table_name = 'users'
+                    """
+                )
+            }
+            assert {"preferred_regions", "excluded_regions"}.isdisjoint(user_columns)
 
             # Schema initialization can run repeatedly without creating a
             # second seed profile or changing the job import rows.
@@ -802,8 +811,6 @@ def test_matching_normalizes_accents_for_relocation_locations():
         "willing_to_relocate": True,
         "relocation_cities": ["Madrid", "Málaga"],
         "relocation_countries": ["Spain", "Portugal"],
-        "preferred_regions": ["Europe"],
-        "excluded_regions": ["US-only"],
         "min_match_score": 75,
     }
     job = {
@@ -837,8 +844,6 @@ def test_remote_location_evidence_is_user_specific_and_conservative():
         "hybrid_allowed": True,
         "willing_to_relocate": True,
         "relocation_countries": ["Portugal"],
-        "preferred_regions": ["Europe"],
-        "excluded_regions": [],
     }
     remote_job = {
         "location_raw": "Remote",
@@ -892,7 +897,6 @@ def test_remote_location_evidence_is_user_specific_and_conservative():
         "base_city": None,
         "base_country": "United States",
         "relocation_countries": [],
-        "preferred_regions": ["United States"],
     }
     assert persistence._location_matches(remote_job, us_user) is True
     assert persistence._location_matches(
@@ -930,7 +934,6 @@ def test_concrete_location_scope_rejects_other_european_countries():
         "willing_to_relocate": True,
         "relocation_cities": ["Madrid", "Málaga"],
         "relocation_countries": ["Spain", "Portugal"],
-        "preferred_regions": ["Europe", "EU", "EEA", "EMEA"],
     }
 
     def job(location, workplace_type="remote", is_remote=True):
@@ -955,6 +958,15 @@ def test_concrete_location_scope_rejects_other_european_countries():
         job("İstanbul Office", workplace_type="hybrid", is_remote=True),
         user,
     ) is False
+    paris_hybrid = job("Paris", workplace_type="hybrid", is_remote=True) | {
+        "address": {
+            "secondaryLocations": [
+                {"location": "Madrid", "address": {"country": "Spain"}}
+            ]
+        }
+    }
+    assert persistence._workplace_kind(paris_hybrid) == "hybrid"
+    assert persistence._location_matches(paris_hybrid, user) is False
     assert persistence._location_matches(job("Remote, US"), user) is False
     assert persistence._location_matches(job("Remote"), user) is False
 
@@ -1052,8 +1064,6 @@ def test_profile_json_produces_granular_score_components():
         "willing_to_relocate": True,
         "relocation_cities": ["Madrid"],
         "relocation_countries": ["Spain"],
-        "preferred_regions": ["Europe"],
-        "excluded_regions": [],
         "min_match_score": 75,
         "profile_json": {
             "schema_version": "v1",

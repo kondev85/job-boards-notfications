@@ -10,11 +10,18 @@ posting with no geographic evidence must not be assumed European; it may remain
 eligible for a user explicitly targeting the United States, while configured
 non-US users should not receive it by default.
 
+Concrete work-country and city preferences are hard eligibility constraints;
+broad user regions are not. For hybrid and onsite roles, the job's explicit
+primary location outranks unrelated secondary offices. ATS `isRemote` flags can
+be permissive even when `workplaceType` is Hybrid, so the explicit workplace
+type takes precedence.
+
 **Why:** Public ATS feeds often label US-only jobs simply as `Remote`, while
-European eligibility is frequently expressed through country, region, or
-secondary-location data.
+multi-office ATS address payloads and permissive remote flags can make an
+ineligible office look valid if all evidence is flattened together.
 
 **How to apply:** Match explicit job geography against each user's location
 preferences before scoring. Use description text only as a cautious fallback,
-and never treat short ISO country codes as free-text country names unless they
-are country-labelled structured data.
+prefer a concrete country/city match over broad Europe/EMEA wording, and never
+treat short ISO country codes as free-text country names unless they are
+country-labelled structured data.

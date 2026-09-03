@@ -102,15 +102,15 @@ Run the deterministic preference matcher after importing jobs:
 uv run postgres_persistence.py --match
 ```
 
-The matcher considers active users and jobs whose `closed_at` is NULL. It first
-rejects jobs whose location evidence contains an excluded region, whose workplace
-type is not allowed, or whose location is incompatible with the user's configured
-city/country/region rules. Location is a hard filter and contributes no points,
-so a location-incompatible job cannot enter the ranking. For remote jobs, explicit
-provider address evidence and explicit location labels are preferred over text.
-European evidence (such as an EU country, Europe, or EMEA) can match a European
-user; explicit US evidence cannot. A plain Remote/Anywhere/Work from home posting
-with no geographic evidence is rejected for configured non-US users, but remains
+The matcher considers active users and jobs whose `closed_at` is NULL. It rejects
+jobs whose workplace type is not allowed or whose location is incompatible with
+the user's concrete city/country preferences. Location is a hard filter and
+contributes no points, so a location-incompatible job cannot enter the ranking.
+For remote jobs, explicit provider address evidence and explicit location labels
+are preferred over text. A remote Europe/EU/EEA scope can match a user whose
+concrete work country is in that scope, while a specific different country such
+as Germany or the United States cannot. A plain Remote/Anywhere/Work from home
+posting with no geographic evidence is rejected for configured users, but remains
 eligible for an explicitly US-targeting user. Users with no location preference
 remain unconstrained. Greenhouse description evidence is used when content has
 been enriched. Numeric distance limits are not calculated because the schema does
