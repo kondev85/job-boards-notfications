@@ -23,6 +23,9 @@ Examples:
 
     # Later, after the smoke test has been reviewed:
     uv run postgres_persistence.py --ats ashby --published-after 2026-07-15
+
+    # Daily lightweight Ashby + Greenhouse scan, match, and Konstantin report:
+    uv run postgres_persistence.py --daily --published-after 2026-08-26
 """
 
 from __future__ import annotations
@@ -33,7 +36,7 @@ import os
 import re
 import sys
 import unicodedata
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from html import unescape
 from pathlib import Path
 from typing import Any
@@ -164,6 +167,9 @@ CREATE TABLE IF NOT EXISTS job_boards (
     first_seen  TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_seen   TIMESTAMPTZ NOT NULL DEFAULT now(),
     closed_at   TIMESTAMPTZ,
+    etag         TEXT,
+    etag_seen_at TIMESTAMPTZ,
+    etag_published_after TIMESTAMPTZ,
     UNIQUE (ats, slug)
 );
 
@@ -195,6 +201,9 @@ CREATE TABLE IF NOT EXISTS jobs (
 
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS company TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS address JSONB;
+ALTER TABLE job_boards ADD COLUMN IF NOT EXISTS etag TEXT;
+ALTER TABLE job_boards ADD COLUMN IF NOT EXISTS etag_seen_at TIMESTAMPTZ;
+ALTER TABLE job_boards ADD COLUMN IF NOT EXISTS etag_published_after TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS users (
     user_id                 BIGSERIAL PRIMARY KEY,
@@ -600,6 +609,8 @@ def _fetch_normalized(
     slug: str,
     published_after: datetime | None = None,
     greenhouse_content: bool = False,
+    etag: str | None = None,
+    meta: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
     payload = json.loads(
         job_boards.fetch(
@@ -609,6 +620,8 @@ def _fetch_normalized(
                 want_content=greenhouse_content and ats == "greenhouse",
             ),
             timeout=30,
+            etag=etag,
+            meta=meta,
         )
     )
     source = job_boards.SOURCES[ats]
@@ -662,6 +675,80 @@ def _fetch_normalized(
         })
     rows = [row for row in normalized_rows if row["external_id"]]
     return rows, skipped
+
+
+def _board_fetch_state(
+    conn: psycopg.Connection,
+    ats: str,
+    slug: str,
+) -> tuple[int | None, str | None, datetime | None]:
+    """Return the board id, ETag, and cutoff covered by that ETag."""
+    row = conn.execute(
+        """
+        SELECT board_id, etag, etag_published_after
+        FROM job_boards
+        WHERE ats = %s AND slug = %s
+        """,
+        (ats, slug),
+    ).fetchone()
+    return row if row else (None, None, None)
+
+
+def _etag_covers(
+    cached_published_after: datetime | None,
+    requested_published_after: datetime | None,
+) -> bool:
+    """Whether a stored response can safely answer this filtered scan.
+
+    A response fetched without a cutoff covers every later cutoff. A response
+    fetched with a cutoff only covers the same or a newer cutoff, since a
+    request for older jobs could require records that were never persisted.
+    """
+    if cached_published_after is None:
+        return True
+    return (
+        requested_published_after is not None
+        and requested_published_after >= cached_published_after
+    )
+
+
+def _save_board_etag(
+    cur: psycopg.Cursor,
+    board_id: int,
+    etag: str | None,
+    seen_at: datetime,
+    published_after: datetime | None,
+) -> None:
+    cur.execute(
+        """
+        UPDATE job_boards
+        SET etag = %s,
+            etag_seen_at = %s,
+            etag_published_after = %s
+        WHERE board_id = %s
+        """,
+        (etag, seen_at, published_after, board_id),
+    )
+
+
+def _mark_board_unchanged(
+    cur: psycopg.Cursor,
+    board_id: int,
+    seen_at: datetime,
+    requested_published_after: datetime | None,
+) -> None:
+    """Refresh board health after a 304 without touching job last_seen values."""
+    cur.execute(
+        """
+        UPDATE job_boards
+        SET last_seen = %s,
+            closed_at = NULL,
+            etag_seen_at = %s,
+            etag_published_after = %s
+        WHERE board_id = %s
+        """,
+        (seen_at, seen_at, requested_published_after, board_id),
+    )
 
 
 def _ensure_board(
@@ -1527,6 +1614,7 @@ def run_matching(
     user_id: int | None = None,
     user_email: str | None = None,
     now: datetime | None = None,
+    published_after: datetime | None = None,
     model_name: str = MATCH_MODEL_NAME,
     model_version: str = MATCH_MODEL_VERSION,
 ) -> dict[str, int]:
@@ -1536,6 +1624,9 @@ def run_matching(
     for auditability. A previously matched job that now fails the hard location
     filter is also marked rejected with a NULL score. Closed or excluded jobs
     are not evaluated or inserted; any existing match for one remains unchanged.
+    When ``published_after`` is supplied, only jobs in that inclusive window are
+    loaded for this run. This keeps recent daily scans bounded without changing
+    historical match rows.
     """
     if user_id is not None and user_email is not None:
         raise ValueError("pass either user_id or user_email, not both")
@@ -1563,8 +1654,13 @@ def run_matching(
             """,
             user_params,
         ).fetchall()
+        job_cutoff = ""
+        job_params: tuple[datetime, ...] = ()
+        if published_after is not None:
+            job_cutoff = " AND j.published_at >= %s"
+            job_params = (published_after,)
         jobs = conn.execute(
-            """
+            f"""
             SELECT j.job_id, j.title, j.department, j.team, j.company,
                    j.description_text, j.location_raw, j.address, j.is_remote,
                    j.workplace_type, c.industry, c.category
@@ -1572,8 +1668,10 @@ def run_matching(
             LEFT JOIN job_boards AS b ON b.board_id = j.board_id
             LEFT JOIN companies AS c ON c.company_id = b.company_id
             WHERE j.closed_at IS NULL
+            {job_cutoff}
             ORDER BY j.job_id
-            """
+            """,
+            job_params,
         ).fetchall()
 
         user_columns = (
@@ -1667,7 +1765,13 @@ def run_matching(
 def run(args: argparse.Namespace) -> int:
     match_requested = getattr(args, "match", False)
     profile_requested = getattr(args, "generate_profile", False)
-    matching_only = match_requested and not args.board and not args.boards_from
+    export_requested = getattr(args, "export_report", False)
+    matching_only = (
+        match_requested
+        and not args.board
+        and not args.boards_from
+        and not getattr(args, "daily", False)
+    )
     profile_only = profile_requested and not args.board and not args.boards_from
     specs = [] if matching_only or profile_only else _board_specs(args)
     published_after = _timestamp(args.published_after) if args.published_after else None
@@ -1687,6 +1791,7 @@ def run(args: argparse.Namespace) -> int:
     total_updated = 0
     total_closed = 0
     failed = 0
+    unchanged = 0
 
     with psycopg.connect(dsn) as conn:
         conn.execute(SCHEMA_SQL)
@@ -1708,11 +1813,23 @@ def run(args: argparse.Namespace) -> int:
 
         for index, (ats, slug) in enumerate(specs, 1):
             try:
+                _, stored_etag, cached_published_after = _board_fetch_state(
+                    conn, ats, slug
+                )
+                conditional_etag = (
+                    stored_etag
+                    if stored_etag
+                    and _etag_covers(cached_published_after, published_after)
+                    else None
+                )
+                fetch_meta: dict[str, Any] = {}
                 rows, skipped = _fetch_normalized(
                     ats,
                     slug,
                     published_after,
                     greenhouse_content=greenhouse_content,
+                    etag=conditional_etag,
+                    meta=fetch_meta,
                 )
                 with conn.transaction():
                     with conn.cursor() as cur:
@@ -1728,6 +1845,13 @@ def run(args: argparse.Namespace) -> int:
                             seen_at,
                             close_missing=published_after is None,
                         )
+                        _save_board_etag(
+                            cur,
+                            board_id,
+                            fetch_meta.get("etag"),
+                            seen_at,
+                            published_after,
+                        )
                 new = len(rows) - existing
                 total_jobs += len(rows)
                 total_new += new
@@ -1737,6 +1861,22 @@ def run(args: argparse.Namespace) -> int:
                     f"{index}/{len(specs)} {ats}/{slug}: "
                     f"{len(rows)} jobs ({new} new, {existing} updated, "
                     f"{skipped} before cutoff, {closed} closed)"
+                )
+            except job_boards.NotModified:
+                unchanged += 1
+                with conn.transaction():
+                    with conn.cursor() as cur:
+                        seen_at = datetime.now(timezone.utc)
+                        board_id, _, _ = _board_fetch_state(conn, ats, slug)
+                        if board_id is not None:
+                            _mark_board_unchanged(
+                                cur,
+                                board_id,
+                                seen_at,
+                                published_after,
+                            )
+                print(
+                    f"{index}/{len(specs)} {ats}/{slug}: unchanged (304, ETag)"
                 )
             except job_boards.NotFound:
                 failed += 1
@@ -1750,7 +1890,10 @@ def run(args: argparse.Namespace) -> int:
                 )
 
         if match_requested:
-            match_stats = run_matching(conn)
+            match_stats = run_matching(
+                conn,
+                published_after=published_after,
+            )
             print(
                 "\nMatching complete: "
                 f"{match_stats['evaluated']} evaluated, "
@@ -1759,17 +1902,26 @@ def run(args: argparse.Namespace) -> int:
                 f"{match_stats['skipped']} excluded"
             )
 
+    if export_requested:
+        try:
+            from scripts.export_match_reports import _export
+
+            _export(published_after=published_after)
+        except Exception as exc:
+            print(f"\nReport export failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            failed += 1
+
     if specs:
         print(
             f"\nPostgreSQL import complete: {total_jobs} current jobs, "
             f"{total_new} new, {total_updated} updated, {total_closed} closed, "
-            f"{failed} failed boards"
+            f"{unchanged} unchanged, {failed} failed boards"
         )
     elif not match_requested:
         print(
             f"\nPostgreSQL import complete: {total_jobs} current jobs, "
             f"{total_new} new, {total_updated} updated, {total_closed} closed, "
-            f"{failed} failed boards"
+            f"{unchanged} unchanged, {failed} failed boards"
         )
     return 1 if failed else 0
 
@@ -1780,7 +1932,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--ats",
-        default="all",
+        default=None,
         help="comma-separated ATS platforms when selecting cached boards",
     )
     parser.add_argument(
@@ -1821,6 +1973,19 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--daily",
+        action="store_true",
+        help=(
+            "scan cached Ashby and Greenhouse boards, match immediately, and "
+            "export Konstantin's ranked report; defaults to the last 7 days"
+        ),
+    )
+    parser.add_argument(
+        "--export-report",
+        action="store_true",
+        help="export the matched-role CSV and JSON report for Konstantin after matching",
+    )
+    parser.add_argument(
         "--generate-profile",
         action="store_true",
         help=(
@@ -1833,6 +1998,26 @@ def main() -> None:
         help="user email for --generate-profile",
     )
     args = parser.parse_args()
+    if args.daily:
+        if args.ats is not None:
+            parser.error("--daily selects Ashby and Greenhouse; do not combine it with --ats")
+        if args.board or args.boards_from or args.limit is not None:
+            parser.error(
+                "--daily cannot be combined with --board, --boards-from, or --limit"
+            )
+        if args.greenhouse_content:
+            parser.error(
+                "--daily never requests Greenhouse descriptions; omit --greenhouse-content"
+            )
+        args.ats = "ashby,greenhouse"
+        args.match = True
+        args.export_report = True
+        if not args.published_after:
+            args.published_after = (
+                datetime.now(timezone.utc) - timedelta(days=7)
+            ).date().isoformat()
+    elif args.ats is None:
+        args.ats = "all"
     if args.limit is not None and args.limit < 1:
         parser.error("--limit must be at least 1")
     if args.generate_profile:
@@ -1845,6 +2030,8 @@ def main() -> None:
             or args.limit is not None
             or args.published_after
             or args.greenhouse_content
+            or args.daily
+            or args.export_report
         ):
             parser.error(
                 "--generate-profile cannot be combined with import or --match options"

@@ -62,12 +62,18 @@ def _json_value(value: object) -> object:
     return value
 
 
-def _export() -> int:
+def _export(published_after: datetime | None = None) -> int:
     dsn = os.environ.get("DATABASE_URL")
     if not dsn:
         raise SystemExit("DATABASE_URL is not set; use the Replit-managed database")
 
-    query = """
+    cutoff_clause = ""
+    query_params: list[object] = [DEFAULT_EMAIL]
+    if published_after is not None:
+        cutoff_clause = " AND j.published_at >= %s"
+        query_params.append(published_after)
+
+    query = f"""
         SELECT
             ROW_NUMBER() OVER (
                 ORDER BY
@@ -107,6 +113,7 @@ def _export() -> int:
         WHERE u.email = %s
           AND jm.match_status = 'matched'
           AND j.closed_at IS NULL
+          {cutoff_clause}
         ORDER BY
             jm.score DESC,
             j.published_at DESC NULLS LAST,
@@ -116,7 +123,7 @@ def _export() -> int:
     """
 
     with psycopg.connect(dsn) as conn:
-        rows = conn.execute(query, (DEFAULT_EMAIL,)).fetchall()
+        rows = conn.execute(query, query_params).fetchall()
 
     records = []
     for row in rows:

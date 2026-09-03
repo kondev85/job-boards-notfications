@@ -200,6 +200,31 @@ With `--published-after`, the importer does not close or delete older jobs.
 Repeating the command makes one sequential API request per selected board and
 upserts jobs by `(ats, external_id)`.
 
+### Daily Ashby + Greenhouse scan
+
+Run the lightweight daily scan, deterministic matching, and Konstantin report
+export as one command:
+
+```bash
+uv run postgres_persistence.py \
+  --daily \
+  --published-after 2026-08-26
+```
+
+`--daily` selects the cached Ashby and Greenhouse boards, defaults to the last
+seven days when no cutoff is supplied, runs the deterministic matcher, and writes
+`reports/matched_roles.csv` and `reports/matched_roles.json` for
+`infobettor@gmail.com`. It never requests Greenhouse `content=true`, so
+Greenhouse descriptions remain deferred. Matching and report export use the
+same inclusive cutoff, so the daily report contains only roles in that window.
+
+PostgreSQL stores the latest board ETag and the cutoff covered by that response.
+If the board is unchanged, a later compatible scan receives `304 Not Modified`
+and skips payload parsing and job writes. A scan with an older cutoff
+automatically makes a full request instead of incorrectly trusting a narrower
+cached response. The existing `--greenhouse-content` option remains an explicit,
+manual full-board enrichment operation and is not part of the daily command.
+
 Inspect the PostgreSQL database from Replit's My Data pane, or use SQL such as:
 
 ```sql

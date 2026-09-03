@@ -234,6 +234,80 @@ def test_timestamp_conversion_handles_iso_epoch_and_invalid_values():
     assert persistence._timestamp("not a timestamp") is None
 
 
+def test_etag_coverage_is_safe_for_recent_cutoff_scans():
+    older = datetime(2026, 8, 26, tzinfo=timezone.utc)
+    newer = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    assert persistence._etag_covers(None, None) is True
+    assert persistence._etag_covers(None, newer) is True
+    assert persistence._etag_covers(older, older) is True
+    assert persistence._etag_covers(older, newer) is True
+    assert persistence._etag_covers(older, None) is False
+    assert persistence._etag_covers(newer, older) is False
+
+
+def test_daily_mode_is_not_treated_as_matching_only():
+    args = type(
+        "Args",
+        (),
+        {
+            "match": True,
+            "daily": True,
+            "board": None,
+            "boards_from": None,
+        },
+    )()
+    assert not (
+        args.match
+        and not args.board
+        and not args.boards_from
+        and not getattr(args, "daily", False)
+    )
+
+
+def test_board_etag_state_round_trips_and_refreshes_on_304():
+    with _temporary_postgres() as dsn:
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            fetched_at = datetime(2026, 8, 26, tzinfo=timezone.utc)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    board_id = persistence._ensure_board(
+                        cur, "greenhouse", "etag-fixture", fetched_at
+                    )
+                    persistence._save_board_etag(
+                        cur,
+                        board_id,
+                        '"fixture-etag"',
+                        fetched_at,
+                        fetched_at,
+                    )
+
+            assert persistence._board_fetch_state(
+                conn, "greenhouse", "etag-fixture"
+            ) == (board_id, '"fixture-etag"', fetched_at)
+
+            unchanged_at = datetime(2026, 8, 27, tzinfo=timezone.utc)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    persistence._mark_board_unchanged(
+                        cur, board_id, unchanged_at, fetched_at
+                    )
+            state = conn.execute(
+                """
+                SELECT last_seen, etag, etag_seen_at, etag_published_after
+                FROM job_boards
+                WHERE board_id = %s
+                """,
+                (board_id,),
+            ).fetchone()
+            assert state == (
+                unchanged_at,
+                '"fixture-etag"',
+                unchanged_at,
+                fetched_at,
+            )
+
+
 def test_postgres_schema_constraints_repeat_import_and_lifecycle():
     with _temporary_postgres() as dsn:
         with psycopg.connect(dsn) as conn:
@@ -270,6 +344,22 @@ def test_postgres_schema_constraints_repeat_import_and_lifecycle():
                 "users",
                 "job_matches",
             }
+            board_columns = {
+                row[0]
+                for row in conn.execute(
+                    """
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_schema = current_schema()
+                      AND table_name = 'job_boards'
+                    """
+                )
+            }
+            assert {
+                "etag",
+                "etag_seen_at",
+                "etag_published_after",
+            } <= board_columns
 
             user = conn.execute(
                 """
