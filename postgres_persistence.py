@@ -645,6 +645,24 @@ def _board_specs(args: argparse.Namespace) -> list[tuple[str, str]]:
     return specs
 
 
+def _database_board_specs(
+    conn: psycopg.Connection,
+    ats_list: list[str],
+) -> list[tuple[str, str]]:
+    """Return every active board persisted in PostgreSQL for the selected ATSes."""
+    rows = conn.execute(
+        """
+        SELECT ats, slug
+        FROM job_boards
+        WHERE ats = ANY(%s)
+          AND closed_at IS NULL
+        ORDER BY ats, slug
+        """,
+        (ats_list,),
+    ).fetchall()
+    return [(ats, slug) for ats, slug in rows]
+
+
 def _ats_list(value: str) -> list[str]:
     ats_list = list(ATS_NAMES) if value == "all" else [
         item.strip() for item in value.split(",") if item.strip()
@@ -2376,6 +2394,14 @@ def run(args: argparse.Namespace) -> int:
     with psycopg.connect(dsn) as conn:
         conn.execute(SCHEMA_SQL)
         conn.commit()
+        if args.daily:
+            database_specs = _database_board_specs(conn, _ats_list(args.ats))
+            if database_specs:
+                specs = database_specs
+                print(
+                    f"Daily board registry: {len(specs)} active PostgreSQL boards "
+                    f"({', '.join(f'{ats}={sum(item[0] == ats for item in specs)}' for ats in _ats_list(args.ats))})"
+                )
         if profile_requested:
             try:
                 generated = generate_profile_for_user(

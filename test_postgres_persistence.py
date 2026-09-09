@@ -264,6 +264,29 @@ def test_daily_mode_is_not_treated_as_matching_only():
     )
 
 
+def test_daily_board_specs_use_all_active_postgres_boards():
+    with _temporary_postgres() as dsn:
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    seen_at = datetime(2026, 9, 3, tzinfo=timezone.utc)
+                    persistence._ensure_board(cur, "greenhouse", "daily-a", seen_at)
+                    persistence._ensure_board(cur, "greenhouse", "daily-b", seen_at)
+                    closed_id = persistence._ensure_board(
+                        cur, "greenhouse", "daily-closed", seen_at
+                    )
+                    cur.execute(
+                        "UPDATE job_boards SET closed_at = %s WHERE board_id = %s",
+                        (seen_at, closed_id),
+                    )
+
+            specs = persistence._database_board_specs(conn, ["ashby", "greenhouse"])
+            assert ("greenhouse", "daily-a") in specs
+            assert ("greenhouse", "daily-b") in specs
+            assert ("greenhouse", "daily-closed") not in specs
+
+
 def test_board_etag_state_round_trips_and_refreshes_on_304():
     with _temporary_postgres() as dsn:
         with psycopg.connect(dsn) as conn:
