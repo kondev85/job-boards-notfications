@@ -58,14 +58,14 @@ app.get("/api/me", async (req: AuthedRequest, res) => {
   res.json(r.rows[0]);
 });
 app.get("/api/profile/summary", async (req: AuthedRequest, res) => {
-  const r = await pool.query("SELECT name,profile_json, profile_text, cv_text,target_roles,target_industries,base_city,base_country,remote_allowed,onsite_allowed,onsite_max_distance_km,hybrid_allowed,hybrid_max_distance_km,willing_to_relocate,relocation_cities,relocation_countries,min_match_score FROM users WHERE user_id=$1", [uid(req)]);
+  const r = await pool.query("SELECT name,profile_json,profile_text,cv_text,target_roles,target_industries,base_city,base_country,remote_allowed,onsite_allowed,onsite_max_distance_km,hybrid_allowed,hybrid_max_distance_km,willing_to_relocate,relocation_cities,relocation_countries,min_match_score,profile_generated_at,profile_model,profile_version FROM users WHERE user_id=$1", [uid(req)]);
   res.json(r.rows[0] || {});
 });
 app.patch("/api/profile", async (req: AuthedRequest, res) => {
   const allowed = ["name","profile_text","cv_text","target_roles","target_industries","base_city","base_country","remote_allowed","onsite_allowed","onsite_max_distance_km","hybrid_allowed","hybrid_max_distance_km","willing_to_relocate","relocation_cities","relocation_countries","min_match_score"];
   const entries = Object.entries(req.body || {}).filter(([key]) => allowed.includes(key));
   if (!entries.length) return res.status(400).json({ error: "No profile fields supplied" });
-  const current = await pool.query("SELECT profile_text,cv_text FROM users WHERE user_id=$1", [uid(req)]);
+  const current = await pool.query("SELECT profile_text,cv_text,base_city,base_country FROM users WHERE user_id=$1", [uid(req)]);
   const supplied = Object.fromEntries(entries);
   const invalidateProfile =
     ("profile_text" in supplied && supplied.profile_text !== current.rows[0]?.profile_text) ||
@@ -80,6 +80,10 @@ app.patch("/api/profile", async (req: AuthedRequest, res) => {
       "profile_version=NULL",
     );
   }
+  const invalidateCoordinates =
+    ("base_city" in supplied && supplied.base_city !== current.rows[0]?.base_city) ||
+    ("base_country" in supplied && supplied.base_country !== current.rows[0]?.base_country);
+  if (invalidateCoordinates) sets.push("base_latitude=NULL", "base_longitude=NULL");
   const values = entries.map(([, value]) => value);
   values.push(uid(req));
   const r = await pool.query(`UPDATE users SET ${sets.join(",")},updated_at=now() WHERE user_id=$${values.length} RETURNING name,profile_text,cv_text,target_roles,target_industries,base_city,base_country,remote_allowed,onsite_allowed,onsite_max_distance_km,hybrid_allowed,hybrid_max_distance_km,willing_to_relocate,relocation_cities,relocation_countries,min_match_score`, values);

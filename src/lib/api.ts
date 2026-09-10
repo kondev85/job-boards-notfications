@@ -2,7 +2,18 @@ export type JobStatus = "new" | "saved" | "applied" | "rejected";
 export interface Me { user_id:number; name:string; email:string; target_roles:string[]; target_industries:string[]; min_match_score:number|null }
 export interface MatchedJob { job_id:number; ats:string; external_id:string; company:string; title:string; location_raw:string; workplace_type:string; published_at:string; job_url:string; score:number; status:JobStatus }
 export interface SearchRun { run_id:number; progress:number; status:"queued"|"running"|"completed"|"failed"; cutoff:string; error?:string }
-export interface Profile { name:string; profile_text:string|null; cv_text:string|null; target_roles:string[]|null; target_industries:string[]|null; base_city:string|null; base_country:string|null; remote_allowed:boolean|null; onsite_allowed:boolean|null; hybrid_allowed:boolean|null; min_match_score:number|null }
+export interface Profile {
+  [key:string]: any;
+  name:string; profile_text:string|null; cv_text:string|null;
+  target_roles:string[]|null; target_industries:string[]|null;
+  base_city:string|null; base_country:string|null;
+  remote_allowed:boolean|null; onsite_allowed:boolean|null;
+  onsite_max_distance_km:number|null; hybrid_allowed:boolean|null;
+  hybrid_max_distance_km:number|null; willing_to_relocate:boolean|null;
+  relocation_cities:string[]|null; relocation_countries:string[]|null;
+  min_match_score:number|null;
+  profile_generated_at?:string|null; profile_model?:string|null; profile_version?:string|null;
+}
 async function request<T>(url:string, init?:RequestInit):Promise<T> { const r=await fetch(url, { credentials:"same-origin", ...init }); if (!r.ok) throw new Error((await r.json().catch(()=>({}))).error || r.statusText); return r.json(); }
 export const getMe = () => request<Me>("/api/me");
 export const getProfileSummary = () => request<Record<string,unknown>>("/api/profile/summary");
