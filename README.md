@@ -1,11 +1,12 @@
 # job-boards
 
-Pull every public job posting from every **Ashby, Greenhouse and Lever** job board.
+Pull every public job posting from **Ashby, Greenhouse, Lever, and Workday** job boards.
 No API key, no account, no dependencies.
 
-All three publish an unauthenticated posting API that is per-company, keyed by a board
-slug, with no global search endpoint. This finds the boards — **13,146** of them across
-the three platforms — then fans out across all of them. **~308,000 live postings.**
+The original three platforms publish unauthenticated posting APIs that are per-company,
+keyed by a board slug, with no global search endpoint. This finds **13,146** boards
+across those platforms — then fans out across all of them. **~308,000 live postings**
+before Workday discovery.
 
 > **Engineers and coding agents:** the [`openwiki/`](openwiki/quickstart.md) wiki is the
 > map of the code — architecture, workflows, data model, runbook. Agents should start
@@ -38,7 +39,7 @@ That is the whole thing. You end up with:
 | `job-boards.db` | SQLite, accumulating across runs, keyed on `(ats, id)` |
 | `boards.json` | the discovered slugs per platform, cached so later runs skip discovery |
 
-Every row carries an `ats` column, so one CSV and one database cover all three platforms
+Every row carries an `ats` column, so one CSV and one database cover all supported platforms
 and you can slice by platform or ignore it entirely.
 
 Later runs reuse `boards.json`, so a re-scrape is just `uv run job_boards.py --all`.
@@ -51,6 +52,7 @@ covers `--since` for a fresher dataset.
 ```bash
 uv run job_boards.py --ats greenhouse --title "swe"  # one platform
 uv run job_boards.py --ats ashby,lever --all         # a subset
+uv run job_boards.py --ats workday --refresh-boards --all
 uv run job_boards.py --title "software engineer"
 uv run job_boards.py --title "software engineer" --match exact
 uv run job_boards.py --title "product designer" --remote --limit 200
@@ -97,6 +99,26 @@ Where boards can still be missed:
   rejected on Ashby turned up zero real boards, so this looks safe, but it is a sample.
 
 If you find a board this misses, add it to `boards.seed.json` and it is permanent.
+
+### Workday discovery
+
+Workday has no public board directory. Its adapter uses the public CXS jobs endpoint
+behind each `*.myworkdayjobs.com` career site. `--refresh-boards --ats workday` queries
+Wayback CDX for the four common Workday environments, extracts tenant/environment/board
+identifiers from archived URLs, and verifies each candidate with a small POST request.
+
+Workday identifiers use the form `tenant.environment/board`, for example:
+
+```bash
+uv run job_boards.py --board workday:salesforce.wd12/External_Career_Site --all
+```
+
+The optional `--workday-bruteforce` flag also probes common fallback board names
+(`External_Careers`, `Careers`, `jobs`, and related names) for archived tenants. It is
+off by default because it can create thousands of extra requests. Recent or
+cutoff-scoped Workday imports enrich public JSON-LD detail pages for descriptions and
+concrete location evidence; full historical exports keep list-only fetching unless
+`WORKDAY_ENRICH_DETAILS=1` is set.
 
 ## How recent is the data — and how to make it fresher
 
@@ -522,7 +544,7 @@ engineer-facing map — [architecture](openwiki/architecture/overview.md),
 [data model](openwiki/architecture/data-model.md),
 [runbook](openwiki/operations/runbook.md), [testing](openwiki/testing.md).
 The whole tool is one file, `job_boards.py`, zero dependencies. Per-platform differences
-live in the `SOURCES` table and the three `normalize_*` functions; everything else is
+live in the `SOURCES` table and the normalizer functions; everything else is
 platform-agnostic. Adding an ATS should mean one `SOURCES` entry and one normaliser, not
 changes scattered through the pipeline.
 
@@ -538,10 +560,10 @@ If `uv` is not on your `PATH`, use the second command — it runs the identical 
 any Python 3.9+, including macOS's system `python3`. Never report the tests as
 unrunnable without trying it.
 
-The test suite is the fast feedback loop — it covers every filter, all three normalisers,
+The test suite is the fast feedback loop — it covers every filter, all platform normalisers,
 the SQLite lifecycle and the archive-parsing paths without touching the network. Run it
 before and after any change. A full `--refresh-boards --all` spans 13,146 boards across
-three platforms and takes tens of minutes; do not run it casually, and never in a loop. `--ats <one> --limit 10` is
+the original three platforms and takes tens of minutes; do not run it casually, and never in a loop. `--ats <one> --limit 10` is
 the cheap way to exercise a real request path.
 
 **Things that look like bugs but are load-bearing.** Each is pinned by a test; if you

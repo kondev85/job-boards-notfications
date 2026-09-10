@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""Pull public job postings from every Ashby, Greenhouse and Lever job board.
+"""Pull public job postings from Ashby, Greenhouse, Lever, and Workday boards.
 
 No API key. Each ATS publishes an unauthenticated per-company posting API with no
 global search, so this runs in two phases: discover board slugs from the Internet
@@ -361,6 +361,270 @@ def normalize_lever(job: dict) -> dict | None:
     }
 
 
+_WORKDAY_ID = re.compile(
+    r"^(?P<tenant>[A-Za-z0-9-]+)\.(?P<environment>wd[0-9]+)"
+    r"/(?P<board>[^/]+)$",
+    re.IGNORECASE,
+)
+_WORKDAY_HOST = re.compile(
+    r"^(?P<tenant>[A-Za-z0-9-]+)\.(?P<environment>wd[0-9]+)"
+    r"\.myworkdayjobs\.com$",
+    re.IGNORECASE,
+)
+_WORKDAY_CDX_ENVS = ("wd1", "wd3", "wd5", "wd12")
+
+
+def _workday_parts(identifier: str) -> tuple[str, str, str]:
+    match = _WORKDAY_ID.fullmatch(str(identifier).strip())
+    if not match:
+        raise ValueError(
+            "Workday board identifiers must look like tenant.wd5/Board_Name"
+        )
+    return (
+        match.group("tenant"),
+        match.group("environment").lower(),
+        urllib.parse.unquote(match.group("board")),
+    )
+
+
+def workday_board_url(identifier: str) -> str:
+    """Return the public Workday CXS jobs endpoint for a verified board."""
+    tenant, environment, board = _workday_parts(identifier)
+    return (
+        f"https://{tenant}.{environment}.myworkdayjobs.com/wday/cxs/"
+        f"{urllib.parse.quote(tenant, safe='')}/{urllib.parse.quote(board, safe='_-.')}/jobs"
+    )
+
+
+def _workday_job_url(identifier: str, external_path: str) -> str:
+    tenant, environment, board = _workday_parts(identifier)
+    path = str(external_path or "").strip()
+    if not path.startswith("/"):
+        path = "/" + path
+    return (
+        f"https://{tenant}.{environment}.myworkdayjobs.com/en-US/"
+        f"{urllib.parse.quote(board, safe='_-.')}{path}"
+    )
+
+
+def _workday_posted_at(value: object) -> str:
+    """Convert Workday's ISO or human relative publication label to ISO UTC."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc).isoformat(timespec="seconds")
+    except ValueError:
+        pass
+    lower = text.lower()
+    if "today" in lower:
+        days = 0
+    elif "yesterday" in lower:
+        days = 1
+    else:
+        match = re.search(r"(\d+)\s+days?\s+ago", lower)
+        if match:
+            days = int(match.group(1))
+        elif "30+" in lower:
+            days = 30
+        else:
+            return ""
+    return (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(
+        timespec="seconds"
+    )
+
+
+def normalize_workday(job: dict) -> dict | None:
+    """Normalize a Workday CXS list item into the common posting shape."""
+    external_path = str(job.get("externalPath") or "").strip()
+    if not external_path or not job.get("title"):
+        return None
+    bullets = job.get("bulletFields") or []
+    requisition = str(job.get("jobPostingId") or (bullets[0] if bullets else "")).strip()
+    raw_workplace = str(job.get("remoteType") or "").strip()
+    workplace_key = raw_workplace.lower().replace("-", "").replace("_", "")
+    if workplace_key in {"telecommute", "remote"}:
+        workplace = "remote"
+    elif workplace_key in {"flex", "hybrid"}:
+        workplace = "hybrid"
+    elif workplace_key in {"onsite", "onsiteonly"}:
+        workplace = "onsite"
+    else:
+        workplace = raw_workplace
+    return {
+        "id": requisition or external_path,
+        "title": job.get("title") or "",
+        "department": job.get("jobFamily") or "",
+        "team": job.get("jobCategory") or "",
+        "employmentType": job.get("timeType") or job.get("employmentType") or "",
+        "location": job.get("locationsText") or job.get("location") or "",
+        "isRemote": workplace == "remote",
+        "workplaceType": workplace,
+        "address": {
+            key: job[key]
+            for key in ("locationsText", "primaryLocation", "locations")
+            if job.get(key) is not None
+        } or None,
+        "publishedAt": _workday_posted_at(job.get("postedOn") or job.get("postedAt")),
+        "jobUrl": job.get("_jobUrl") or "",
+        "_description": job.get("jobDescription") or job.get("description") or "",
+    }
+
+
+def _workday_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
+    """POST to the public CXS endpoint with bounded retry handling."""
+    body = json.dumps(payload).encode("utf-8")
+    headers = {
+        "User-Agent": UA,
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+    for attempt in range(4):
+        request = urllib.request.Request(url, data=body, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                result = json.loads(response.read())
+                if not isinstance(result, dict):
+                    raise ValueError("Workday response is not an object")
+                return result
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                raise NotFound(url) from exc
+            if exc.code not in (429, 500, 502, 503, 504) or attempt == 3:
+                raise
+            time.sleep(_retry_delay(exc.headers.get("Retry-After"), attempt))
+        except (urllib.error.URLError, TimeoutError, http.client.HTTPException, OSError):
+            if attempt == 3:
+                raise
+            time.sleep(2**attempt)
+    raise RuntimeError("unreachable")
+
+
+def _workday_details(url: str) -> dict:
+    """Read the public JobPosting JSON-LD embedded in a Workday detail page."""
+    request = urllib.request.Request(url, headers={"User-Agent": UA})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        html = response.read().decode("utf-8", "replace")
+    match = re.search(
+        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+        html,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if not match:
+        return {}
+    try:
+        value = json.loads(match.group(1).strip())
+    except json.JSONDecodeError:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def fetch_workday_jobs(
+    identifier: str,
+    published_after: datetime | None = None,
+) -> list[dict]:
+    """Fetch paginated Workday postings, stopping at a known publication cutoff."""
+    url = workday_board_url(identifier)
+    limit = 20
+    offset = 0
+    all_jobs: list[dict] = []
+    for _ in range(250):
+        payload = _workday_post_json(
+            url,
+            {
+                "appliedFacets": {},
+                "limit": limit,
+                "offset": offset,
+                "searchText": "",
+            },
+        )
+        page = payload.get("jobPostings")
+        if not isinstance(page, list):
+            raise ValueError(f"workday/{identifier}: response has no jobPostings array")
+        for job in page:
+            if isinstance(job, dict):
+                item = dict(job)
+                item["_jobUrl"] = _workday_job_url(
+                    identifier, item.get("externalPath", "")
+                )
+                # The list API intentionally omits descriptions and often only
+                # reports "N Locations". Enrich cutoff-scoped imports from the
+                # public JSON-LD detail page so matching has real location and
+                # description evidence. Full historical exports remain cheap
+                # unless WORKDAY_ENRICH_DETAILS=1 is explicitly requested.
+                if published_after is not None or os.environ.get(
+                    "WORKDAY_ENRICH_DETAILS"
+                ) == "1":
+                    try:
+                        details = _workday_details(item["_jobUrl"])
+                    except Exception:
+                        details = {}
+                    if details:
+                        item["postedAt"] = details.get("datePosted") or item.get(
+                            "postedOn"
+                        )
+                        item["jobDescription"] = details.get("description") or ""
+                        locations = details.get("jobLocation")
+                        if isinstance(locations, dict):
+                            locations = [locations]
+                        if isinstance(locations, list):
+                            labels = []
+                            for location in locations:
+                                address = (
+                                    location.get("address")
+                                    if isinstance(location, dict)
+                                    else None
+                                )
+                                if not isinstance(address, dict):
+                                    continue
+                                label = ", ".join(
+                                    str(value)
+                                    for value in (
+                                        address.get("addressLocality"),
+                                        address.get("addressCountry"),
+                                    )
+                                    if value
+                                )
+                                if label and label not in labels:
+                                    labels.append(label)
+                            if labels:
+                                item["locationsText"] = "; ".join(labels)
+                        if details.get("jobLocationType") and not item.get("remoteType"):
+                            item["remoteType"] = details["jobLocationType"]
+                        if details.get("employmentType") and not item.get("employmentType"):
+                            item["employmentType"] = details["employmentType"]
+                all_jobs.append(item)
+        total = int(payload.get("total") or 0)
+        if len(page) < limit or (total and len(all_jobs) >= total):
+            break
+        if published_after is not None:
+            dated = [_workday_posted_at(item.get("postedOn")) for item in page]
+            parsed = [
+                datetime.fromisoformat(value)
+                for value in dated
+                if value
+            ]
+            if parsed and max(parsed) < published_after:
+                break
+        offset += len(page)
+    return all_jobs
+
+
+def workday_board_exists(identifier: str) -> bool:
+    try:
+        result = _workday_post_json(
+            workday_board_url(identifier),
+            {"appliedFacets": {}, "limit": 1, "offset": 0, "searchText": ""},
+            timeout=25,
+        )
+        return isinstance(result.get("jobPostings"), list)
+    except Exception:
+        return False
+
+
 SOURCES = {
     "ashby": {
         "domains": ["jobs.ashbyhq.com"],
@@ -390,6 +654,19 @@ SOURCES = {
         "content_param": None,
         "junk_prefixes": (),
     },
+    "workday": {
+        "domains": [
+            f"{environment}.myworkdayjobs.com"
+            for environment in _WORKDAY_CDX_ENVS
+        ],
+        "api": None,
+        "jobs": lambda payload: payload,
+        "normalize": normalize_workday,
+        "content_param": None,
+        "junk_prefixes": (),
+        "fetch_jobs": fetch_workday_jobs,
+        "board_exists": workday_board_exists,
+    },
 }
 
 
@@ -412,6 +689,8 @@ def _sqlite_value(value: object) -> str:
 
 
 def board_url(ats: str, slug: str, want_content: bool = False) -> str:
+    if ats == "workday":
+        return workday_board_url(slug)
     url = SOURCES[ats]["api"].format(slug=urllib.parse.quote(slug))
     param = SOURCES[ats]["content_param"]
     if want_content and param:
@@ -464,6 +743,68 @@ def candidates_from_wayback(domains: list[str], since_days: int | None = None) -
             _add(seen, row[0])
         print(f"    {len(rows) - 1} archived URLs -> {len(seen)} candidates so far",
               file=sys.stderr)
+    return seen
+
+
+def candidates_from_workday_wayback(
+    since_days: int | None = None,
+) -> dict[str, str]:
+    """Extract tenant/environment/board identifiers from Workday CDX captures.
+
+    Workday has no public directory. Querying the four stable environment
+    domains gives us archived tenant hosts and board paths without probing
+    arbitrary company names.
+    """
+    seen: dict[str, str] = {}
+    window = ""
+    if since_days is not None:
+        start = datetime.now(timezone.utc) - timedelta(days=since_days)
+        window = f"&from={start:%Y%m%d}"
+    for environment in _WORKDAY_CDX_ENVS:
+        pattern = urllib.parse.quote(
+            f"{environment}.myworkdayjobs.com/*", safe=""
+        )
+        url = (
+            "https://web.archive.org/cdx/search/cdx?"
+            f"url={pattern}&matchType=domain&fl=original&collapse=urlkey"
+            f"&output=json&filter=statuscode:200{window}"
+        )
+        print(
+            f"  querying the Wayback Machine for Workday {environment}...",
+            file=sys.stderr,
+        )
+        rows = json.loads(fetch(url, timeout=300, retries=3))
+        for row in rows[1:] if rows else []:
+            original = row[0] if isinstance(row, list) and row else row
+            parsed = urllib.parse.urlsplit(str(original))
+            host = (parsed.hostname or "").lower()
+            host_match = _WORKDAY_HOST.fullmatch(host)
+            if not host_match:
+                continue
+            parts = [urllib.parse.unquote(part) for part in parsed.path.split("/") if part]
+            if not parts:
+                continue
+            board = ""
+            for index, part in enumerate(parts):
+                if part.lower() == "job" and index:
+                    board = parts[index - 1]
+                    break
+            if not board:
+                start = 1 if _WORKDAY_LOCALE.fullmatch(parts[0]) else 0
+                if start < len(parts):
+                    board = parts[start]
+            if not board or board.lower() in {"job", "wday", "assets", "favicon.ico"}:
+                continue
+            identifier = (
+                f"{host_match.group('tenant')}."
+                f"{host_match.group('environment').lower()}/{board}"
+            )
+            seen.setdefault(identifier.lower(), identifier)
+        print(
+            f"    {max(0, len(rows) - 1)} archived URLs -> "
+            f"{len(seen)} Workday candidates so far",
+            file=sys.stderr,
+        )
     return seen
 
 
@@ -552,7 +893,12 @@ def board_exists(ats: str, slug: str) -> bool:
         return False  # transient failure: drop it, the next refresh can find it
 
 
-def discover_boards(ats: str, concurrency: int = 8, recent_days: int | None = None) -> list[str]:
+def discover_boards(
+    ats: str,
+    concurrency: int = 8,
+    recent_days: int | None = None,
+    bruteforce: bool = False,
+) -> list[str]:
     """Find board slugs for one ATS: harvest candidates, then validate each.
 
     `recent_days` switches to the cheap mode: only archive captures from that window,
@@ -560,6 +906,12 @@ def discover_boards(ats: str, concurrency: int = 8, recent_days: int | None = No
     archive's ~48-day median capture lag. Measured at ~4 minutes against ~26 for the
     full crawl, and purely additive: one run added 14 boards and lost none.
     """
+    if ats == "workday":
+        return discover_workday_boards(
+            concurrency=concurrency,
+            recent_days=recent_days,
+            bruteforce=bruteforce,
+        )
     domains = SOURCES[ats]["domains"]
     print(f"{ats}: discovering boards", file=sys.stderr)
     try:
@@ -594,6 +946,60 @@ def discover_boards(ats: str, concurrency: int = 8, recent_days: int | None = No
     return sorted(known.values(), key=str.lower)
 
 
+def discover_workday_boards(
+    concurrency: int = 8,
+    recent_days: int | None = None,
+    bruteforce: bool = False,
+) -> list[str]:
+    """Discover and verify Workday boards.
+
+    CDX-derived boards are always checked. Fallback names are deliberately
+    opt-in because probing every archived tenant across four environments can
+    create thousands of avoidable requests.
+    """
+    print("workday: discovering boards", file=sys.stderr)
+    try:
+        seen = candidates_from_workday_wayback(recent_days)
+    except Exception as exc:
+        print(f"  Workday Wayback failed ({exc}); using cached boards", file=sys.stderr)
+        seen = {}
+
+    if bruteforce:
+        tenants = {
+            (
+                identifier.split("/", 1)[0].split(".", 1)[0],
+                identifier.split("/", 1)[0].split(".", 1)[1],
+            )
+            for identifier in seen.values()
+            if "/" in identifier and "." in identifier.split("/", 1)[0]
+        }
+        for tenant, environment in tenants:
+            for board in _WORKDAY_FALLBACK_BOARDS:
+                identifier = f"{tenant}.{environment}/{board}"
+                seen.setdefault(identifier.lower(), identifier)
+
+    candidates = sorted(seen.values(), key=str.lower)
+    print(f"  validating {len(candidates)} Workday board candidates...", file=sys.stderr)
+    checker = SOURCES["workday"]["board_exists"]
+    with ThreadPoolExecutor(max_workers=concurrency) as pool:
+        live = [
+            identifier
+            for identifier, ok in zip(candidates, pool.map(checker, candidates))
+            if ok
+        ]
+
+    known = {identifier.lower(): identifier for identifier in live}
+    for path in (BOARDS_SEED, BOARDS_CACHE):
+        for identifier in _read_boards(path).get("workday", []):
+            known.setdefault(identifier.lower(), identifier)
+    print(
+        f"  {len(live)} live Workday boards "
+        f"({len(known) - len(live)} retained from seed/cache)",
+        file=sys.stderr,
+    )
+    return sorted(known.values(), key=str.lower)
+
+
 def _read_boards(path: Path) -> dict[str, list[str]]:
     """Read a board file, accepting the pre-multi-ATS flat list as Ashby."""
     if not path.exists():
@@ -610,6 +1016,7 @@ def load_boards(
     ats_list: list[str],
     concurrency: int = 8,
     recent: bool = False,
+    workday_bruteforce: bool = False,
 ) -> dict[str, list[str]]:
     if not refresh and not recent:
         # Merge per platform rather than taking the first file that has anything.
@@ -634,7 +1041,10 @@ def load_boards(
     for ats in ats_list:
         try:
             boards[ats] = discover_boards(
-                ats, concurrency, recent_days=RECENT_WINDOW_DAYS if recent else None
+                ats,
+                concurrency,
+                recent_days=RECENT_WINDOW_DAYS if recent else None,
+                bruteforce=workday_bruteforce if ats == "workday" else False,
             )
         except RateLimited:
             sys.exit(
@@ -741,10 +1151,17 @@ def scan_board(
     as well as the description; see the loop below for why they are searched apart.
     """
     source = SOURCES[ats]
-    payload = json.loads(
-        fetch(board_url(ats, slug, want_content=pattern is not None), etag=etag, meta=meta)
-    )
-    jobs = source["jobs"](payload)
+    if source.get("fetch_jobs"):
+        jobs = source["fetch_jobs"](slug, cutoff)
+    else:
+        payload = json.loads(
+            fetch(
+                board_url(ats, slug, want_content=pattern is not None),
+                etag=etag,
+                meta=meta,
+            )
+        )
+        jobs = source["jobs"](payload)
     if not isinstance(jobs, list):
         # Fail loudly on a shape change rather than silently reporting no results.
         raise ValueError(f"{ats}/{slug}: response has no jobs array")
@@ -756,6 +1173,8 @@ def scan_board(
         norm = source["normalize"](job)
         if norm is None:
             continue
+        if ats == "workday":
+            norm["id"] = f"{slug}:{norm['id']}"
         norm = _clean(norm)
         if cutoff is not None and not published_within(norm["publishedAt"], cutoff):
             continue
@@ -1070,6 +1489,11 @@ def main() -> None:
     p.add_argument("--concurrency", type=int, default=8)
     p.add_argument("--refresh-boards", action="store_true", help="re-crawl slug lists")
     p.add_argument(
+        "--workday-bruteforce",
+        action="store_true",
+        help="when discovering Workday, also probe fallback board names for archived tenants",
+    )
+    p.add_argument(
         "--refresh-recent",
         action="store_true",
         help="cheap daily discovery: urlscan.io plus the last 30 days of archive "
@@ -1141,7 +1565,11 @@ def main() -> None:
             sys.exit(f"--boards-from {args.boards_from}: no boards in that file")
     else:
         boards = load_boards(
-            args.refresh_boards, ats_list, args.concurrency, recent=args.refresh_recent
+            args.refresh_boards,
+            ats_list,
+            args.concurrency,
+            recent=args.refresh_recent,
+            workday_bruteforce=args.workday_bruteforce,
         )
     scanned = [
         (ats, slug)

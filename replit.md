@@ -1,7 +1,7 @@
 # job-boards (imported project)
 
 A dependency-free Python CLI that scrapes public job postings from Ashby, Greenhouse,
-and Lever job boards. See `README.md` for the full product description and
+Lever, and Workday job boards. See `README.md` for the full product description and
 `openwiki/quickstart.md` for the engineering map.
 
 ## Running on Replit
@@ -30,6 +30,14 @@ uv run job_boards.py --ats greenhouse --title "engineer" --limit 5 --out test-sc
 
 # Full scrape, every platform, every posting (uses cached boards.seed.json)
 uv run job_boards.py --all
+
+# Workday discovery (CDX extraction + live CXS verification)
+uv run job_boards.py --ats workday --refresh-boards --all
+# Optional fallback-name probing for archived Workday tenants
+uv run job_boards.py --ats workday --refresh-boards --workday-bruteforce --all
+
+# Import discovered Workday boards into PostgreSQL
+uv run postgres_persistence.py --ats workday --published-after 2026-09-08
 
 # Refresh the discovered board list first (slower, monthly cadence per README)
 uv run job_boards.py --refresh-boards --all

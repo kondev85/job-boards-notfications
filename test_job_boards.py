@@ -23,6 +23,7 @@ from job_boards import (
     normalize_ashby,
     normalize_greenhouse,
     normalize_lever,
+    normalize_workday,
     plain_text,
     plausible,
     save,
@@ -111,6 +112,8 @@ def test_every_posting_api_host_is_pooled():
     import urllib.parse
     from job_boards import SOURCES, _POOLED_HOSTS, board_url
     for ats in SOURCES:
+        if SOURCES[ats].get("api") is None:
+            continue
         host = urllib.parse.urlsplit(board_url(ats, "example")).netloc
         assert host in _POOLED_HOSTS, f"{ats} posting API host {host} is not pooled"
 
@@ -346,6 +349,73 @@ def test_normalize_lever():
     assert "T" in row["publishedAt"] and row["publishedAt"].endswith("+00:00")
 
 
+def test_normalize_workday():
+    row = normalize_workday({
+        "title": "Platform Engineer",
+        "externalPath": "/job/USA---Remote/Platform-Engineer_JR1",
+        "bulletFields": ["JR1"],
+        "locationsText": "USA, Remote",
+        "postedOn": "Posted Yesterday",
+        "remoteType": "Flex",
+    })
+    assert row["id"] == "JR1"
+    assert row["workplaceType"] == "hybrid"
+    assert row["isRemote"] is False
+    assert row["location"] == "USA, Remote"
+    assert row["jobUrl"] == ""
+    assert row["publishedAt"].endswith("+00:00")
+
+
+def test_workday_adapter_paginates_and_namespaces_requisition_ids():
+    import job_boards
+
+    original_post = job_boards._workday_post_json
+    calls = []
+
+    def fake_post(url, payload, timeout=30):
+        calls.append(payload["offset"])
+        if payload["offset"] == 0:
+            return {
+                "total": 21,
+                "jobPostings": [
+                    {
+                        "title": "Platform Engineer",
+                        "externalPath": f"/job/Remote/Platform-{i}_JR1",
+                        "bulletFields": ["JR1"],
+                        "postedOn": "Posted Today",
+                    }
+                    for i in range(20)
+                ],
+            }
+        return {
+            "total": 21,
+            "jobPostings": [{
+                "title": "Product Engineer",
+                "externalPath": "/job/Remote/Product_JR2",
+                "bulletFields": ["JR2"],
+                "postedOn": "Posted Today",
+            }],
+        }
+
+    job_boards._workday_post_json = fake_post
+    try:
+        rows = job_boards.scan_board(
+            "workday",
+            "tenant.wd5/Careers",
+            None,
+            False,
+            "fuzzy",
+        )
+    finally:
+        job_boards._workday_post_json = original_post
+    assert calls == [0, 20]
+    assert len(rows) == 21
+    assert rows[0]["id"] == "tenant.wd5/Careers:JR1"
+    assert rows[-1]["jobUrl"].startswith(
+        "https://tenant.wd5.myworkdayjobs.com/en-US/Careers/"
+    )
+
+
 def test_normalizers_survive_explicit_nulls():
     """Every ATS sends JSON null for fields it has no value for.
 
@@ -373,6 +443,9 @@ def test_every_normalizer_fills_the_same_keys():
         (normalize_ashby, {"id": "1", "isListed": True}),
         (normalize_greenhouse, {"id": 1}),
         (normalize_lever, {"id": "1"}),
+        (normalize_workday, {
+            "title": "T", "externalPath": "/job/Location/T_JR1",
+        }),
     ]
     expected = {f for f in FIELDS if f not in ("ats", "company", "matched")}
     for fn, payload in samples:

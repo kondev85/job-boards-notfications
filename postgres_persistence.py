@@ -165,7 +165,7 @@ CREATE TABLE IF NOT EXISTS companies (
 CREATE TABLE IF NOT EXISTS job_boards (
     board_id    BIGSERIAL PRIMARY KEY,
     company_id  BIGINT NOT NULL REFERENCES companies(company_id),
-    ats         TEXT NOT NULL CHECK (ats IN ('ashby', 'greenhouse', 'lever')),
+    ats         TEXT NOT NULL CHECK (ats IN ('ashby', 'greenhouse', 'lever', 'workday')),
     slug        TEXT NOT NULL,
     active      BOOLEAN NOT NULL DEFAULT TRUE,
     source_url  TEXT NOT NULL,
@@ -182,7 +182,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     job_id             BIGSERIAL PRIMARY KEY,
     board_id           BIGINT NOT NULL REFERENCES job_boards(board_id),
     company            TEXT,
-    ats                TEXT NOT NULL CHECK (ats IN ('ashby', 'greenhouse', 'lever')),
+    ats                TEXT NOT NULL CHECK (ats IN ('ashby', 'greenhouse', 'lever', 'workday')),
     external_id        TEXT NOT NULL,
     title              TEXT NOT NULL,
     department         TEXT,
@@ -211,6 +211,12 @@ ALTER TABLE job_boards ADD COLUMN IF NOT EXISTS etag_seen_at TIMESTAMPTZ;
 ALTER TABLE job_boards ADD COLUMN IF NOT EXISTS etag_published_after TIMESTAMPTZ;
 ALTER TABLE job_boards
     ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE job_boards DROP CONSTRAINT IF EXISTS job_boards_ats_check;
+ALTER TABLE job_boards ADD CONSTRAINT job_boards_ats_check
+    CHECK (ats IN ('ashby', 'greenhouse', 'lever', 'workday'));
+ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_ats_check;
+ALTER TABLE jobs ADD CONSTRAINT jobs_ats_check
+    CHECK (ats IN ('ashby', 'greenhouse', 'lever', 'workday'));
 
 CREATE TABLE IF NOT EXISTS users (
     user_id                 BIGSERIAL PRIMARY KEY,
@@ -584,6 +590,7 @@ def _source_updated_at(ats: str, raw_job: dict[str, Any]) -> datetime | None:
         "ashby": ("updatedAt", "updated_at", "modifiedAt", "modified_at"),
         "greenhouse": ("updated_at", "updatedAt", "modified_at", "modifiedAt"),
         "lever": ("updatedAt", "updated_at", "modifiedAt", "modified_at"),
+        "workday": ("updatedAt", "updated_at", "modifiedAt", "modified_at"),
     }
     for key in keys_by_ats[ats]:
         if raw_job.get(key) not in (None, ""):
@@ -671,7 +678,11 @@ def _board_specs(args: argparse.Namespace) -> list[tuple[str, str]]:
             path = job_boards.HERE / path
         boards = job_boards._read_boards(path)
     else:
-        boards = job_boards.load_boards(False, ats_list)
+        boards = job_boards.load_boards(
+            False,
+            ats_list,
+            workday_bruteforce=getattr(args, "workday_bruteforce", False),
+        )
     if not boards:
         raise SystemExit("no boards found")
     specs = [
@@ -746,20 +757,23 @@ def _fetch_normalized(
     etag: str | None = None,
     meta: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
-    payload = json.loads(
-        job_boards.fetch(
-            job_boards.board_url(
-                ats,
-                slug,
-                want_content=greenhouse_content and ats == "greenhouse",
-            ),
-            timeout=30,
-            etag=etag,
-            meta=meta,
-        )
-    )
     source = job_boards.SOURCES[ats]
-    raw_jobs = source["jobs"](payload)
+    if source.get("fetch_jobs"):
+        raw_jobs = source["fetch_jobs"](slug, published_after)
+    else:
+        payload = json.loads(
+            job_boards.fetch(
+                job_boards.board_url(
+                    ats,
+                    slug,
+                    want_content=greenhouse_content and ats == "greenhouse",
+                ),
+                timeout=30,
+                etag=etag,
+                meta=meta,
+            )
+        )
+        raw_jobs = source["jobs"](payload)
     if not isinstance(raw_jobs, list):
         raise ValueError(f"{ats}/{slug}: response has no jobs array")
 
@@ -771,6 +785,8 @@ def _fetch_normalized(
         normalized = source["normalize"](raw_job)
         if normalized is None:
             continue
+        if ats == "workday":
+            normalized["id"] = f"{slug}:{normalized['id']}"
         normalized = job_boards._clean(normalized)
         published_at = _timestamp(normalized.get("publishedAt"))
         if published_after is not None and (
@@ -2874,6 +2890,11 @@ def main() -> None:
         help="maximum boards per selected ATS when using cached boards",
     )
     parser.add_argument(
+        "--workday-bruteforce",
+        action="store_true",
+        help="when discovering Workday, also probe fallback board names for archived tenants",
+    )
+    parser.add_argument(
         "--published-after",
         help=(
             "persist only jobs published on or after this inclusive ISO date "
@@ -2913,8 +2934,8 @@ def main() -> None:
     parser.add_argument(
         "--daily",
         action="store_true",
-        help=(
-            "scan cached Ashby, Greenhouse, and Lever boards, match immediately, "
+            help=(
+            "scan cached Ashby, Greenhouse, Lever, and Workday boards, match immediately, "
             "and export ATS-specific reports; combine with --ats to select one "
             "or more ATSes; defaults to the last 7 days"
         ),
@@ -2953,7 +2974,7 @@ def main() -> None:
                 "--daily never requests Greenhouse descriptions; omit --greenhouse-content"
             )
         if args.ats is None:
-            args.ats = "ashby,greenhouse,lever"
+            args.ats = "ashby,greenhouse,lever,workday"
         _ats_list(args.ats)
         args.daily_all_ats = daily_all_ats
         args.match = True

@@ -1,4 +1,10 @@
 ALTER TABLE users ADD COLUMN IF NOT EXISTS clerk_user_id TEXT UNIQUE;
+ALTER TABLE job_boards DROP CONSTRAINT IF EXISTS job_boards_ats_check;
+ALTER TABLE job_boards ADD CONSTRAINT job_boards_ats_check
+  CHECK (ats IN ('ashby', 'greenhouse', 'lever', 'workday'));
+ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_ats_check;
+ALTER TABLE jobs ADD CONSTRAINT jobs_ats_check
+  CHECK (ats IN ('ashby', 'greenhouse', 'lever', 'workday'));
 
 CREATE TABLE IF NOT EXISTS user_job_state (
   user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,

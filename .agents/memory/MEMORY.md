@@ -5,3 +5,4 @@
 - [Remote location evidence](remote-location-evidence.md) — prefer structured provider geography; treat unknown remote scope conservatively per user preference.
 - [Gemini recommendation sizing](gemini-recommendation-sizing.md) — use deterministic gating before Gemini; cap deep reviews and keep finalist comparisons to five jobs.
 - [Preview port routing](replit-preview-port-routing.md) — expose the app server, not Vite’s standalone WebSocket port, or preview requests return HTTP 426.
+- [Workday adapter boundaries](workday-adapter-boundaries.md) — namespace requisitions by board; use verified CDX candidates and opt-in fallback probing.
