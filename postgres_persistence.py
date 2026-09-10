@@ -300,6 +300,41 @@ CREATE INDEX IF NOT EXISTS job_matches_match_status_idx
 CREATE INDEX IF NOT EXISTS job_matches_notified_at_idx
     ON job_matches (notified_at);
 
+ALTER TABLE users ADD COLUMN IF NOT EXISTS clerk_user_id TEXT UNIQUE;
+
+CREATE TABLE IF NOT EXISTS user_job_state (
+    user_id    BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    job_id     BIGINT NOT NULL REFERENCES jobs(job_id) ON DELETE CASCADE,
+    status     TEXT NOT NULL DEFAULT 'new'
+               CHECK (status IN ('new', 'saved', 'applied', 'rejected')),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, job_id)
+);
+
+CREATE TABLE IF NOT EXISTS user_job_status_history (
+    history_id BIGSERIAL PRIMARY KEY,
+    user_id    BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    job_id     BIGINT NOT NULL REFERENCES jobs(job_id) ON DELETE CASCADE,
+    status     TEXT NOT NULL
+               CHECK (status IN ('new', 'saved', 'applied', 'rejected')),
+    changed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS feedback_signals (
+    user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    signal  TEXT NOT NULL CHECK (signal IN ('saved', 'applied', 'rejected')),
+    weight  INTEGER NOT NULL,
+    PRIMARY KEY (user_id, signal)
+);
+
+INSERT INTO feedback_signals (user_id, signal, weight)
+SELECT user_id, signal, weight
+FROM users
+CROSS JOIN (
+    VALUES ('saved', 3), ('applied', 1), ('rejected', -2)
+) AS defaults(signal, weight)
+ON CONFLICT DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS profile_recommendation_runs (
     run_id              BIGSERIAL PRIMARY KEY,
     user_id             BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
@@ -1042,6 +1077,24 @@ def _text_similarity(value: Any, text: Any) -> float:
     return len(value_tokens & text_tokens) / len(value_tokens)
 
 
+def _feedback_adjustment(
+    job: dict[str, Any],
+    examples: list[tuple[int, str, str, int]],
+) -> int:
+    """Apply a bounded title-similarity signal from prior user decisions."""
+    strongest: dict[str, float] = {}
+    for prior_job_id, prior_title, status, weight in examples:
+        if prior_job_id == job["job_id"]:
+            continue
+        similarity = _text_similarity(job.get("title"), prior_title)
+        if similarity < 0.35:
+            continue
+        signed = float(weight) * similarity * 2
+        if status not in strongest or abs(signed) > abs(strongest[status]):
+            strongest[status] = signed
+    return max(-10, min(10, round(sum(strongest.values()))))
+
+
 def _normalized_match_text(value: Any) -> str:
     normalized = _normalized_search_text(value)
     return " ".join(
@@ -1760,20 +1813,25 @@ def evaluate_job_match(
 def generate_profile_for_user(
     conn: psycopg.Connection,
     *,
-    user_email: str,
+    user_email: str | None = None,
+    user_id: int | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Generate and persist one profile only after Gemini returns valid data."""
+    if (user_email is None) == (user_id is None):
+        raise ValueError("pass either user_email or user_id")
+    lookup = "email = %s" if user_email is not None else "user_id = %s"
+    lookup_value = user_email if user_email is not None else user_id
     row = conn.execute(
-        """
+        f"""
         SELECT user_id, cv_text, profile_text
         FROM users
-        WHERE email = %s
+        WHERE {lookup}
         """,
-        (user_email,),
+        (lookup_value,),
     ).fetchone()
     if row is None:
-        raise ValueError(f"No user exists with email {user_email}")
+        raise ValueError("No matching user exists")
     user_id, cv_text, existing_profile_text = row
 
     generated = gemini_service.generate_user_profile(
@@ -1816,6 +1874,7 @@ def run_matching(
     now: datetime | None = None,
     published_after: datetime | None = None,
     ats: tuple[str, ...] | None = None,
+    board_ids: tuple[int, ...] | None = None,
     model_name: str = MATCH_MODEL_NAME,
     model_version: str = MATCH_MODEL_VERSION,
 ) -> dict[str, int]:
@@ -1865,6 +1924,10 @@ def run_matching(
         if ats:
             ats_clause = " AND b.ats = ANY(%s)"
             job_params = (*job_params, list(ats))
+        board_clause = ""
+        if board_ids:
+            board_clause = " AND b.board_id = ANY(%s)"
+            job_params = (*job_params, list(board_ids))
         jobs = conn.execute(
             f"""
             SELECT j.job_id, j.title, j.department, j.team, j.company,
@@ -1877,10 +1940,26 @@ def run_matching(
               AND b.active IS TRUE
             {job_cutoff}
             {ats_clause}
+            {board_clause}
             ORDER BY j.job_id
             """,
             job_params,
         ).fetchall()
+        feedback_rows = conn.execute(
+            """
+            SELECT s.user_id, j.job_id, j.title, s.status, f.weight
+            FROM user_job_state AS s
+            JOIN jobs AS j ON j.job_id = s.job_id
+            JOIN feedback_signals AS f
+              ON f.user_id = s.user_id AND f.signal = s.status
+            WHERE s.status IN ('saved', 'applied', 'rejected')
+            """
+        ).fetchall()
+        feedback_by_user: dict[int, list[tuple[int, str, str, int]]] = {}
+        for feedback_user_id, feedback_job_id, title, status, weight in feedback_rows:
+            feedback_by_user.setdefault(feedback_user_id, []).append(
+                (feedback_job_id, title, status, weight)
+            )
 
         user_columns = (
             "user_id", "target_roles", "target_industries", "base_city",
@@ -1923,6 +2002,16 @@ def run_matching(
                 if result is None:
                     stats["skipped"] += 1
                     continue
+                result["score"] = max(
+                    0,
+                    min(
+                        100,
+                        result["score"]
+                        + _feedback_adjustment(
+                            job, feedback_by_user.get(user["user_id"], [])
+                        ),
+                    ),
+                )
                 stats["evaluated"] += 1
                 conn.execute(
                     """
@@ -2037,6 +2126,7 @@ def run_recommendations(
     now: datetime | None = None,
     published_after: datetime | None = None,
     ats: tuple[str, ...] | None = None,
+    board_ids: tuple[int, ...] | None = None,
     top_n: int = RECOMMENDATION_TOP_N,
     batch_size: int = RECOMMENDATION_BATCH_SIZE,
     shortlist_size: int = RECOMMENDATION_SHORTLIST_SIZE,
@@ -2092,6 +2182,10 @@ def run_recommendations(
     if ats:
         ats_clause = " AND b.ats = ANY(%s)"
         job_params = (*job_params, list(ats))
+    board_clause = ""
+    if board_ids:
+        board_clause = " AND b.board_id = ANY(%s)"
+        job_params = (*job_params, list(board_ids))
     rows = conn.execute(
         f"""
         SELECT j.job_id, j.title, j.department, j.team, j.company,
@@ -2101,13 +2195,17 @@ def run_recommendations(
         FROM job_matches AS jm
         JOIN jobs AS j ON j.job_id = jm.job_id
         JOIN job_boards AS b ON b.board_id = j.board_id
+        LEFT JOIN user_job_state AS s
+          ON s.user_id = jm.user_id AND s.job_id = jm.job_id
         WHERE jm.user_id = %s
           AND jm.match_status = 'matched'
+          AND COALESCE(s.status, 'new') <> 'rejected'
           AND j.closed_at IS NULL
           AND b.active IS TRUE
           AND jm.score >= %s
           {job_cutoff}
           {ats_clause}
+          {board_clause}
         ORDER BY jm.score DESC, j.published_at DESC NULLS LAST, j.job_id
         """,
         (user_id_value, candidate_floor, *job_params),

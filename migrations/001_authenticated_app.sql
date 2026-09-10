@@ -1,0 +1,43 @@
+ALTER TABLE users ADD COLUMN IF NOT EXISTS clerk_user_id TEXT UNIQUE;
+
+CREATE TABLE IF NOT EXISTS user_job_state (
+  user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  job_id BIGINT NOT NULL REFERENCES jobs(job_id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'new'
+    CHECK (status IN ('new', 'saved', 'applied', 'rejected')),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, job_id)
+);
+CREATE TABLE IF NOT EXISTS user_job_status_history (
+  history_id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  job_id BIGINT NOT NULL REFERENCES jobs(job_id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK (status IN ('new', 'saved', 'applied', 'rejected')),
+  changed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS search_runs (
+  run_id BIGSERIAL PRIMARY KEY,
+  owner_user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  progress INTEGER NOT NULL DEFAULT 0 CHECK (progress BETWEEN 0 AND 100),
+  status TEXT NOT NULL DEFAULT 'queued'
+    CHECK (status IN ('queued', 'running', 'completed', 'failed')),
+  scope TEXT NOT NULL CHECK (scope IN ('all', 'ats', 'boards')),
+  ats TEXT,
+  board_ids BIGINT[],
+  cutoff DATE NOT NULL,
+  error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS feedback_signals (
+  user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  signal TEXT NOT NULL CHECK (signal IN ('saved', 'applied', 'rejected')),
+  weight INTEGER NOT NULL,
+  PRIMARY KEY (user_id, signal)
+);
+INSERT INTO feedback_signals (user_id, signal, weight)
+SELECT user_id, signal, weight FROM users CROSS JOIN
+  (VALUES ('saved', 3), ('applied', 1), ('rejected', -2)) AS defaults(signal, weight)
+ON CONFLICT DO NOTHING;
+CREATE INDEX IF NOT EXISTS user_job_state_status_idx ON user_job_state(user_id, status);
+CREATE INDEX IF NOT EXISTS search_runs_owner_idx ON search_runs(owner_user_id, created_at DESC);

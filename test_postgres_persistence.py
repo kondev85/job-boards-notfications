@@ -436,6 +436,9 @@ def test_postgres_schema_constraints_repeat_import_and_lifecycle():
                 "job_matches",
                 "profile_recommendation_runs",
                 "job_profile_reviews",
+                "user_job_state",
+                "user_job_status_history",
+                "feedback_signals",
             }
             board_columns = {
                 row[0]

@@ -10,6 +10,14 @@ __pycache__/
 *.csv
 *.json
 !boards.seed.json
+!package.json
+!package-lock.json
+!tsconfig.json
+
+# Web build outputs and installed dependencies.
+node_modules/
+dist/
+screenshots/
 
 # Scrape database.
 *.db
