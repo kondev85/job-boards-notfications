@@ -24,8 +24,11 @@ Examples:
     # Later, after the smoke test has been reviewed:
     uv run postgres_persistence.py --ats ashby --published-after 2026-07-15
 
-    # Daily lightweight Ashby + Greenhouse scan, match, and Konstantin report:
+    # Daily lightweight Ashby + Greenhouse + Lever scan, match, and reports:
     uv run postgres_persistence.py --daily --published-after 2026-08-26
+
+    # Daily scan for one ATS only:
+    uv run postgres_persistence.py --daily --ats lever --published-after 2026-08-26
 """
 
 from __future__ import annotations
@@ -1790,6 +1793,7 @@ def run_matching(
     user_email: str | None = None,
     now: datetime | None = None,
     published_after: datetime | None = None,
+    ats: tuple[str, ...] | None = None,
     model_name: str = MATCH_MODEL_NAME,
     model_version: str = MATCH_MODEL_VERSION,
 ) -> dict[str, int]:
@@ -1803,6 +1807,7 @@ def run_matching(
     When ``published_after`` is supplied, only jobs in that inclusive window are
     loaded for this run. This keeps recent daily scans bounded without changing
     historical match rows.
+    When ``ats`` is supplied, only jobs from those ATSes are evaluated.
     """
     if user_id is not None and user_email is not None:
         raise ValueError("pass either user_id or user_email, not both")
@@ -1830,10 +1835,14 @@ def run_matching(
             user_params,
         ).fetchall()
         job_cutoff = ""
-        job_params: tuple[datetime, ...] = ()
+        job_params: tuple[Any, ...] = ()
         if published_after is not None:
             job_cutoff = " AND j.published_at >= %s"
             job_params = (published_after,)
+        ats_clause = ""
+        if ats:
+            ats_clause = " AND b.ats = ANY(%s)"
+            job_params = (*job_params, list(ats))
         jobs = conn.execute(
             f"""
             SELECT j.job_id, j.title, j.department, j.team, j.company,
@@ -1844,6 +1853,7 @@ def run_matching(
             LEFT JOIN companies AS c ON c.company_id = b.company_id
             WHERE j.closed_at IS NULL
             {job_cutoff}
+            {ats_clause}
             ORDER BY j.job_id
             """,
             job_params,
@@ -2003,6 +2013,7 @@ def run_recommendations(
     user_email: str | None = None,
     now: datetime | None = None,
     published_after: datetime | None = None,
+    ats: tuple[str, ...] | None = None,
     top_n: int = RECOMMENDATION_TOP_N,
     batch_size: int = RECOMMENDATION_BATCH_SIZE,
     shortlist_size: int = RECOMMENDATION_SHORTLIST_SIZE,
@@ -2050,10 +2061,14 @@ def run_recommendations(
         else max(0, min(100, int(configured_floor)))
     )
     job_cutoff = ""
-    job_params: tuple[datetime, ...] = ()
+    job_params: tuple[Any, ...] = ()
     if published_after is not None:
         job_cutoff = " AND j.published_at >= %s"
         job_params = (published_after,)
+    ats_clause = ""
+    if ats:
+        ats_clause = " AND b.ats = ANY(%s)"
+        job_params = (*job_params, list(ats))
     rows = conn.execute(
         f"""
         SELECT j.job_id, j.title, j.department, j.team, j.company,
@@ -2062,11 +2077,13 @@ def run_recommendations(
                j.description_text, jm.score
         FROM job_matches AS jm
         JOIN jobs AS j ON j.job_id = jm.job_id
+        JOIN job_boards AS b ON b.board_id = j.board_id
         WHERE jm.user_id = %s
           AND jm.match_status = 'matched'
           AND j.closed_at IS NULL
           AND jm.score >= %s
           {job_cutoff}
+          {ats_clause}
         ORDER BY jm.score DESC, j.published_at DESC NULLS LAST, j.job_id
         """,
         (user_id_value, candidate_floor, *job_params),
@@ -2241,6 +2258,7 @@ def run_recommendations(
                 "profile_source_hash": profile_source_hash,
                 "candidate_floor": candidate_floor,
                 "top_n": top_n,
+                "ats": list(ats) if ats else None,
                 "shortlist": shortlist_signature,
             },
             sort_keys=True,
@@ -2500,6 +2518,7 @@ def run(args: argparse.Namespace) -> int:
             match_stats = run_matching(
                 conn,
                 published_after=published_after,
+                ats=tuple(_ats_list(args.ats)),
             )
             print(
                 "\nMatching complete: "
@@ -2512,6 +2531,7 @@ def run(args: argparse.Namespace) -> int:
                 recommendation_stats = run_recommendations(
                     conn,
                     published_after=published_after,
+                    ats=tuple(_ats_list(args.ats)),
                     batch_size=args.recommend_batch_size,
                 )
             except (ValueError, gemini_service.GeminiProfileError) as exc:
@@ -2531,7 +2551,16 @@ def run(args: argparse.Namespace) -> int:
         try:
             from scripts.export_match_reports import _export
 
-            _export(published_after=published_after)
+            selected_ats = _ats_list(args.ats)
+            if args.daily and getattr(args, "daily_all_ats", False):
+                _export(published_after=published_after)
+                for ats in selected_ats:
+                    _export(published_after=published_after, ats=ats)
+            elif args.ats == "all":
+                _export(published_after=published_after)
+            else:
+                for ats in selected_ats:
+                    _export(published_after=published_after, ats=ats)
         except Exception as exc:
             print(f"\nReport export failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             failed += 1
@@ -2539,7 +2568,16 @@ def run(args: argparse.Namespace) -> int:
         try:
             from scripts.export_match_reports import _export_recommendations
 
-            _export_recommendations(published_after=published_after)
+            selected_ats = _ats_list(args.ats)
+            if args.daily and getattr(args, "daily_all_ats", False):
+                _export_recommendations(published_after=published_after)
+                for ats in selected_ats:
+                    _export_recommendations(published_after=published_after, ats=ats)
+            elif args.ats == "all":
+                _export_recommendations(published_after=published_after)
+            else:
+                for ats in selected_ats:
+                    _export_recommendations(published_after=published_after, ats=ats)
         except Exception as exc:
             print(
                 f"\nRecommendation export failed: {type(exc).__name__}: {exc}",
@@ -2626,8 +2664,9 @@ def main() -> None:
         "--daily",
         action="store_true",
         help=(
-            "scan cached Ashby and Greenhouse boards, match immediately, and "
-            "export Konstantin's ranked report; defaults to the last 7 days"
+            "scan cached Ashby, Greenhouse, and Lever boards, match immediately, "
+            "and export ATS-specific reports; combine with --ats to select one "
+            "or more ATSes; defaults to the last 7 days"
         ),
     )
     parser.add_argument(
@@ -2654,8 +2693,7 @@ def main() -> None:
     )
     args = parser.parse_args()
     if args.daily:
-        if args.ats is not None:
-            parser.error("--daily selects Ashby and Greenhouse; do not combine it with --ats")
+        daily_all_ats = args.ats is None
         if args.board or args.boards_from or args.limit is not None:
             parser.error(
                 "--daily cannot be combined with --board, --boards-from, or --limit"
@@ -2664,7 +2702,10 @@ def main() -> None:
             parser.error(
                 "--daily never requests Greenhouse descriptions; omit --greenhouse-content"
             )
-        args.ats = "ashby,greenhouse"
+        if args.ats is None:
+            args.ats = "ashby,greenhouse,lever"
+        _ats_list(args.ats)
+        args.daily_all_ats = daily_all_ats
         args.match = True
         args.recommend = True
         args.export_report = True

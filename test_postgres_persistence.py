@@ -273,6 +273,7 @@ def test_daily_board_specs_use_all_active_postgres_boards():
                     seen_at = datetime(2026, 9, 3, tzinfo=timezone.utc)
                     persistence._ensure_board(cur, "greenhouse", "daily-a", seen_at)
                     persistence._ensure_board(cur, "greenhouse", "daily-b", seen_at)
+                    persistence._ensure_board(cur, "lever", "daily-lever", seen_at)
                     closed_id = persistence._ensure_board(
                         cur, "greenhouse", "daily-closed", seen_at
                     )
@@ -281,10 +282,68 @@ def test_daily_board_specs_use_all_active_postgres_boards():
                         (seen_at, closed_id),
                     )
 
-            specs = persistence._database_board_specs(conn, ["ashby", "greenhouse"])
+            specs = persistence._database_board_specs(
+                conn, ["ashby", "greenhouse", "lever"]
+            )
             assert ("greenhouse", "daily-a") in specs
             assert ("greenhouse", "daily-b") in specs
+            assert ("lever", "daily-lever") in specs
             assert ("greenhouse", "daily-closed") not in specs
+
+
+def test_matching_scope_only_evaluates_selected_ats():
+    with _temporary_postgres() as dsn:
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            seen_at = datetime(2026, 8, 27, tzinfo=timezone.utc)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    ashby_board = persistence._ensure_board(
+                        cur, "ashby", "scope-ashby", seen_at
+                    )
+                    lever_board = persistence._ensure_board(
+                        cur, "lever", "scope-lever", seen_at
+                    )
+                    valid = {
+                        "location_raw": "Remote - Spain",
+                        "address": {"country": "ES"},
+                    }
+                    persistence._upsert_board_jobs(
+                        cur,
+                        ashby_board,
+                        "scope-ashby",
+                        [_row("ashby-scope", title="Program Manager") | valid],
+                        seen_at,
+                    )
+                    persistence._upsert_board_jobs(
+                        cur,
+                        lever_board,
+                        "scope-lever",
+                        [_row(
+                            "lever-scope",
+                            ats="lever",
+                            title="Program Manager",
+                        ) | valid],
+                        seen_at,
+                    )
+
+            stats = persistence.run_matching(
+                conn,
+                user_email=persistence.KONSTANTIN_EMAIL,
+                ats=("lever",),
+                now=seen_at,
+            )
+            assert stats["matched"] == 1
+            assert conn.execute(
+                """
+                SELECT j.ats, j.external_id
+                FROM job_matches AS jm
+                JOIN users AS u ON u.user_id = jm.user_id
+                JOIN jobs AS j ON j.job_id = jm.job_id
+                WHERE u.email = %s
+                """,
+                (persistence.KONSTANTIN_EMAIL,),
+            ).fetchall() == [("lever", "lever-scope")]
 
 
 def test_board_etag_state_round_trips_and_refreshes_on_304():

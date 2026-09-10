@@ -201,7 +201,7 @@ With `--published-after`, the importer does not close or delete older jobs.
 Repeating the command makes one sequential API request per selected board and
 upserts jobs by `(ats, external_id)`.
 
-### Daily Ashby + Greenhouse scan
+### Daily Ashby + Greenhouse + Lever scan
 
 Run the lightweight daily scan, deterministic matching, Gemini recommendations,
 and both Konstantin reports as one command:
@@ -212,16 +212,32 @@ uv run postgres_persistence.py \
   --published-after 2026-08-26
 ```
 
-`--daily` selects the cached Ashby and Greenhouse boards, defaults to the last
-seven days when no cutoff is supplied, runs the deterministic matcher, and writes
-`reports/matched_roles.csv` and `reports/matched_roles.json` for
+`--daily` selects every active PostgreSQL board for Ashby, Greenhouse, and Lever,
+defaults to the last seven days when no cutoff is supplied, runs the deterministic
+matcher, and writes the combined report plus one report per ATS:
+`reports/matched_roles.csv`, `reports/matched_roles_ashby.csv`,
+`reports/matched_roles_greenhouse.csv`, and
+`reports/matched_roles_lever.csv` (each also has a `.json` file) for
 `infobettor@gmail.com`. It also reviews score-floor candidates with Gemini and
-It writes the top-five recommendation files:
-`reports/konstantin_recommendations.csv` and
-`reports/konstantin_recommendations.json`. It never requests Greenhouse
+writes the corresponding combined and ATS-specific top-five recommendation files.
+It never requests Greenhouse
 `content=true`, so Greenhouse descriptions remain deferred. Matching and report
 export use the same inclusive cutoff, so the reports contain only roles in that
 window.
+
+To scan and report one ATS only, pass `--ats`:
+
+```bash
+uv run postgres_persistence.py \
+  --daily \
+  --ats lever \
+  --published-after 2026-08-26
+```
+
+This imports only active Lever boards from PostgreSQL, evaluates only Lever jobs,
+and writes `reports/matched_roles_lever.csv` and
+`reports/matched_roles_lever.json`. `--ats ashby`, `--ats greenhouse`, and
+comma-separated selections work the same way.
 
 The `--recommend` command runs the same recommendation layer without importing
 boards. It uses the user's `min_match_score` as the candidate floor (55 for the

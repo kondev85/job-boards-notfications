@@ -23,10 +23,6 @@ import psycopg
 
 ROOT = Path(__file__).resolve().parents[1]
 REPORTS_DIR = ROOT / "reports"
-CSV_PATH = REPORTS_DIR / "matched_roles.csv"
-JSON_PATH = REPORTS_DIR / "matched_roles.json"
-RECOMMENDATION_CSV_PATH = REPORTS_DIR / "konstantin_recommendations.csv"
-RECOMMENDATION_JSON_PATH = REPORTS_DIR / "konstantin_recommendations.json"
 DEFAULT_EMAIL = "infobettor@gmail.com"
 
 FIELDS = (
@@ -93,13 +89,37 @@ def _json_value(value: object) -> object:
     return value
 
 
-def _export(published_after: datetime | None = None) -> int:
+def _report_paths(ats: str | None = None) -> tuple[Path, Path]:
+    suffix = f"_{ats}" if ats else ""
+    return (
+        REPORTS_DIR / f"matched_roles{suffix}.csv",
+        REPORTS_DIR / f"matched_roles{suffix}.json",
+    )
+
+
+def _recommendation_report_paths(ats: str | None = None) -> tuple[Path, Path]:
+    suffix = f"_{ats}" if ats else ""
+    return (
+        REPORTS_DIR / f"konstantin_recommendations{suffix}.csv",
+        REPORTS_DIR / f"konstantin_recommendations{suffix}.json",
+    )
+
+
+def _export(
+    published_after: datetime | None = None,
+    *,
+    ats: str | None = None,
+) -> int:
     dsn = os.environ.get("DATABASE_URL")
     if not dsn:
         raise SystemExit("DATABASE_URL is not set; use the Replit-managed database")
 
     cutoff_clause = ""
     query_params: list[object] = [DEFAULT_EMAIL]
+    ats_clause = ""
+    if ats is not None:
+        ats_clause = " AND j.ats = %s"
+        query_params.append(ats)
     if published_after is not None:
         cutoff_clause = " AND j.published_at >= %s"
         query_params.append(published_after)
@@ -144,6 +164,7 @@ def _export(published_after: datetime | None = None) -> int:
         WHERE u.email = %s
           AND jm.match_status = 'matched'
           AND j.closed_at IS NULL
+          {ats_clause}
           {cutoff_clause}
         ORDER BY
             jm.score DESC,
@@ -163,6 +184,7 @@ def _export(published_after: datetime | None = None) -> int:
         records.append({key: _json_value(value) for key, value in record.items()})
 
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    csv_path, json_path = _report_paths(ats)
     csv_records = [
         record
         | {
@@ -174,29 +196,35 @@ def _export(published_after: datetime | None = None) -> int:
         }
         for record in records
     ]
-    with CSV_PATH.open("w", newline="", encoding="utf-8-sig") as handle:
+    with csv_path.open("w", newline="", encoding="utf-8-sig") as handle:
         writer = csv.DictWriter(handle, fieldnames=FIELDS)
         writer.writeheader()
         writer.writerows(csv_records)
-    JSON_PATH.write_text(
+    json_path.write_text(
         json.dumps(records, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
 
     print(f"Exported {len(records)} matched roles for {DEFAULT_EMAIL}")
-    print(f"CSV:  {CSV_PATH.relative_to(ROOT)}")
-    print(f"JSON: {JSON_PATH.relative_to(ROOT)}")
+    print(f"CSV:  {csv_path.relative_to(ROOT)}")
+    print(f"JSON: {json_path.relative_to(ROOT)}")
     return len(records)
 
 
 def _export_recommendations(
     published_after: datetime | None = None,
     *,
+    ats: str | None = None,
     top_n: int = 10,
 ) -> int:
     dsn = os.environ.get("DATABASE_URL")
     if not dsn:
         raise SystemExit("DATABASE_URL is not set; use the Replit-managed database")
+    ats_clause = " AND j.ats = %s" if ats is not None else ""
+    query_params: list[object] = [DEFAULT_EMAIL, published_after]
+    if ats is not None:
+        query_params.append(ats)
+    query_params.append(top_n)
     query = """
         WITH latest_run AS (
             SELECT run_id, candidate_floor
@@ -241,17 +269,22 @@ def _export_recommendations(
           ON jm.user_id = r.user_id AND jm.job_id = r.job_id
         JOIN jobs AS j ON j.job_id = r.job_id
         WHERE j.closed_at IS NULL
+          {ats_clause}
         ORDER BY r.final_rank
         LIMIT %s
-    """
+    """.format(ats_clause=ats_clause)
     with psycopg.connect(dsn) as conn:
-        rows = conn.execute(query, (DEFAULT_EMAIL, published_after, top_n)).fetchall()
+        rows = conn.execute(
+            query,
+            query_params,
+        ).fetchall()
 
     records = []
     for row in rows:
         record = dict(zip(RECOMMENDATION_FIELDS, row))
         records.append({key: _json_value(value) for key, value in record.items()})
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    csv_path, json_path = _recommendation_report_paths(ats)
     csv_records = []
     for record in records:
         csv_record = dict(record)
@@ -263,17 +296,17 @@ def _export_recommendations(
                 else ""
             )
         csv_records.append(csv_record)
-    with RECOMMENDATION_CSV_PATH.open("w", newline="", encoding="utf-8-sig") as handle:
+    with csv_path.open("w", newline="", encoding="utf-8-sig") as handle:
         writer = csv.DictWriter(handle, fieldnames=RECOMMENDATION_FIELDS)
         writer.writeheader()
         writer.writerows(csv_records)
-    RECOMMENDATION_JSON_PATH.write_text(
+    json_path.write_text(
         json.dumps(records, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     print(f"Exported {len(records)} recommendations for {DEFAULT_EMAIL}")
-    print(f"CSV:  {RECOMMENDATION_CSV_PATH.relative_to(ROOT)}")
-    print(f"JSON: {RECOMMENDATION_JSON_PATH.relative_to(ROOT)}")
+    print(f"CSV:  {csv_path.relative_to(ROOT)}")
+    print(f"JSON: {json_path.relative_to(ROOT)}")
     return len(records)
 
 
