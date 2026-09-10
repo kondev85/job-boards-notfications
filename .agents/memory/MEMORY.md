@@ -4,3 +4,4 @@
 - [Profile-aware role ranking](profile-aware-role-ranking.md) — role-specific functional depth should outweigh ambiguous top-level title seniority.
 - [Remote location evidence](remote-location-evidence.md) — prefer structured provider geography; treat unknown remote scope conservatively per user preference.
 - [Gemini recommendation sizing](gemini-recommendation-sizing.md) — batch reviews can be broad, but keep structured finalist comparisons to five jobs for reliable JSON.
+- [Preview port routing](replit-preview-port-routing.md) — expose the app server, not Vite’s standalone WebSocket port, or preview requests return HTTP 426.

@@ -7,6 +7,7 @@ import { clerkProxyMiddleware, CLERK_PROXY_PATH, getClerkProxyHost } from "./mid
 import multer from "multer";
 import { parse } from "csv-parse/sync";
 import { spawn } from "node:child_process";
+import { createServer as createHttpServer } from "node:http";
 import path from "node:path";
 import { readFileSync } from "node:fs";
 
@@ -164,15 +165,19 @@ async function start() {
   // The CLI remains the canonical owner of the large base schema; this small
   // migration is safe to apply repeatedly when the web service starts.
   await pool.query(readFileSync(path.resolve("migrations/001_authenticated_app.sql"), "utf8"));
+  const httpServer = createHttpServer(app);
   if (process.env.NODE_ENV === "production") {
     app.use(express.static(path.resolve("dist")));
     app.get("*splat", (_req, res) => res.sendFile(path.resolve("dist/index.html")));
   } else {
     const { createServer } = await import("vite");
-    const vite = await createServer({ server: { middlewareMode: true }, appType: "spa" });
+    const vite = await createServer({
+      server: { middlewareMode: true, hmr: { server: httpServer } },
+      appType: "spa",
+    });
     app.use(vite.middlewares);
   }
-  app.listen(5000, "0.0.0.0", () => console.log("API and web app listening on port 5000"));
+  httpServer.listen(5000, "0.0.0.0", () => console.log("API and web app listening on port 5000"));
 }
 if (process.env.NODE_ENV !== "test") start().catch((error) => {
   console.error("Database migration failed:", error);
