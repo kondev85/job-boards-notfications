@@ -167,6 +167,7 @@ CREATE TABLE IF NOT EXISTS job_boards (
     company_id  BIGINT NOT NULL REFERENCES companies(company_id),
     ats         TEXT NOT NULL CHECK (ats IN ('ashby', 'greenhouse', 'lever')),
     slug        TEXT NOT NULL,
+    active      BOOLEAN NOT NULL DEFAULT TRUE,
     source_url  TEXT NOT NULL,
     first_seen  TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_seen   TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -208,6 +209,8 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS address JSONB;
 ALTER TABLE job_boards ADD COLUMN IF NOT EXISTS etag TEXT;
 ALTER TABLE job_boards ADD COLUMN IF NOT EXISTS etag_seen_at TIMESTAMPTZ;
 ALTER TABLE job_boards ADD COLUMN IF NOT EXISTS etag_published_after TIMESTAMPTZ;
+ALTER TABLE job_boards
+    ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
 
 CREATE TABLE IF NOT EXISTS users (
     user_id                 BIGSERIAL PRIMARY KEY,
@@ -652,18 +655,37 @@ def _database_board_specs(
     conn: psycopg.Connection,
     ats_list: list[str],
 ) -> list[tuple[str, str]]:
-    """Return every active board persisted in PostgreSQL for the selected ATSes."""
+    """Return every enabled, open board persisted for the selected ATSes."""
     rows = conn.execute(
         """
         SELECT ats, slug
         FROM job_boards
         WHERE ats = ANY(%s)
+          AND active IS TRUE
           AND closed_at IS NULL
         ORDER BY ats, slug
         """,
         (ats_list,),
     ).fetchall()
     return [(ats, slug) for ats, slug in rows]
+
+
+def _database_has_board_rows(
+    conn: psycopg.Connection,
+    ats_list: list[str],
+) -> bool:
+    """Whether PostgreSQL has a board registry for the selected ATSes.
+
+    This distinguishes an empty registry from a registry where an administrator
+    intentionally disabled every board. The latter must not fall back to the
+    local seed and fetch disabled boards.
+    """
+    return bool(
+        conn.execute(
+            "SELECT EXISTS(SELECT 1 FROM job_boards WHERE ats = ANY(%s))",
+            (ats_list,),
+        ).fetchone()[0]
+    )
 
 
 def _ats_list(value: str) -> list[str]:
@@ -1849,9 +1871,10 @@ def run_matching(
                    j.description_text, j.location_raw, j.address, j.is_remote,
                    j.workplace_type, c.industry, c.category
             FROM jobs AS j
-            LEFT JOIN job_boards AS b ON b.board_id = j.board_id
+            JOIN job_boards AS b ON b.board_id = j.board_id
             LEFT JOIN companies AS c ON c.company_id = b.company_id
             WHERE j.closed_at IS NULL
+              AND b.active IS TRUE
             {job_cutoff}
             {ats_clause}
             ORDER BY j.job_id
@@ -2081,6 +2104,7 @@ def run_recommendations(
         WHERE jm.user_id = %s
           AND jm.match_status = 'matched'
           AND j.closed_at IS NULL
+          AND b.active IS TRUE
           AND jm.score >= %s
           {job_cutoff}
           {ats_clause}
@@ -2413,12 +2437,13 @@ def run(args: argparse.Namespace) -> int:
         conn.execute(SCHEMA_SQL)
         conn.commit()
         if args.daily:
-            database_specs = _database_board_specs(conn, _ats_list(args.ats))
-            if database_specs:
+            selected_ats = _ats_list(args.ats)
+            database_specs = _database_board_specs(conn, selected_ats)
+            if database_specs or _database_has_board_rows(conn, selected_ats):
                 specs = database_specs
                 print(
                     f"Daily board registry: {len(specs)} active PostgreSQL boards "
-                    f"({', '.join(f'{ats}={sum(item[0] == ats for item in specs)}' for ats in _ats_list(args.ats))})"
+                    f"({', '.join(f'{ats}={sum(item[0] == ats for item in specs)}' for ats in selected_ats)})"
                 )
         if profile_requested:
             try:

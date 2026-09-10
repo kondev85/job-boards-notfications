@@ -161,9 +161,11 @@ def _export(
         FROM job_matches AS jm
         JOIN users AS u ON u.user_id = jm.user_id
         JOIN jobs AS j ON j.job_id = jm.job_id
+        JOIN job_boards AS b ON b.board_id = j.board_id
         WHERE u.email = %s
           AND jm.match_status = 'matched'
           AND j.closed_at IS NULL
+          AND b.active IS TRUE
           {ats_clause}
           {cutoff_clause}
         ORDER BY
@@ -268,7 +270,9 @@ def _export_recommendations(
         JOIN job_matches AS jm
           ON jm.user_id = r.user_id AND jm.job_id = r.job_id
         JOIN jobs AS j ON j.job_id = r.job_id
+        JOIN job_boards AS b ON b.board_id = j.board_id
         WHERE j.closed_at IS NULL
+          AND b.active IS TRUE
           {ats_clause}
         ORDER BY r.final_rank
         LIMIT %s

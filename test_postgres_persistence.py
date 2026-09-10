@@ -274,6 +274,13 @@ def test_daily_board_specs_use_all_active_postgres_boards():
                     persistence._ensure_board(cur, "greenhouse", "daily-a", seen_at)
                     persistence._ensure_board(cur, "greenhouse", "daily-b", seen_at)
                     persistence._ensure_board(cur, "lever", "daily-lever", seen_at)
+                    inactive_id = persistence._ensure_board(
+                        cur, "lever", "daily-disabled", seen_at
+                    )
+                    cur.execute(
+                        "UPDATE job_boards SET active = FALSE WHERE board_id = %s",
+                        (inactive_id,),
+                    )
                     closed_id = persistence._ensure_board(
                         cur, "greenhouse", "daily-closed", seen_at
                     )
@@ -288,7 +295,9 @@ def test_daily_board_specs_use_all_active_postgres_boards():
             assert ("greenhouse", "daily-a") in specs
             assert ("greenhouse", "daily-b") in specs
             assert ("lever", "daily-lever") in specs
+            assert ("lever", "daily-disabled") not in specs
             assert ("greenhouse", "daily-closed") not in specs
+            assert persistence._database_has_board_rows(conn, ["lever"]) is True
 
 
 def test_matching_scope_only_evaluates_selected_ats():
