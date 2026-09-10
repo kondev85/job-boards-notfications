@@ -3,5 +3,5 @@
 - [PostgreSQL test harness](postgres-test-harness.md) — temporary local clusters need an explicit writable Unix socket directory.
 - [Profile-aware role ranking](profile-aware-role-ranking.md) — role-specific functional depth should outweigh ambiguous top-level title seniority.
 - [Remote location evidence](remote-location-evidence.md) — prefer structured provider geography; treat unknown remote scope conservatively per user preference.
-- [Gemini recommendation sizing](gemini-recommendation-sizing.md) — batch reviews can be broad, but keep structured finalist comparisons to five jobs for reliable JSON.
+- [Gemini recommendation sizing](gemini-recommendation-sizing.md) — use deterministic gating before Gemini; cap deep reviews and keep finalist comparisons to five jobs.
 - [Preview port routing](replit-preview-port-routing.md) — expose the app server, not Vite’s standalone WebSocket port, or preview requests return HTTP 426.

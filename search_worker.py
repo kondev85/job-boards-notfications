@@ -65,18 +65,19 @@ def main() -> None:
         persistence.run_matching(conn, user_id=user_id, published_after=published_after,
                                  ats=selected_ats, board_ids=selected_board_ids)
         conn.execute("UPDATE search_runs SET progress=75,updated_at=now() WHERE run_id=%s", (run_id,))
+        recommendation_failed = None
         try:
             persistence.run_recommendations(conn, user_id=user_id, published_after=published_after,
                                             ats=selected_ats, board_ids=selected_board_ids)
-        except Exception:
-            # Recommendations may be unavailable without an AI key; matching
-            # still completes and the run reports the useful result.
-            pass
-        note = (
-            f"{len(failures)} board(s) failed: " + ", ".join(failures[:10])
-            if failures else None
-        )
-        conn.execute("UPDATE search_runs SET status='completed',progress=100,error=%s,updated_at=now() WHERE run_id=%s", (note, run_id))
+        except Exception as exc:
+            recommendation_failed = f"recommendations failed: {type(exc).__name__}"
+        notes = []
+        if failures:
+            notes.append(f"{len(failures)} board import(s) failed: " + ", ".join(failures[:10]))
+        if recommendation_failed:
+            notes.append(recommendation_failed)
+        status = "completed_with_warnings" if notes else "completed"
+        conn.execute("UPDATE search_runs SET status=%s,progress=100,error=%s,updated_at=now() WHERE run_id=%s", (status, " | ".join(notes) if notes else None, run_id))
         conn.commit()
 
 if __name__ == "__main__":

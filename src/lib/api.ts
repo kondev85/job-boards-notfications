@@ -1,7 +1,7 @@
 export type JobStatus = "new" | "saved" | "applied" | "rejected";
 export interface Me { user_id:number; name:string; email:string; target_roles:string[]; target_industries:string[]; min_match_score:number|null }
 export interface MatchedJob { job_id:number; ats:string; external_id:string; company:string; title:string; location_raw:string; workplace_type:string; published_at:string; job_url:string; score:number; status:JobStatus }
-export interface SearchRun { run_id:number; progress:number; status:"queued"|"running"|"completed"|"failed"; cutoff:string; error?:string }
+export interface SearchRun { run_id:number; progress:number; status:"queued"|"running"|"completed"|"completed_with_warnings"|"failed"; cutoff:string; run_type:"manual"|"scheduled"; error?:string }
 export interface Profile {
   [key:string]: any;
   name:string; profile_text:string|null; cv_text:string|null;
@@ -15,6 +15,7 @@ export interface Profile {
   profile_generated_at?:string|null; profile_model?:string|null; profile_version?:string|null;
 }
 export interface Recommendation {
+  review_id?: number; job_id?: number;
   title?: string|null; company?: string|null; job_url?: string|null; ats?: string|null;
   external_id?: string|null; location_raw?: string|null; workplace_type?: string|null;
   published_at?: string|null; description_text?: string|null;

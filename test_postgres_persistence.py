@@ -19,6 +19,7 @@ import shutil
 import socket
 import subprocess
 import tempfile
+from unittest.mock import patch
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -1038,6 +1039,253 @@ def test_recommendation_role_key_collapses_location_variants():
     ) == persistence._recommendation_role_key(
         {"company": "Bjakcareer", "title": "Product Lead - AI Stockbroking"}
     )
+
+
+def _recommendation_fixture(conn, jobs):
+    """Create one profiled user, active board, and deterministic matches."""
+    with conn.transaction():
+        with conn.cursor() as cur:
+            board_id = persistence._ensure_board(
+                cur, "ashby", "recommendation-fixtures",
+                datetime(2026, 8, 10, tzinfo=timezone.utc),
+            )
+            rows = [
+                _row(
+                    external_id,
+                    title=title,
+                    published_at=datetime(2026, 8, 10, tzinfo=timezone.utc),
+                )
+                for external_id, title, company, score in jobs
+            ]
+            # The fixture helper's company is intentionally replaced after
+            # import so role/company diversity is exercised independently.
+            persistence._upsert_board_jobs(
+                cur, board_id, "fixture-company", rows,
+                datetime(2026, 8, 10, tzinfo=timezone.utc),
+            )
+            user_id = cur.execute(
+                "SELECT user_id FROM users WHERE email = %s",
+                (persistence.KONSTANTIN_EMAIL,),
+            ).fetchone()[0]
+            cur.execute(
+                """UPDATE users SET profile_json=%s::jsonb, profile_source_hash='fixture-profile',
+                   min_match_score=0 WHERE user_id=%s""",
+                (json.dumps({"professional_summary": "test"}), user_id),
+            )
+            for external_id, title, company, score in jobs:
+                cur.execute(
+                    """UPDATE jobs SET company=%s WHERE external_id=%s""",
+                    (company, external_id),
+                )
+                job_id = cur.execute(
+                    "SELECT job_id FROM jobs WHERE external_id=%s",
+                    (external_id,),
+                ).fetchone()[0]
+                cur.execute(
+                    """INSERT INTO job_matches
+                       (user_id,job_id,score,match_status,model_name,model_version)
+                       VALUES (%s,%s,%s,'matched','fixture','fixture')""",
+                    (user_id, job_id, score),
+                )
+    return user_id
+
+
+def _fake_review(job, score=80):
+    return {
+        "job_id": job["job_id"], "fit_score": score,
+        "recommendation": "strong_match", "strengths": ["evidence"],
+        "concerns": [], "rationale": "fixture", "rank": 1,
+    }
+
+
+def test_recommendations_never_send_below_effective_floor_and_keep_match():
+    with _temporary_postgres() as dsn:
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            user_id = _recommendation_fixture(
+                conn, [("low", "Low Role", "LowCo", 74), ("high", "High Role", "HighCo", 90)]
+            )
+            batch_ids = []
+            final_ids = []
+
+            def batch(profile, payloads):
+                batch_ids.extend(p["job_id"] for p in payloads)
+                return [_fake_review(p) for p in payloads]
+
+            def final(profile, payloads):
+                final_ids.extend(p["job_id"] for p in payloads)
+                return [_fake_review(p, 80) for p in payloads]
+
+            with patch.object(persistence, "_review_batch_with_split", batch), patch.object(
+                persistence.gemini_service, "compare_job_shortlist", final
+            ):
+                persistence.run_recommendations(
+                    conn, user_id=user_id, gemini_review_floor=75,
+                    max_gemini_candidates=20, force=True,
+                )
+            low_id = conn.execute(
+                "SELECT job_id FROM jobs WHERE external_id='low'"
+            ).fetchone()[0]
+            assert low_id not in batch_ids and low_id not in final_ids
+            assert conn.execute(
+                "SELECT score,match_status FROM job_matches WHERE user_id=%s AND job_id=%s",
+                (user_id, low_id),
+            ).fetchone() == (74, "matched")
+
+
+def test_recommendations_cap_and_diversify_gemini_batch():
+    jobs = [
+        (f"job-{i}", f"Role {i}", "SameCo" if i < 3 else f"Co{i}", 90 - i)
+        for i in range(5)
+    ]
+    with _temporary_postgres() as dsn:
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            user_id = _recommendation_fixture(conn, jobs)
+            seen = []
+
+            def batch(profile, payloads):
+                seen.extend(payloads)
+                return [_fake_review(p) for p in payloads]
+
+            with patch.object(persistence, "_review_batch_with_split", batch), patch.object(
+                persistence.gemini_service, "compare_job_shortlist",
+                lambda profile, payloads: [_fake_review(p, 80) for p in payloads],
+            ):
+                persistence.run_recommendations(
+                    conn, user_id=user_id, gemini_review_floor=70,
+                    max_gemini_candidates=3, force=True,
+                )
+            assert len(seen) <= 3
+            assert len({p["company"] for p in seen}) >= 2
+            assert len({p["title"] for p in seen}) == len(seen)
+
+
+def test_weak_final_review_is_evidence_but_not_pinned():
+    with _temporary_postgres() as dsn:
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            user_id = _recommendation_fixture(
+                conn, [("weak", "Weak Role", "WeakCo", 90), ("good", "Good Role", "GoodCo", 89)]
+            )
+
+            def batch(profile, payloads):
+                return [_fake_review(p, 80) for p in payloads]
+
+            def final(profile, payloads):
+                first = _fake_review(payloads[0], 40)
+                first["rank"] = 2
+                second = _fake_review(payloads[1], 85)
+                second["rank"] = 1
+                return [first, second]
+
+            with patch.object(persistence, "_review_batch_with_split", batch), patch.object(
+                persistence.gemini_service, "compare_job_shortlist", final
+            ):
+                result = persistence.run_recommendations(
+                    conn, user_id=user_id, pinned_final_floor=70,
+                    top_n=2, shortlist_size=2, force=True,
+                )
+            rows = conn.execute(
+                """SELECT j.external_id,r.final_fit_score,r.recommendation_run_id,r.final_rank
+                   FROM job_profile_reviews r JOIN jobs j USING(job_id)
+                   WHERE r.user_id=%s ORDER BY j.external_id""",
+                (user_id,),
+            ).fetchall()
+            assert rows[0][0] == "good" and rows[0][1] == 85 and rows[0][2] == result["run_id"] and rows[0][3] == 1
+            assert rows[1][0] == "weak" and rows[1][1] == 40
+            assert rows[1][2:] == (None, None)
+            assert conn.execute(
+                """SELECT count(*) FROM job_profile_reviews
+                   WHERE user_id=%s AND recommendation_run_id=%s""",
+                (user_id, result["run_id"]),
+            ).fetchone()[0] == 1
+
+
+def test_empty_recommendation_run_clears_stale_pins_and_is_cached():
+    with _temporary_postgres() as dsn:
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            user_id = _recommendation_fixture(
+                conn, [("only", "Only Role", "OnlyCo", 90)]
+            )
+            with patch.object(
+                persistence, "_review_batch_with_split",
+                lambda profile, payloads: [_fake_review(p) for p in payloads],
+            ), patch.object(
+                persistence.gemini_service, "compare_job_shortlist",
+                lambda profile, payloads: [_fake_review(p) for p in payloads],
+            ):
+                first = persistence.run_recommendations(
+                    conn, user_id=user_id, top_n=1, shortlist_size=1, force=True
+                )
+            conn.execute("DELETE FROM job_matches WHERE user_id=%s", (user_id,))
+            with patch.object(
+                persistence.gemini_service, "review_job_batch",
+                side_effect=AssertionError("Gemini must not run for empty set"),
+            ), patch.object(
+                persistence.gemini_service, "compare_job_shortlist",
+                side_effect=AssertionError("Gemini must not run for empty set"),
+            ):
+                empty = persistence.run_recommendations(
+                    conn, user_id=user_id, top_n=1, shortlist_size=1
+                )
+            assert empty["run_id"] != first["run_id"]
+            assert empty["candidates"] == empty["recommendations"] == 0
+            assert conn.execute(
+                "SELECT count(*) FROM job_profile_reviews WHERE user_id=%s AND recommendation_run_id IS NOT NULL",
+                (user_id,),
+            ).fetchone()[0] == 0
+            cached = persistence.run_recommendations(
+                conn, user_id=user_id, top_n=1, shortlist_size=1
+            )
+            assert cached["run_id"] == empty["run_id"]
+
+
+def test_workplace_change_rejects_existing_match():
+    with _temporary_postgres() as dsn:
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    board_id = persistence._ensure_board(
+                        cur, "ashby", "workplace-fixture",
+                        datetime(2026, 8, 10, tzinfo=timezone.utc),
+                    )
+                    persistence._upsert_board_jobs(
+                        cur, board_id, "workplace-co",
+                        [_row("office", published_at=datetime(2026, 8, 10, tzinfo=timezone.utc))],
+                        datetime(2026, 8, 10, tzinfo=timezone.utc),
+                    )
+                    user_id = cur.execute(
+                        "SELECT user_id FROM users WHERE email=%s",
+                        (persistence.KONSTANTIN_EMAIL,),
+                    ).fetchone()[0]
+                    job_id = cur.execute(
+                        "SELECT job_id FROM jobs WHERE external_id='office'"
+                    ).fetchone()[0]
+                    cur.execute(
+                        """UPDATE users SET remote_allowed=FALSE, onsite_allowed=TRUE,
+                           hybrid_allowed=FALSE, profile_json=%s::jsonb
+                           WHERE user_id=%s""",
+                        (json.dumps({"professional_summary": "test"}), user_id),
+                    )
+                    cur.execute(
+                        """INSERT INTO job_matches(user_id,job_id,score,match_status)
+                           VALUES(%s,%s,80,'matched')""",
+                        (user_id, job_id),
+                    )
+                    cur.execute(
+                        "UPDATE jobs SET workplace_type='onsite',is_remote=FALSE WHERE job_id=%s",
+                        (job_id,),
+                    )
+            # Make the same role ineligible after the existing match exists.
+            conn.execute("UPDATE users SET onsite_allowed=FALSE WHERE user_id=%s", (user_id,))
+            persistence.run_matching(conn, user_id=user_id)
+            assert conn.execute(
+                "SELECT score,match_status FROM job_matches WHERE user_id=%s AND job_id=%s",
+                (user_id, job_id),
+            ).fetchone() == (None, "rejected")
 
 
 def test_concrete_location_scope_rejects_other_european_countries():

@@ -12,6 +12,10 @@ import path from "node:path";
 import { readFileSync } from "node:fs";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pinnedRecommendationFloor = Math.max(
+  0,
+  Math.min(100, Number(process.env.PINNED_RECOMMENDATION_FLOOR || 70)),
+);
 const app = express();
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 app.use(cors({ credentials: true, origin: true }));
@@ -121,7 +125,7 @@ app.get("/api/jobs/matched", async (req: AuthedRequest, res) => {
   res.json({ rows: rows.rows, total: Number(count.rows[0].count), page, limit });
 });
 app.get("/api/recommendations/latest", async (req: AuthedRequest, res) => {
-  const r = await pool.query("SELECT r.*,j.title,j.company,j.job_url,j.ats,j.external_id,j.location_raw,j.workplace_type,j.published_at,j.description_text FROM job_profile_reviews r JOIN jobs j USING(job_id) JOIN job_boards b ON b.board_id=j.board_id AND b.active IS TRUE WHERE r.user_id=$1 AND r.recommendation_run_id=(SELECT run_id FROM profile_recommendation_runs WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1) ORDER BY r.final_rank NULLS LAST", [uid(req)]); res.json(r.rows);
+  const r = await pool.query("SELECT r.*,j.title,j.company,j.job_url,j.ats,j.external_id,j.location_raw,j.workplace_type,j.published_at,j.description_text FROM job_profile_reviews r JOIN jobs j USING(job_id) JOIN job_boards b ON b.board_id=j.board_id AND b.active IS TRUE WHERE r.user_id=$1 AND r.final_fit_score >= $2 AND r.recommendation_run_id=(SELECT run_id FROM profile_recommendation_runs WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1) ORDER BY r.final_rank NULLS LAST", [uid(req), pinnedRecommendationFloor]); res.json(r.rows);
 });
 app.patch("/api/jobs/:jobId/status", async (req: AuthedRequest, res) => {
   const status = req.body?.status; if (!["new","saved","applied","rejected"].includes(status)) return res.status(400).json({ error: "Invalid status" });
@@ -152,11 +156,17 @@ app.post("/api/search-runs", async (req: AuthedRequest, res) => {
   if (scope === "boards" && (!Array.isArray(boardIds) || boardIds.length === 0)) return res.status(400).json({ error: "Select at least one board" });
   const running = await pool.query("SELECT run_id FROM search_runs WHERE owner_user_id=$1 AND status IN ('queued','running') LIMIT 1", [uid(req)]);
   if (running.rowCount) return res.status(409).json({ error: "A search is already running", runId: running.rows[0].run_id });
-  const r = await pool.query("INSERT INTO search_runs(owner_user_id,scope,ats,board_ids,cutoff) VALUES($1,$2,$3,$4,$5) RETURNING run_id", [uid(req),scope,ats,boardIds,cutoff]);
+   let r;
+   try {
+     r = await pool.query("INSERT INTO search_runs(owner_user_id,scope,ats,board_ids,cutoff,run_type) VALUES($1,$2,$3,$4,$5,'manual') RETURNING run_id", [uid(req),scope,ats,boardIds,cutoff]);
+   } catch (e) {
+     if ((e as {code?:string}).code === "23505") return res.status(409).json({ error: "A search is already running" });
+     throw e;
+   }
   const runId = r.rows[0].run_id; const child = spawn("python3", [path.resolve("search_worker.py"), String(runId), String(uid(req))], { detached: true, stdio: "ignore" }); child.unref(); res.status(202).json({ runId });
 });
-app.get("/api/search-runs/:id", async (req: AuthedRequest, res) => { const r = await pool.query("SELECT run_id,progress,status,scope,cutoff,error,created_at,updated_at FROM search_runs WHERE run_id=$1 AND owner_user_id=$2", [req.params.id,uid(req)]); if (!r.rows[0]) return res.sendStatus(404); res.json(r.rows[0]); });
-app.get("/api/search-runs", async (req: AuthedRequest, res) => { const r = await pool.query("SELECT run_id,progress,status,scope,cutoff,error,created_at,updated_at FROM search_runs WHERE owner_user_id=$1 ORDER BY created_at DESC LIMIT 25", [uid(req)]); res.json(r.rows); });
+app.get("/api/search-runs/:id", async (req: AuthedRequest, res) => { const r = await pool.query("SELECT run_id,progress,status,scope,cutoff,run_type,error,created_at,updated_at FROM search_runs WHERE run_id=$1 AND owner_user_id=$2", [req.params.id,uid(req)]); if (!r.rows[0]) return res.sendStatus(404); res.json(r.rows[0]); });
+app.get("/api/search-runs", async (req: AuthedRequest, res) => { const r = await pool.query("SELECT run_id,progress,status,scope,cutoff,run_type,error,created_at,updated_at FROM search_runs WHERE owner_user_id=$1 ORDER BY created_at DESC LIMIT 25", [uid(req)]); res.json(r.rows); });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 app.post("/api/import", upload.single("file"), async (req: AuthedRequest, res) => {
   if (!req.file) return res.status(400).json({ error: "CSV file is required" }); const records = parse(req.file.buffer, { columns: true, skip_empty_lines: true, bom: true }) as Record<string,string>[]; let updated = 0;

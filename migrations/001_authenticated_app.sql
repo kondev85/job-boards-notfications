@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS search_runs (
   owner_user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
   progress INTEGER NOT NULL DEFAULT 0 CHECK (progress BETWEEN 0 AND 100),
   status TEXT NOT NULL DEFAULT 'queued'
-    CHECK (status IN ('queued', 'running', 'completed', 'failed')),
+    CHECK (status IN ('queued', 'running', 'completed', 'completed_with_warnings', 'failed')),
   scope TEXT NOT NULL CHECK (scope IN ('all', 'ats', 'boards')),
   ats TEXT,
   board_ids BIGINT[],
@@ -29,6 +29,21 @@ CREATE TABLE IF NOT EXISTS search_runs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE search_runs ADD COLUMN IF NOT EXISTS run_type TEXT NOT NULL DEFAULT 'manual';
+ALTER TABLE search_runs DROP CONSTRAINT IF EXISTS search_runs_status_check;
+ALTER TABLE search_runs ADD CONSTRAINT search_runs_status_check
+  CHECK (status IN ('queued', 'running', 'completed', 'completed_with_warnings', 'failed'));
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'search_runs'::regclass
+      AND conname = 'search_runs_run_type_check'
+  ) THEN
+    ALTER TABLE search_runs ADD CONSTRAINT search_runs_run_type_check
+      CHECK (run_type IN ('manual', 'scheduled'));
+  END IF;
+END $$;
 CREATE TABLE IF NOT EXISTS feedback_signals (
   user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
   signal TEXT NOT NULL CHECK (signal IN ('saved', 'applied', 'rejected')),
@@ -41,3 +56,21 @@ SELECT user_id, signal, weight FROM users CROSS JOIN
 ON CONFLICT DO NOTHING;
 CREATE INDEX IF NOT EXISTS user_job_state_status_idx ON user_job_state(user_id, status);
 CREATE INDEX IF NOT EXISTS search_runs_owner_idx ON search_runs(owner_user_id, created_at DESC);
+WITH active_runs AS (
+  SELECT run_id,
+         row_number() OVER (
+           PARTITION BY owner_user_id
+           ORDER BY updated_at DESC, run_id DESC
+         ) AS active_rank
+  FROM search_runs
+  WHERE status IN ('queued', 'running')
+)
+UPDATE search_runs
+SET status = 'failed',
+    error = COALESCE(error || ' | ', '') || 'Superseded while enforcing one active run per user',
+    updated_at = now()
+WHERE run_id IN (
+  SELECT run_id FROM active_runs WHERE active_rank > 1
+);
+CREATE UNIQUE INDEX IF NOT EXISTS search_runs_one_active_per_user_idx
+  ON search_runs(owner_user_id) WHERE status IN ('queued', 'running');

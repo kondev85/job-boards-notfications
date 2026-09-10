@@ -422,6 +422,9 @@ MATCH_MODEL_VERSION = "v3-concrete-location"
 RECOMMENDATION_MODEL_NAME = "gemini-profile-reranker"
 RECOMMENDATION_MODEL_VERSION = gemini_service.JOB_REVIEW_VERSION
 DEFAULT_RECOMMENDATION_FLOOR = 55
+RECOMMENDATION_GEMINI_REVIEW_FLOOR = 75
+RECOMMENDATION_MAX_GEMINI_CANDIDATES = 20
+RECOMMENDATION_PINNED_FINAL_FLOOR = 70
 RECOMMENDATION_BATCH_SIZE = 10
 RECOMMENDATION_SHORTLIST_SIZE = 5
 RECOMMENDATION_TOP_N = 5
@@ -1978,6 +1981,14 @@ def run_matching(
             for job_row in jobs:
                 job = dict(zip(job_columns, job_row))
                 if not _workplace_matches(job, user):
+                    conn.execute(
+                        """UPDATE job_matches
+                           SET score=NULL, match_status='rejected',
+                               model_name=%s, model_version=%s, updated_at=%s
+                           WHERE user_id=%s AND job_id=%s""",
+                        (model_name, model_version, run_at,
+                         user["user_id"], job["job_id"]),
+                    )
                     stats["skipped"] += 1
                     continue
                 if _location_is_configured(user) and not _location_matches(job, user):
@@ -2130,6 +2141,9 @@ def run_recommendations(
     top_n: int = RECOMMENDATION_TOP_N,
     batch_size: int = RECOMMENDATION_BATCH_SIZE,
     shortlist_size: int = RECOMMENDATION_SHORTLIST_SIZE,
+    gemini_review_floor: int = RECOMMENDATION_GEMINI_REVIEW_FLOOR,
+    max_gemini_candidates: int = RECOMMENDATION_MAX_GEMINI_CANDIDATES,
+    pinned_final_floor: int = RECOMMENDATION_PINNED_FINAL_FLOOR,
     force: bool = False,
 ) -> dict[str, int]:
     """Review score-floor candidates with Gemini and persist a top recommendation set."""
@@ -2137,6 +2151,10 @@ def run_recommendations(
         raise ValueError("pass either user_id or user_email, not both")
     if top_n < 1 or batch_size < 1 or shortlist_size < top_n:
         raise ValueError("invalid recommendation sizing")
+    if max_gemini_candidates < 1:
+        raise ValueError("max_gemini_candidates must be positive")
+    gemini_review_floor = max(0, min(100, int(gemini_review_floor)))
+    pinned_final_floor = max(0, min(100, int(pinned_final_floor)))
 
     user_filter = ""
     user_params: tuple[Any, ...] = ()
@@ -2168,11 +2186,14 @@ def run_recommendations(
         raise gemini_service.GeminiConfigurationError(
             "Cannot recommend jobs without a profile source hash"
         )
-    candidate_floor = (
+    configured_candidate_floor = (
         DEFAULT_RECOMMENDATION_FLOOR
         if configured_floor is None
         else max(0, min(100, int(configured_floor)))
     )
+    # This is deliberately independent of the display threshold: deterministic
+    # matching remains the source of truth, while Gemini sees only strong fits.
+    candidate_floor = max(configured_candidate_floor, gemini_review_floor)
     job_cutoff = ""
     job_params: tuple[Any, ...] = ()
     if published_after is not None:
@@ -2216,7 +2237,76 @@ def run_recommendations(
         "workplace_type", "published_at", "job_url", "description_text", "score",
     )
     candidates = [dict(zip(columns, row)) for row in rows]
+    # Preserve the complete deterministic match set in job_matches, but only
+    # send a diverse, strongest slice to Gemini.  Role variants and company
+    # concentration are reduced before any model call.
+    deterministic_candidate_count = len(candidates)
+    ordered = sorted(
+        candidates,
+        key=lambda job: (
+            -job["score"],
+            -(job["published_at"].timestamp() if job["published_at"] else 0),
+            job["job_id"],
+        ),
+    )
+    selected: list[dict[str, Any]] = []
+    selected_roles: set[str] = set()
+    company_counts: dict[str, int] = {}
+    for job in ordered:
+        role_key = _recommendation_role_key(job)
+        company_key = _normalized_search_text(job.get("company"))
+        if role_key in selected_roles or company_counts.get(company_key, 0) >= 2:
+            continue
+        selected_roles.add(role_key)
+        company_counts[company_key] = company_counts.get(company_key, 0) + 1
+        selected.append(job)
+        if len(selected) >= max_gemini_candidates:
+            break
+    candidates = selected
     if not candidates:
+        empty_hash = hashlib.sha256(json.dumps({
+            "profile_source_hash": profile_source_hash,
+            "candidate_floor": candidate_floor,
+            "gemini_review_floor": gemini_review_floor,
+            "max_gemini_candidates": max_gemini_candidates,
+            "pinned_final_floor": pinned_final_floor,
+            "top_n": top_n,
+            "shortlist": [],
+        }, sort_keys=True).encode("utf-8")).hexdigest()
+        existing_empty = None if force else conn.execute(
+            """SELECT run_id FROM profile_recommendation_runs
+               WHERE user_id=%s AND profile_source_hash=%s
+                 AND published_after IS NOT DISTINCT FROM %s
+                 AND candidate_floor=%s AND top_n=%s AND shortlist_hash=%s
+               ORDER BY created_at DESC LIMIT 1""",
+            (user_id_value, profile_source_hash, published_after,
+             candidate_floor, top_n, empty_hash),
+        ).fetchone()
+        if existing_empty:
+            conn.execute(
+                """UPDATE job_profile_reviews
+                   SET recommendation_run_id=NULL, final_rank=NULL
+                   WHERE user_id=%s""", (user_id_value,)
+            )
+            conn.commit()
+            return {"candidate_floor": candidate_floor, "candidates": 0,
+                    "batch_reviewed": 0, "batch_cached": 0, "final_candidates": 0,
+                    "recommendations": 0, "run_id": existing_empty[0]}
+        run_at = now or datetime.now(timezone.utc)
+        with conn.transaction():
+            conn.execute(
+                """UPDATE job_profile_reviews
+                   SET recommendation_run_id=NULL, final_rank=NULL
+                   WHERE user_id=%s""", (user_id_value,))
+            empty_run_id = conn.execute(
+                """INSERT INTO profile_recommendation_runs
+                   (user_id,profile_source_hash,candidate_floor,top_n,
+                    published_after,candidate_count,shortlist_hash,model_name,model_version)
+                   VALUES (%s,%s,%s,%s,%s,0,%s,%s,%s) RETURNING run_id""",
+                (user_id_value, profile_source_hash, candidate_floor, top_n,
+                 published_after, empty_hash, os.environ.get("GEMINI_MODEL", gemini_service.DEFAULT_MODEL),
+                 gemini_service.JOB_REVIEW_VERSION),
+            ).fetchone()[0]
         return {
             "candidate_floor": candidate_floor,
             "candidates": 0,
@@ -2224,7 +2314,7 @@ def run_recommendations(
             "batch_cached": 0,
             "final_candidates": 0,
             "recommendations": 0,
-            "run_id": 0,
+            "run_id": empty_run_id,
         }
 
     model_name = os.environ.get("GEMINI_MODEL", gemini_service.DEFAULT_MODEL)
@@ -2379,6 +2469,9 @@ def run_recommendations(
             {
                 "profile_source_hash": profile_source_hash,
                 "candidate_floor": candidate_floor,
+                "gemini_review_floor": gemini_review_floor,
+                "max_gemini_candidates": max_gemini_candidates,
+                "pinned_final_floor": pinned_final_floor,
                 "top_n": top_n,
                 "ats": list(ats) if ats else None,
                 "shortlist": shortlist_signature,
@@ -2411,13 +2504,21 @@ def run_recommendations(
             ),
         ).fetchone()
     if existing_run:
+        pinned_count = conn.execute(
+            """
+            SELECT count(*)
+            FROM job_profile_reviews
+            WHERE user_id = %s AND recommendation_run_id = %s
+            """,
+            (user_id_value, existing_run[0]),
+        ).fetchone()[0]
         return {
             "candidate_floor": candidate_floor,
-            "candidates": len(candidates),
+            "candidates": deterministic_candidate_count,
             "batch_reviewed": len(pending),
             "batch_cached": cached,
             "final_candidates": len(shortlist),
-            "recommendations": min(top_n, len(shortlist)),
+            "recommendations": int(pinned_count),
             "run_id": existing_run[0],
         }
 
@@ -2448,14 +2549,40 @@ def run_recommendations(
                 candidate_floor,
                 top_n,
                 published_after,
-                len(candidates),
+                deterministic_candidate_count,
                 shortlist_hash,
                 model_name,
                 prompt_version,
             ),
         ).fetchone()[0]
+        # A fresh run supersedes prior pins. Weak final reviews are retained as
+        # evidence but intentionally cannot appear in pinned recommendations.
+        conn.execute(
+            """
+            UPDATE job_profile_reviews
+            SET recommendation_run_id = NULL, final_rank = NULL
+            WHERE user_id = %s
+            """,
+            (user_id_value,),
+        )
+        pinned_jobs = [
+            job for job in shortlist
+            if int(final_by_id[job["job_id"]]["fit_score"]) >= pinned_final_floor
+        ]
+        pinned_jobs.sort(
+            key=lambda job: (
+                int(final_by_id[job["job_id"]].get("rank") or 10**9),
+                job["job_id"],
+            )
+        )
+        pinned_ids = {job["job_id"] for job in pinned_jobs}
+        pinned_ranks = {
+            job["job_id"]: rank
+            for rank, job in enumerate(pinned_jobs, 1)
+        }
         for job in shortlist:
             review = final_by_id[job["job_id"]]
+            is_pinned = job["job_id"] in pinned_ids
             conn.execute(
                 """
                 UPDATE job_profile_reviews
@@ -2471,9 +2598,9 @@ def run_recommendations(
                 WHERE user_id = %s AND job_id = %s
                 """,
                 (
-                    run_id,
+                    run_id if is_pinned else None,
                     review["fit_score"],
-                    review["rank"],
+                    pinned_ranks.get(job["job_id"]),
                     review["recommendation"],
                     Jsonb(review["strengths"]),
                     Jsonb(review["concerns"]),
@@ -2486,11 +2613,11 @@ def run_recommendations(
             )
     return {
         "candidate_floor": candidate_floor,
-        "candidates": len(candidates),
+        "candidates": deterministic_candidate_count,
         "batch_reviewed": len(pending),
         "batch_cached": cached,
         "final_candidates": len(shortlist),
-        "recommendations": min(top_n, len(shortlist)),
+        "recommendations": min(top_n, len(pinned_ids)),
         "run_id": run_id,
     }
 
