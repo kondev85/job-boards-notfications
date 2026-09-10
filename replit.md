@@ -239,6 +239,30 @@ and writes `reports/matched_roles_lever.csv` and
 `reports/matched_roles_lever.json`. `--ats ashby`, `--ats greenhouse`, and
 comma-separated selections work the same way.
 
+### Disabling noisy boards
+
+Each `job_boards` row has an `active` flag that defaults to `TRUE`. Set it to
+`FALSE` when a board consistently produces irrelevant results:
+
+```sql
+UPDATE job_boards
+SET active = FALSE
+WHERE ats = 'lever' AND slug = 'jobgether';
+```
+
+An inactive board is excluded from daily fetching, deterministic matching, Gemini
+recommendations, and all matched-role reports. Its jobs and historical matches
+remain stored, so an administrator can restore it later:
+
+```sql
+UPDATE job_boards
+SET active = TRUE
+WHERE ats = 'lever' AND slug = 'jobgether';
+```
+
+The daily command will not fall back to the local seed registry when PostgreSQL
+contains only disabled boards for an ATS.
+
 The `--recommend` command runs the same recommendation layer without importing
 boards. It uses the user's `min_match_score` as the candidate floor (55 for the
 default Konstantin profile), sends candidates in batches rather than making one

@@ -449,6 +449,7 @@ def test_postgres_schema_constraints_repeat_import_and_lifecycle():
                 )
             }
             assert {
+                "active",
                 "etag",
                 "etag_seen_at",
                 "etag_published_after",
