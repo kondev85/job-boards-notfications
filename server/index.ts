@@ -121,7 +121,7 @@ app.get("/api/jobs/matched", async (req: AuthedRequest, res) => {
   res.json({ rows: rows.rows, total: Number(count.rows[0].count), page, limit });
 });
 app.get("/api/recommendations/latest", async (req: AuthedRequest, res) => {
-  const r = await pool.query("SELECT r.*,j.title,j.company,j.job_url,j.ats,j.external_id FROM job_profile_reviews r JOIN jobs j USING(job_id) JOIN job_boards b ON b.board_id=j.board_id AND b.active IS TRUE WHERE r.user_id=$1 AND r.recommendation_run_id=(SELECT run_id FROM profile_recommendation_runs WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1) ORDER BY r.final_rank NULLS LAST", [uid(req)]); res.json(r.rows);
+  const r = await pool.query("SELECT r.*,j.title,j.company,j.job_url,j.ats,j.external_id,j.location_raw,j.workplace_type,j.published_at,j.description_text FROM job_profile_reviews r JOIN jobs j USING(job_id) JOIN job_boards b ON b.board_id=j.board_id AND b.active IS TRUE WHERE r.user_id=$1 AND r.recommendation_run_id=(SELECT run_id FROM profile_recommendation_runs WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1) ORDER BY r.final_rank NULLS LAST", [uid(req)]); res.json(r.rows);
 });
 app.patch("/api/jobs/:jobId/status", async (req: AuthedRequest, res) => {
   const status = req.body?.status; if (!["new","saved","applied","rejected"].includes(status)) return res.status(400).json({ error: "Invalid status" });

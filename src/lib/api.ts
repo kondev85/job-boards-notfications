@@ -14,13 +14,25 @@ export interface Profile {
   min_match_score:number|null;
   profile_generated_at?:string|null; profile_model?:string|null; profile_version?:string|null;
 }
+export interface Recommendation {
+  title?: string|null; company?: string|null; job_url?: string|null; ats?: string|null;
+  external_id?: string|null; location_raw?: string|null; workplace_type?: string|null;
+  published_at?: string|null; description_text?: string|null;
+  final_fit_score?: number|null; final_recommendation?: string|null;
+  final_strengths?: string[]|null; final_concerns?: string[]|null; final_rationale?: string|null;
+  fit_score?: number|null; recommendation?: string|null; strengths?: string[]|null;
+  concerns?: string[]|null; rationale?: string|null;
+  batch_fit_score?: number|null; batch_recommendation?: string|null;
+  batch_strengths?: string[]|null; batch_concerns?: string[]|null; batch_rationale?: string|null;
+  [key:string]: unknown;
+}
 async function request<T>(url:string, init?:RequestInit):Promise<T> { const r=await fetch(url, { credentials:"same-origin", ...init }); if (!r.ok) throw new Error((await r.json().catch(()=>({}))).error || r.statusText); return r.json(); }
 export const getMe = () => request<Me>("/api/me");
 export const getProfileSummary = () => request<Record<string,unknown>>("/api/profile/summary");
 export const updateProfile = (profile:Partial<Profile>) => request<Profile>("/api/profile",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(profile)});
 export const getBoardOptions = () => request<unknown[]>("/api/boards/options");
 export const getMatchedJobs = (query:Record<string,string|number>={}) => request<{rows:MatchedJob[];total:number;page:number;limit:number}>(`/api/jobs/matched?${new URLSearchParams(Object.entries(query).map(([k,v])=>[k,String(v)]))}`);
-export const getLatestRecommendations = () => request<unknown[]>("/api/recommendations/latest");
+export const getLatestRecommendations = () => request<Recommendation[]>("/api/recommendations/latest");
 export const updateJobStatus = (jobId:number,status:JobStatus) => request<{status:JobStatus}>(`/api/jobs/${jobId}/status`, { method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({status}) });
 export const launchSearch = (body:{cutoff:string;scope:"all"|"ats"|"boards";ats?:string;boardIds?:number[]}) => request<{runId:number}>("/api/search-runs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
 export const getSearchRun = (id:number) => request<SearchRun>(`/api/search-runs/${id}`);
