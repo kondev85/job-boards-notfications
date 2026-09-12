@@ -373,6 +373,7 @@ _WORKDAY_HOST = re.compile(
 )
 _WORKDAY_LOCALE = re.compile(r"^[a-z]{2}(?:-[a-z]{2})?$", re.IGNORECASE)
 _WORKDAY_CDX_ENVS = ("wd1", "wd3", "wd5", "wd12")
+_WORKDAY_CDX_LIMIT = 10_000
 
 
 def _workday_parts(identifier: str) -> tuple[str, str, str]:
@@ -768,13 +769,13 @@ def candidates_from_workday_wayback(
         url = (
             "https://web.archive.org/cdx/search/cdx?"
             f"url={pattern}&matchType=domain&fl=original&collapse=urlkey"
-            f"&output=json&filter=statuscode:200{window}"
+            f"&output=json&filter=statuscode:200&limit={_WORKDAY_CDX_LIMIT}{window}"
         )
         print(
             f"  querying the Wayback Machine for Workday {environment}...",
             file=sys.stderr,
         )
-        rows = json.loads(fetch(url, timeout=300, retries=3))
+        rows = json.loads(fetch(url, timeout=120, retries=2))
         for row in rows[1:] if rows else []:
             original = row[0] if isinstance(row, list) and row else row
             parsed = urllib.parse.urlsplit(str(original))
@@ -794,7 +795,9 @@ def candidates_from_workday_wayback(
                 start = 1 if _WORKDAY_LOCALE.fullmatch(parts[0]) else 0
                 if start < len(parts):
                     board = parts[start]
-            if not board or board.lower() in {"job", "wday", "assets", "favicon.ico"}:
+            if not board or board.lower() in {
+                "job", "wday", "assets", "favicon.ico", "robots.txt", "sitemap.xml"
+            }:
                 continue
             identifier = (
                 f"{host_match.group('tenant')}."
