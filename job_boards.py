@@ -374,6 +374,7 @@ _WORKDAY_HOST = re.compile(
 _WORKDAY_LOCALE = re.compile(r"^[a-z]{2}(?:-[a-z]{2})?$", re.IGNORECASE)
 _WORKDAY_CDX_ENVS = ("wd1", "wd3", "wd5", "wd12")
 _WORKDAY_CDX_LIMIT = 10_000
+_WORKDAY_DETAIL_CONCURRENCY = 4
 
 
 def _workday_parts(identifier: str) -> tuple[str, str, str]:
@@ -508,7 +509,7 @@ def _workday_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
 def _workday_details(url: str) -> dict:
     """Read the public JobPosting JSON-LD embedded in a Workday detail page."""
     request = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(request, timeout=30) as response:
+    with urllib.request.urlopen(request, timeout=20) as response:
         html = response.read().decode("utf-8", "replace")
     match = re.search(
         r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
@@ -524,6 +525,64 @@ def _workday_details(url: str) -> dict:
     return value if isinstance(value, dict) else {}
 
 
+def _workday_needs_details(
+    item: dict,
+    published_after: datetime | None,
+) -> bool:
+    """Avoid detail requests for list items already outside a cutoff window."""
+    if published_after is None:
+        return True
+    posted = _workday_posted_at(item.get("postedOn") or item.get("postedAt"))
+    if not posted:
+        return True
+    try:
+        return datetime.fromisoformat(posted) >= published_after
+    except ValueError:
+        return True
+
+
+def _enrich_workday_item(item: dict) -> dict:
+    """Best-effort detail enrichment for one cutoff-eligible Workday posting."""
+    try:
+        details = _workday_details(item["_jobUrl"])
+    except Exception:
+        return item
+    if not details:
+        return item
+    item["postedAt"] = details.get("datePosted") or item.get("postedOn")
+    item["jobDescription"] = details.get("description") or ""
+    locations = details.get("jobLocation")
+    if isinstance(locations, dict):
+        locations = [locations]
+    if isinstance(locations, list):
+        labels = []
+        for location in locations:
+            address = (
+                location.get("address")
+                if isinstance(location, dict)
+                else None
+            )
+            if not isinstance(address, dict):
+                continue
+            label = ", ".join(
+                str(value)
+                for value in (
+                    address.get("addressLocality"),
+                    address.get("addressCountry"),
+                )
+                if value
+            )
+            if label and label not in labels:
+                labels.append(label)
+        if labels:
+            item["locationsText"] = "; ".join(labels)
+    if details.get("jobLocationType") and not item.get("remoteType"):
+        item["remoteType"] = details["jobLocationType"]
+    if details.get("employmentType") and not item.get("employmentType"):
+        item["employmentType"] = details["employmentType"]
+    return item
+
+
 def fetch_workday_jobs(
     identifier: str,
     published_after: datetime | None = None,
@@ -533,6 +592,9 @@ def fetch_workday_jobs(
     limit = 20
     offset = 0
     all_jobs: list[dict] = []
+    enrich_details = published_after is not None or os.environ.get(
+        "WORKDAY_ENRICH_DETAILS"
+    ) == "1"
     for _ in range(250):
         payload = _workday_post_json(
             url,
@@ -546,59 +608,25 @@ def fetch_workday_jobs(
         page = payload.get("jobPostings")
         if not isinstance(page, list):
             raise ValueError(f"workday/{identifier}: response has no jobPostings array")
+        page_items = []
+        detail_items = []
         for job in page:
             if isinstance(job, dict):
                 item = dict(job)
                 item["_jobUrl"] = _workday_job_url(
                     identifier, item.get("externalPath", "")
                 )
-                # The list API intentionally omits descriptions and often only
-                # reports "N Locations". Enrich cutoff-scoped imports from the
-                # public JSON-LD detail page so matching has real location and
-                # description evidence. Full historical exports remain cheap
-                # unless WORKDAY_ENRICH_DETAILS=1 is explicitly requested.
-                if published_after is not None or os.environ.get(
-                    "WORKDAY_ENRICH_DETAILS"
-                ) == "1":
-                    try:
-                        details = _workday_details(item["_jobUrl"])
-                    except Exception:
-                        details = {}
-                    if details:
-                        item["postedAt"] = details.get("datePosted") or item.get(
-                            "postedOn"
-                        )
-                        item["jobDescription"] = details.get("description") or ""
-                        locations = details.get("jobLocation")
-                        if isinstance(locations, dict):
-                            locations = [locations]
-                        if isinstance(locations, list):
-                            labels = []
-                            for location in locations:
-                                address = (
-                                    location.get("address")
-                                    if isinstance(location, dict)
-                                    else None
-                                )
-                                if not isinstance(address, dict):
-                                    continue
-                                label = ", ".join(
-                                    str(value)
-                                    for value in (
-                                        address.get("addressLocality"),
-                                        address.get("addressCountry"),
-                                    )
-                                    if value
-                                )
-                                if label and label not in labels:
-                                    labels.append(label)
-                            if labels:
-                                item["locationsText"] = "; ".join(labels)
-                        if details.get("jobLocationType") and not item.get("remoteType"):
-                            item["remoteType"] = details["jobLocationType"]
-                        if details.get("employmentType") and not item.get("employmentType"):
-                            item["employmentType"] = details["employmentType"]
-                all_jobs.append(item)
+                page_items.append(item)
+                if enrich_details and _workday_needs_details(
+                    item, published_after
+                ):
+                    detail_items.append(item)
+        if detail_items:
+            with ThreadPoolExecutor(
+                max_workers=_WORKDAY_DETAIL_CONCURRENCY
+            ) as pool:
+                list(pool.map(_enrich_workday_item, detail_items))
+        all_jobs.extend(page_items)
         total = int(payload.get("total") or 0)
         if len(page) < limit or (total and len(all_jobs) >= total):
             break

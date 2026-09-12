@@ -441,6 +441,52 @@ def test_workday_wayback_parser_extracts_locale_and_job_board():
     assert len(calls) == 4
 
 
+def test_workday_cutoff_enrichment_skips_old_list_items():
+    import job_boards
+    from datetime import timedelta
+
+    original_post = job_boards._workday_post_json
+    original_details = job_boards._workday_details
+    detail_calls = []
+
+    def fake_post(url, payload, timeout=30):
+        return {
+            "total": 2,
+            "jobPostings": [
+                {
+                    "title": "Recent role",
+                    "externalPath": "/job/Remote/Recent_JR1",
+                    "bulletFields": ["JR1"],
+                    "postedOn": "Posted Today",
+                },
+                {
+                    "title": "Old role",
+                    "externalPath": "/job/Remote/Old_JR2",
+                    "bulletFields": ["JR2"],
+                    "postedOn": "Posted 30+ Days Ago",
+                },
+            ],
+        }
+
+    def fake_details(url):
+        detail_calls.append(url)
+        return {"description": "Recent detail"}
+
+    job_boards._workday_post_json = fake_post
+    job_boards._workday_details = fake_details
+    try:
+        rows = job_boards.fetch_workday_jobs(
+            "tenant.wd5/Careers",
+            datetime.now(timezone.utc) - timedelta(days=2),
+        )
+    finally:
+        job_boards._workday_post_json = original_post
+        job_boards._workday_details = original_details
+    assert len(rows) == 2
+    assert len(detail_calls) == 1
+    assert "Recent_JR1" in detail_calls[0]
+
+
 def test_normalizers_survive_explicit_nulls():
     """Every ATS sends JSON null for fields it has no value for.
 
