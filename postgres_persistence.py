@@ -756,10 +756,18 @@ def _fetch_normalized(
     greenhouse_content: bool = False,
     etag: str | None = None,
     meta: dict[str, Any] | None = None,
+    cached_workday_jobs: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
     source = job_boards.SOURCES[ats]
     if source.get("fetch_jobs"):
-        raw_jobs = source["fetch_jobs"](slug, published_after)
+        if ats == "workday":
+            raw_jobs = source["fetch_jobs"](
+                slug,
+                published_after,
+                cached_workday_jobs,
+            )
+        else:
+            raw_jobs = source["fetch_jobs"](slug, published_after)
     else:
         payload = json.loads(
             job_boards.fetch(
@@ -842,6 +850,39 @@ def _board_fetch_state(
         (ats, slug),
     ).fetchone()
     return row if row else (None, None, None)
+
+
+def _cached_workday_jobs(
+    conn: psycopg.Connection,
+    board_id: int | None,
+    slug: str,
+) -> dict[str, dict[str, Any]]:
+    """Return persisted Workday detail evidence keyed by raw requisition ID."""
+    if board_id is None:
+        return {}
+    prefix = f"{slug}:"
+    rows = conn.execute(
+        """
+        SELECT external_id, published_at, description_text, location_raw,
+               workplace_type, employment_type
+        FROM jobs
+        WHERE board_id = %s
+        """,
+        (board_id,),
+    ).fetchall()
+    cached: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        external_id = str(row[0] or "")
+        if not external_id.startswith(prefix):
+            continue
+        cached[external_id[len(prefix):]] = {
+            "published_at": row[1],
+            "description_text": row[2],
+            "location_raw": row[3],
+            "workplace_type": row[4],
+            "employment_type": row[5],
+        }
+    return cached
 
 
 def _etag_covers(
@@ -2704,7 +2745,11 @@ def run(args: argparse.Namespace) -> int:
 
         for index, (ats, slug) in enumerate(specs, 1):
             try:
-                _, stored_etag, cached_published_after = _board_fetch_state(
+                print(
+                    f"{index}/{len(specs)} {ats}/{slug}: fetching...",
+                    flush=True,
+                )
+                board_id, stored_etag, cached_published_after = _board_fetch_state(
                     conn, ats, slug
                 )
                 conditional_etag = (
@@ -2714,6 +2759,11 @@ def run(args: argparse.Namespace) -> int:
                     else None
                 )
                 fetch_meta: dict[str, Any] = {}
+                cached_workday_jobs = (
+                    _cached_workday_jobs(conn, board_id, slug)
+                    if ats == "workday"
+                    else None
+                )
                 rows, skipped = _fetch_normalized(
                     ats,
                     slug,
@@ -2721,6 +2771,7 @@ def run(args: argparse.Namespace) -> int:
                     greenhouse_content=greenhouse_content,
                     etag=conditional_etag,
                     meta=fetch_meta,
+                    cached_workday_jobs=cached_workday_jobs,
                 )
                 with conn.transaction():
                     with conn.cursor() as cur:

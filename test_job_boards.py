@@ -487,6 +487,97 @@ def test_workday_cutoff_enrichment_skips_old_list_items():
     assert "Recent_JR1" in detail_calls[0]
 
 
+def test_workday_cutoff_stops_after_detail_dates_cross_cutoff():
+    import job_boards
+    from datetime import timedelta
+
+    original_post = job_boards._workday_post_json
+    original_details = job_boards._workday_details
+    offsets = []
+
+    def fake_post(url, payload, timeout=30):
+        offset = payload["offset"]
+        offsets.append(offset)
+        age = "Recent" if offset == 0 else "Old"
+        return {
+            "total": 60,
+            "jobPostings": [
+                {
+                    "title": f"{age} role {index}",
+                    "externalPath": f"/job/Remote/{age}_{offset}_{index}",
+                    "bulletFields": [f"{age}-{offset}-{index}"],
+                }
+                for index in range(20)
+            ],
+        }
+
+    def fake_details(url):
+        return {
+            "datePosted": (
+                datetime.now(timezone.utc).date().isoformat()
+                if "/Recent_" in url
+                else "2020-01-01"
+            )
+        }
+
+    job_boards._workday_post_json = fake_post
+    job_boards._workday_details = fake_details
+    try:
+        rows = job_boards.fetch_workday_jobs(
+            "tenant.wd5/Careers",
+            datetime.now(timezone.utc) - timedelta(days=2),
+        )
+    finally:
+        job_boards._workday_post_json = original_post
+        job_boards._workday_details = original_details
+    assert offsets == [0, 20]
+    assert len(rows) == 40
+
+
+def test_workday_reuses_cached_detail_evidence():
+    import job_boards
+
+    original_post = job_boards._workday_post_json
+    original_details = job_boards._workday_details
+
+    def fake_post(url, payload, timeout=30):
+        return {
+            "total": 1,
+            "jobPostings": [{
+                "title": "Cached role",
+                "externalPath": "/job/Remote/Cached_JR1",
+                "bulletFields": ["JR1"],
+                "postedOn": "Posted Today",
+            }],
+        }
+
+    def should_not_fetch_details(url):
+        raise AssertionError("cached Workday details should avoid this request")
+
+    job_boards._workday_post_json = fake_post
+    job_boards._workday_details = should_not_fetch_details
+    try:
+        rows = job_boards.fetch_workday_jobs(
+            "tenant.wd5/Careers",
+            datetime.now(timezone.utc),
+            {
+                "JR1": {
+                    "published_at": "2026-09-12T00:00:00+00:00",
+                    "description_text": "Cached description",
+                    "location_raw": "Sofia",
+                    "workplace_type": "hybrid",
+                    "employment_type": "Full time",
+                }
+            },
+        )
+    finally:
+        job_boards._workday_post_json = original_post
+        job_boards._workday_details = original_details
+    assert rows[0]["jobDescription"] == "Cached description"
+    assert rows[0]["locationsText"] == "Sofia"
+    assert rows[0]["remoteType"] == "hybrid"
+
+
 def test_normalizers_survive_explicit_nulls():
     """Every ATS sends JSON null for fields it has no value for.
 

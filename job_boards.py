@@ -135,7 +135,13 @@ def _lower_headers(items) -> dict:
     return {k.lower(): v for k, v in (items.items() if hasattr(items, "items") else items)}
 
 
-def _pooled_request(url: str, method: str, timeout: int, headers: dict) -> tuple[int, dict, bytes]:
+def _pooled_request(
+    url: str,
+    method: str,
+    timeout: int,
+    headers: dict,
+    body: bytes | None = None,
+) -> tuple[int, dict, bytes]:
     """One request over a reused per-thread connection. Returns (status, headers, body).
 
     A pooled connection can be closed by the server between requests, which surfaces
@@ -155,7 +161,10 @@ def _pooled_request(url: str, method: str, timeout: int, headers: dict) -> tuple
                 parts.netloc, timeout=timeout
             )
         try:
-            conn.request(method, target, headers=headers)
+            if body is None:
+                conn.request(method, target, headers=headers)
+            else:
+                conn.request(method, target, body=body, headers=headers)
             resp = conn.getresponse()
             body = resp.read()  # must drain, or the connection cannot be reused
             return resp.status, _lower_headers(resp.getheaders()), body
@@ -177,7 +186,7 @@ def _single_request(
     headers = {"User-Agent": UA, "Accept-Encoding": "gzip"}
     if etag:
         headers["If-None-Match"] = etag
-    if urllib.parse.urlsplit(url).netloc in _POOLED_HOSTS:
+    if _is_pooled_host(urllib.parse.urlsplit(url).netloc):
         return _pooled_request(url, method, timeout, headers)
     req = urllib.request.Request(url, headers=headers, method=method)
     try:
@@ -185,6 +194,12 @@ def _single_request(
             return resp.status, _lower_headers(resp.headers), resp.read()
     except urllib.error.HTTPError as e:
         return e.code, _lower_headers(e.headers or {}), e.read()
+
+
+def _is_pooled_host(netloc: str) -> bool:
+    """Use connection pooling for posting APIs and Workday career hosts."""
+    hostname = netloc.split(":", 1)[0].lower()
+    return netloc in _POOLED_HOSTS or hostname.endswith(".myworkdayjobs.com")
 
 
 # ponytail: seconds-form Retry-After only. The HTTP-date form is legal but none of
@@ -374,7 +389,7 @@ _WORKDAY_HOST = re.compile(
 _WORKDAY_LOCALE = re.compile(r"^[a-z]{2}(?:-[a-z]{2})?$", re.IGNORECASE)
 _WORKDAY_CDX_ENVS = ("wd1", "wd3", "wd5", "wd12")
 _WORKDAY_CDX_LIMIT = 10_000
-_WORKDAY_DETAIL_CONCURRENCY = 4
+_WORKDAY_DETAIL_CONCURRENCY = 8
 
 
 def _workday_parts(identifier: str) -> tuple[str, str, str]:
@@ -486,8 +501,32 @@ def _workday_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
         "Content-Type": "application/json",
     }
     for attempt in range(4):
-        request = urllib.request.Request(url, data=body, headers=headers, method="POST")
         try:
+            if _is_pooled_host(urllib.parse.urlsplit(url).netloc):
+                status, response_headers, response_body = _pooled_request(
+                    url, "POST", timeout, headers, body
+                )
+                if status == 404:
+                    raise NotFound(url)
+                if status >= 400:
+                    if status not in (429, 500, 502, 503, 504):
+                        raise urllib.error.HTTPError(
+                            url, status, "client error", response_headers, None
+                        )
+                    retry_after = response_headers.get("retry-after")
+                    if attempt == 3:
+                        raise urllib.error.HTTPError(
+                            url, status, "server error", response_headers, None
+                        )
+                    time.sleep(_retry_delay(retry_after, attempt))
+                    continue
+                result = json.loads(response_body)
+                if not isinstance(result, dict):
+                    raise ValueError("Workday response is not an object")
+                return result
+            request = urllib.request.Request(
+                url, data=body, headers=headers, method="POST"
+            )
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 result = json.loads(response.read())
                 if not isinstance(result, dict):
@@ -508,9 +547,7 @@ def _workday_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
 
 def _workday_details(url: str) -> dict:
     """Read the public JobPosting JSON-LD embedded in a Workday detail page."""
-    request = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(request, timeout=20) as response:
-        html = response.read().decode("utf-8", "replace")
+    html = fetch(url, timeout=20, retries=2).decode("utf-8", "replace")
     match = re.search(
         r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
         html,
@@ -583,15 +620,37 @@ def _enrich_workday_item(item: dict) -> dict:
     return item
 
 
+def _workday_requisition_id(item: dict) -> str:
+    bullets = item.get("bulletFields") or []
+    return str(item.get("jobPostingId") or (bullets[0] if bullets else "")).strip()
+
+
+def _apply_cached_workday_item(item: dict, cached: dict) -> None:
+    """Reuse persisted detail evidence when a Workday posting is unchanged."""
+    published_at = cached.get("published_at")
+    if published_at:
+        item["postedAt"] = published_at
+    if cached.get("description_text"):
+        item["jobDescription"] = cached["description_text"]
+    if cached.get("location_raw"):
+        item["locationsText"] = cached["location_raw"]
+    if cached.get("workplace_type"):
+        item["remoteType"] = cached["workplace_type"]
+    if cached.get("employment_type"):
+        item["employmentType"] = cached["employment_type"]
+
+
 def fetch_workday_jobs(
     identifier: str,
     published_after: datetime | None = None,
+    cached_jobs: dict[str, dict] | None = None,
 ) -> list[dict]:
     """Fetch paginated Workday postings, stopping at a known publication cutoff."""
     url = workday_board_url(identifier)
     limit = 20
     offset = 0
     all_jobs: list[dict] = []
+    cached_jobs = cached_jobs or {}
     enrich_details = published_after is not None or os.environ.get(
         "WORKDAY_ENRICH_DETAILS"
     ) == "1"
@@ -616,9 +675,18 @@ def fetch_workday_jobs(
                 item["_jobUrl"] = _workday_job_url(
                     identifier, item.get("externalPath", "")
                 )
+                cached = cached_jobs.get(_workday_requisition_id(item))
+                if cached:
+                    _apply_cached_workday_item(item, cached)
                 page_items.append(item)
-                if enrich_details and _workday_needs_details(
-                    item, published_after
+                cached_detail = (
+                    cached is not None
+                    and cached.get("description_text") is not None
+                )
+                if (
+                    enrich_details
+                    and not cached_detail
+                    and _workday_needs_details(item, published_after)
                 ):
                     detail_items.append(item)
         if detail_items:
@@ -631,7 +699,10 @@ def fetch_workday_jobs(
         if len(page) < limit or (total and len(all_jobs) >= total):
             break
         if published_after is not None:
-            dated = [_workday_posted_at(item.get("postedOn")) for item in page]
+            dated = [
+                _workday_posted_at(item.get("postedAt") or item.get("postedOn"))
+                for item in page_items
+            ]
             parsed = [
                 datetime.fromisoformat(value)
                 for value in dated
