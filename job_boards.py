@@ -371,6 +371,7 @@ _WORKDAY_HOST = re.compile(
     r"\.myworkdayjobs\.com$",
     re.IGNORECASE,
 )
+_WORKDAY_LOCALE = re.compile(r"^[a-z]{2}(?:-[a-z]{2})?$", re.IGNORECASE)
 _WORKDAY_CDX_ENVS = ("wd1", "wd3", "wd5", "wd12")
 
 

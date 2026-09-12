@@ -416,6 +416,31 @@ def test_workday_adapter_paginates_and_namespaces_requisition_ids():
     )
 
 
+def test_workday_wayback_parser_extracts_locale_and_job_board():
+    import job_boards
+
+    original_fetch = job_boards.fetch
+    calls = []
+
+    def fake_fetch(url, **kwargs):
+        calls.append(url)
+        if "wd1.myworkdayjobs.com" not in url:
+            return json.dumps([["original"]]).encode()
+        return json.dumps([
+            ["original"],
+            ["https://acme.wd1.myworkdayjobs.com/en-US/External_Careers/job/Remote/Role_JR1"],
+            ["https://acme.wd1.myworkdayjobs.com/External_Careers"],
+        ]).encode()
+
+    job_boards.fetch = fake_fetch
+    try:
+        candidates = job_boards.candidates_from_workday_wayback(since_days=2)
+    finally:
+        job_boards.fetch = original_fetch
+    assert candidates == {"acme.wd1/external_careers": "acme.wd1/External_Careers"}
+    assert len(calls) == 4
+
+
 def test_normalizers_survive_explicit_nulls():
     """Every ATS sends JSON null for fields it has no value for.
 
