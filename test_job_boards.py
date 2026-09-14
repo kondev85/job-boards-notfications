@@ -441,6 +441,11 @@ def test_workday_wayback_parser_extracts_locale_and_job_board():
         job_boards.fetch = original_fetch
     assert candidates == {"acme.wd1/external_careers": "acme.wd1/External_Careers"}
     assert len(calls) == 8
+    assert all(
+        "fl=original" not in url
+        for url in calls
+        if "showNumPages=true" in url
+    )
 
 
 def test_workday_wayback_parser_reads_multiple_cdx_pages():
@@ -476,6 +481,51 @@ def test_workday_wayback_parser_reads_multiple_cdx_pages():
         "beta.wd1/beta_careers": "beta.wd1/Beta_Careers",
     }
     assert any("page=1" in url for url in calls)
+
+
+def test_workday_wayback_refuses_malformed_page_count():
+    import job_boards
+
+    original_fetch = job_boards.fetch
+
+    def fake_fetch(url, **kwargs):
+        return json.dumps([["original"], [None]]).encode()
+
+    job_boards.fetch = fake_fetch
+    try:
+        try:
+            job_boards.candidates_from_workday_wayback()
+        except RuntimeError as exc:
+            assert "refusing an incomplete discovery" in str(exc)
+        else:
+            raise AssertionError("malformed CDX page count must fail discovery")
+    finally:
+        job_boards.fetch = original_fetch
+
+
+def test_workday_wayback_refuses_a_failed_data_page():
+    import job_boards
+
+    original_fetch = job_boards.fetch
+
+    def fake_fetch(url, **kwargs):
+        if "showNumPages=true" in url:
+            return json.dumps([["numpages"], ["2"]]).encode()
+        if "page=1" in url:
+            raise TimeoutError("timed out")
+        return json.dumps([["original"]]).encode()
+
+    job_boards.fetch = fake_fetch
+    try:
+        try:
+            job_boards.candidates_from_workday_wayback()
+        except RuntimeError as exc:
+            assert "page 2/2 failed" in str(exc)
+            assert "refusing an incomplete discovery" in str(exc)
+        else:
+            raise AssertionError("a failed CDX data page must fail discovery")
+    finally:
+        job_boards.fetch = original_fetch
 
 
 def test_workday_cutoff_enrichment_skips_old_list_items():

@@ -390,7 +390,7 @@ _WORKDAY_HOST = re.compile(
 _WORKDAY_LOCALE = re.compile(r"^[a-z]{2}(?:-[a-z]{2})?$", re.IGNORECASE)
 _WORKDAY_CDX_ENVS = ("wd1", "wd3", "wd5", "wd12")
 _WORKDAY_CDX_LIMIT = 10_000
-_WORKDAY_CDX_MAX_PAGES = 250
+_WORKDAY_CDX_MAX_PAGES = 1_000
 _WORKDAY_DETAIL_CONCURRENCY = 8
 
 
@@ -933,21 +933,35 @@ def candidates_from_workday_wayback(
             f"  querying the Wayback Machine for Workday {environment}...",
             file=sys.stderr,
         )
+        # showNumPages changes the response field to `numpages`; requesting
+        # `fl=original` at the same time makes current CDX return `[null]`.
+        # Keep the count query separate or discovery silently reads page one.
+        page_count_url = (
+            "https://web.archive.org/cdx/search/cdx?"
+            f"url={pattern}&matchType=domain&collapse=urlkey&output=json"
+            f"&filter=statuscode:200&limit={_WORKDAY_CDX_LIMIT}"
+            f"{window}&showNumPages=true"
+        )
         try:
-            page_count_url = f"{base_url}&showNumPages=true"
             page_count_rows = json.loads(fetch(page_count_url, timeout=120, retries=2))
-            try:
-                page_count = int(page_count_rows[1][0])
-            except (IndexError, TypeError, ValueError):
-                page_count = 1
+            if (
+                not isinstance(page_count_rows, list)
+                or len(page_count_rows) < 2
+                or page_count_rows[0] != ["numpages"]
+            ):
+                raise ValueError(f"unexpected response: {page_count_rows!r}")
+            page_count = int(page_count_rows[1][0])
         except Exception as exc:
-            print(
-                f"    Workday {environment} CDX page count failed ({exc}); "
-                "using the normal first response",
-                file=sys.stderr,
+            raise RuntimeError(
+                f"Workday {environment} CDX page count failed; "
+                "refusing an incomplete discovery"
+            ) from exc
+        page_count = max(1, page_count)
+        if page_count > _WORKDAY_CDX_MAX_PAGES:
+            raise RuntimeError(
+                f"Workday {environment} has {page_count} CDX pages, above the "
+                f"safety limit of {_WORKDAY_CDX_MAX_PAGES}; refusing to truncate"
             )
-            page_count = 1
-        page_count = max(1, min(page_count, _WORKDAY_CDX_MAX_PAGES))
         archived_urls = 0
         page_urls = [base_url] + [
             f"{base_url}&page={page}" for page in range(1, page_count)
@@ -956,12 +970,10 @@ def candidates_from_workday_wayback(
             try:
                 rows = json.loads(fetch(url, timeout=180, retries=2))
             except Exception as exc:
-                print(
-                    f"    Workday {environment} CDX page {page + 1}/{page_count} "
-                    f"failed ({exc}); continuing",
-                    file=sys.stderr,
-                )
-                continue
+                raise RuntimeError(
+                    f"Workday {environment} CDX page {page + 1}/{page_count} "
+                    "failed; refusing an incomplete discovery"
+                ) from exc
             archived_urls += max(0, len(rows) - 1)
             for row in rows[1:] if rows else []:
                 original = row[0] if isinstance(row, list) and row else row
@@ -1157,8 +1169,9 @@ def discover_workday_boards(
     try:
         seen = candidates_from_workday_wayback(recent_days)
     except Exception as exc:
-        print(f"  Workday Wayback failed ({exc}); using cached boards", file=sys.stderr)
-        seen = {}
+        raise RuntimeError(
+            "Workday Wayback discovery failed; boards.json was not changed"
+        ) from exc
 
     if bruteforce:
         tenants = {
