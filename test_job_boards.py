@@ -585,7 +585,8 @@ def test_workday_wayback_resumes_from_saved_page():
                 and "page=" not in url
                 for url in calls
             ) == 1
-            assert not progress_path.exists()
+            assert progress_path.exists()
+            assert json.loads(progress_path.read_text())["crawlComplete"] is True
             assert {
                 "alpha.wd1/careers",
                 "beta.wd1/careers",
@@ -594,6 +595,85 @@ def test_workday_wayback_resumes_from_saved_page():
     finally:
         job_boards.fetch = original_fetch
         job_boards._WORKDAY_CDX_DELAY_SECONDS = original_delay
+
+
+def test_workday_validation_request_errors_preserve_cache_and_checkpoint():
+    import job_boards
+
+    original_candidates = job_boards.candidates_from_workday_wayback
+    original_inspect = job_boards.inspect_workday_board
+    original_seed = job_boards.BOARDS_SEED
+    original_cache = job_boards.BOARDS_CACHE
+    original_report = job_boards.WORKDAY_DISCOVERY_REPORT
+    original_progress = job_boards.WORKDAY_DISCOVERY_PROGRESS
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            job_boards.BOARDS_SEED = root / "boards.seed.json"
+            job_boards.BOARDS_CACHE = root / "boards.json"
+            job_boards.WORKDAY_DISCOVERY_REPORT = root / "report.json"
+            job_boards.WORKDAY_DISCOVERY_PROGRESS = root / "progress.json"
+            job_boards.BOARDS_SEED.write_text('{"workday": []}')
+            job_boards.BOARDS_CACHE.write_text(
+                '{"workday": ["existing.wd1/Careers"]}'
+            )
+            job_boards.WORKDAY_DISCOVERY_PROGRESS.write_text('{"crawlComplete": true}')
+            job_boards.candidates_from_workday_wayback = lambda *args, **kwargs: {
+                "live.wd1/careers": "live.wd1/Careers",
+                "error.wd1/careers": "error.wd1/Careers",
+            }
+            job_boards.inspect_workday_board = lambda identifier, recent_days=None: {
+                "identifier": identifier,
+                "live": identifier.startswith("live."),
+                "outcome": (
+                    "live" if identifier.startswith("live.") else "request_error"
+                ),
+                "error": None if identifier.startswith("live.") else "timed out",
+            }
+            try:
+                job_boards.discover_workday_boards(concurrency=1)
+            except RuntimeError as exc:
+                assert "validation had 1 request errors" in str(exc)
+            else:
+                raise AssertionError("request errors must block cache replacement")
+            assert json.loads(job_boards.BOARDS_CACHE.read_text()) == {
+                "workday": ["existing.wd1/Careers"]
+            }
+            assert job_boards.WORKDAY_DISCOVERY_PROGRESS.exists()
+            assert json.loads(job_boards.WORKDAY_DISCOVERY_REPORT.read_text())[
+                "requestErrorCount"
+            ] == 1
+    finally:
+        job_boards.candidates_from_workday_wayback = original_candidates
+        job_boards.inspect_workday_board = original_inspect
+        job_boards.BOARDS_SEED = original_seed
+        job_boards.BOARDS_CACHE = original_cache
+        job_boards.WORKDAY_DISCOVERY_REPORT = original_report
+        job_boards.WORKDAY_DISCOVERY_PROGRESS = original_progress
+
+
+def test_successful_workday_cache_write_removes_checkpoint():
+    import job_boards
+
+    original_discover = job_boards.discover_boards
+    original_cache = job_boards.BOARDS_CACHE
+    original_progress = job_boards.WORKDAY_DISCOVERY_PROGRESS
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            job_boards.BOARDS_CACHE = root / "boards.json"
+            job_boards.WORKDAY_DISCOVERY_PROGRESS = root / "progress.json"
+            job_boards.WORKDAY_DISCOVERY_PROGRESS.write_text('{"crawlComplete": true}')
+            job_boards.discover_boards = lambda *args, **kwargs: [
+                "new.wd1/Careers"
+            ]
+            boards = job_boards.load_boards(True, ["workday"])
+            assert boards == {"workday": ["new.wd1/Careers"]}
+            assert not job_boards.WORKDAY_DISCOVERY_PROGRESS.exists()
+    finally:
+        job_boards.discover_boards = original_discover
+        job_boards.BOARDS_CACHE = original_cache
+        job_boards.WORKDAY_DISCOVERY_PROGRESS = original_progress
 
 
 def test_workday_cutoff_enrichment_skips_old_list_items():

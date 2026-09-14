@@ -13,6 +13,8 @@ then contain an `original: null` row instead of a page count. Treat malformed co
 page failures, and safety-limit overflow as an incomplete run, never as page one.
 Long Workday CDX crawls must checkpoint completed pages and extracted candidates so a
 Wayback rate limit can be resumed without replaying hundreds of successful requests.
+Keep that checkpoint until candidate validation succeeds and the board cache is written;
+request errors must preserve both the old cache and the completed crawl for a cheap retry.
 The CXS list API is capped at 20 results, so cutoff imports should skip unnecessary detail
 requests and use only modest bounded concurrency for the detail pages that remain.
 Persisted Workday detail evidence should be reused on later imports because Workday does not

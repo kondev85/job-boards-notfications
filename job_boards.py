@@ -1068,8 +1068,8 @@ def candidates_from_workday_wayback(
             f"({len(seen)} unique cumulative)",
             file=sys.stderr,
         )
-    if progress_path is not None:
-        progress_path.unlink(missing_ok=True)
+    progress["crawlComplete"] = True
+    save_progress()
     return seen
 
 
@@ -1357,6 +1357,12 @@ def discover_workday_boards(
         f"  discovery audit -> {WORKDAY_DISCOVERY_REPORT.name}",
         file=sys.stderr,
     )
+    if request_errors:
+        raise RuntimeError(
+            f"Workday validation had {len(request_errors)} request errors; "
+            f"{BOARDS_CACHE.name} was not changed and "
+            f"{WORKDAY_DISCOVERY_PROGRESS.name} was retained for retry"
+        )
     return sorted(known.values(), key=str.lower)
 
 
@@ -1424,6 +1430,8 @@ def load_boards(
                 "later; the bundled boards.seed.json means this phase is optional."
             )
     BOARDS_CACHE.write_text(json.dumps(boards, indent=2))
+    if "workday" in ats_list:
+        WORKDAY_DISCOVERY_PROGRESS.unlink(missing_ok=True)
     total = sum(len(boards.get(a, [])) for a in ats_list)
     print(f"cached {total} slugs -> {BOARDS_CACHE.name}", file=sys.stderr)
     return {a: boards.get(a, []) for a in ats_list}
