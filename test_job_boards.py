@@ -597,7 +597,7 @@ def test_workday_wayback_resumes_from_saved_page():
         job_boards._WORKDAY_CDX_DELAY_SECONDS = original_delay
 
 
-def test_workday_validation_request_errors_preserve_cache_and_checkpoint():
+def test_workday_validation_saves_live_boards_and_preserves_errors_for_retry():
     import job_boards
 
     original_candidates = job_boards.candidates_from_workday_wayback
@@ -637,12 +637,91 @@ def test_workday_validation_request_errors_preserve_cache_and_checkpoint():
             else:
                 raise AssertionError("request errors must block cache replacement")
             assert json.loads(job_boards.BOARDS_CACHE.read_text()) == {
-                "workday": ["existing.wd1/Careers"]
+                "workday": ["existing.wd1/Careers", "live.wd1/Careers"]
             }
             assert job_boards.WORKDAY_DISCOVERY_PROGRESS.exists()
             assert json.loads(job_boards.WORKDAY_DISCOVERY_REPORT.read_text())[
                 "requestErrorCount"
             ] == 1
+    finally:
+        job_boards.candidates_from_workday_wayback = original_candidates
+        job_boards.inspect_workday_board = original_inspect
+        job_boards.BOARDS_SEED = original_seed
+        job_boards.BOARDS_CACHE = original_cache
+        job_boards.WORKDAY_DISCOVERY_REPORT = original_report
+        job_boards.WORKDAY_DISCOVERY_PROGRESS = original_progress
+
+
+def test_workday_validation_resume_only_retries_request_errors():
+    import job_boards
+
+    original_candidates = job_boards.candidates_from_workday_wayback
+    original_inspect = job_boards.inspect_workday_board
+    original_seed = job_boards.BOARDS_SEED
+    original_cache = job_boards.BOARDS_CACHE
+    original_report = job_boards.WORKDAY_DISCOVERY_REPORT
+    original_progress = job_boards.WORKDAY_DISCOVERY_PROGRESS
+    calls = []
+    flaky_attempts = 0
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            job_boards.BOARDS_SEED = root / "boards.seed.json"
+            job_boards.BOARDS_CACHE = root / "boards.json"
+            job_boards.WORKDAY_DISCOVERY_REPORT = root / "report.json"
+            job_boards.WORKDAY_DISCOVERY_PROGRESS = root / "progress.json"
+            job_boards.BOARDS_SEED.write_text('{"workday": []}')
+            job_boards.BOARDS_CACHE.write_text('{"workday": []}')
+            job_boards.WORKDAY_DISCOVERY_PROGRESS.write_text(
+                '{"crawlComplete": true}'
+            )
+            job_boards.candidates_from_workday_wayback = lambda *args, **kwargs: {
+                "live.wd1/careers": "live.wd1/Careers",
+                "invalid.wd1/careers": "invalid.wd1/Careers",
+                "flaky.wd1/careers": "flaky.wd1/Careers",
+            }
+
+            def inspect(identifier, recent_days=None):
+                nonlocal flaky_attempts
+                calls.append(identifier)
+                if identifier.startswith("invalid."):
+                    return {
+                        "identifier": identifier,
+                        "live": False,
+                        "outcome": "invalid_response",
+                    }
+                if identifier.startswith("flaky.") and flaky_attempts == 0:
+                    flaky_attempts += 1
+                    return {
+                        "identifier": identifier,
+                        "live": False,
+                        "outcome": "request_error",
+                        "error": "timed out",
+                    }
+                return {
+                    "identifier": identifier,
+                    "live": True,
+                    "outcome": "live",
+                    "hasRecentJob": False,
+                }
+
+            job_boards.inspect_workday_board = inspect
+            try:
+                job_boards.discover_workday_boards(concurrency=1)
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError("the first flaky validation must remain retryable")
+            calls.clear()
+            result = job_boards.discover_workday_boards(concurrency=1)
+            assert calls == ["flaky.wd1/Careers"]
+            assert result == ["flaky.wd1/Careers", "live.wd1/Careers"]
+            validations = json.loads(
+                job_boards.WORKDAY_DISCOVERY_PROGRESS.read_text()
+            )["validations"]
+            assert validations["live.wd1/careers"]["attempts"] == 1
+            assert validations["invalid.wd1/careers"]["attempts"] == 1
+            assert validations["flaky.wd1/careers"]["attempts"] == 2
     finally:
         job_boards.candidates_from_workday_wayback = original_candidates
         job_boards.inspect_workday_board = original_inspect
@@ -672,6 +751,46 @@ def test_successful_workday_cache_write_removes_checkpoint():
             assert not job_boards.WORKDAY_DISCOVERY_PROGRESS.exists()
     finally:
         job_boards.discover_boards = original_discover
+        job_boards.BOARDS_CACHE = original_cache
+        job_boards.WORKDAY_DISCOVERY_PROGRESS = original_progress
+
+
+def test_failed_final_workday_cache_commit_preserves_cache_and_checkpoint():
+    import job_boards
+
+    original_discover = job_boards.discover_boards
+    original_write = job_boards._write_json_atomic
+    original_cache = job_boards.BOARDS_CACHE
+    original_progress = job_boards.WORKDAY_DISCOVERY_PROGRESS
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            job_boards.BOARDS_CACHE = root / "boards.json"
+            job_boards.WORKDAY_DISCOVERY_PROGRESS = root / "progress.json"
+            original_payload = {"workday": ["existing.wd1/Careers"]}
+            job_boards.BOARDS_CACHE.write_text(json.dumps(original_payload))
+            job_boards.WORKDAY_DISCOVERY_PROGRESS.write_text(
+                '{"crawlComplete": true}'
+            )
+            job_boards.discover_boards = lambda *args, **kwargs: [
+                "new.wd1/Careers"
+            ]
+
+            def fail_write(path, payload):
+                raise OSError("disk full")
+
+            job_boards._write_json_atomic = fail_write
+            try:
+                job_boards.load_boards(True, ["workday"])
+            except OSError as exc:
+                assert "disk full" in str(exc)
+            else:
+                raise AssertionError("the simulated final cache write must fail")
+            assert json.loads(job_boards.BOARDS_CACHE.read_text()) == original_payload
+            assert job_boards.WORKDAY_DISCOVERY_PROGRESS.exists()
+    finally:
+        job_boards.discover_boards = original_discover
+        job_boards._write_json_atomic = original_write
         job_boards.BOARDS_CACHE = original_cache
         job_boards.WORKDAY_DISCOVERY_PROGRESS = original_progress
 

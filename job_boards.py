@@ -393,6 +393,7 @@ _WORKDAY_CDX_ENVS = ("wd1", "wd3", "wd5", "wd12")
 _WORKDAY_CDX_LIMIT = 10_000
 _WORKDAY_CDX_MAX_PAGES = 1_000
 _WORKDAY_CDX_DELAY_SECONDS = 1.0
+_WORKDAY_VALIDATION_BATCH_SIZE = 25
 _WORKDAY_DETAIL_CONCURRENCY = 8
 
 
@@ -1073,6 +1074,46 @@ def candidates_from_workday_wayback(
     return seen
 
 
+def _write_json_atomic(path: Path, payload: object) -> None:
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(payload, indent=2))
+    temporary.replace(path)
+
+
+def _save_workday_validation_progress(
+    validations: dict[str, dict],
+) -> None:
+    try:
+        progress = json.loads(WORKDAY_DISCOVERY_PROGRESS.read_text())
+    except (OSError, json.JSONDecodeError):
+        progress = {}
+    progress["validations"] = validations
+    progress["validationUpdatedAt"] = datetime.now(timezone.utc).isoformat(
+        timespec="seconds"
+    )
+    _write_json_atomic(WORKDAY_DISCOVERY_PROGRESS, progress)
+
+
+def _cache_verified_workday_boards(identifiers: list[str]) -> int:
+    """Add verified-live boards immediately without removing existing boards."""
+    if not identifiers:
+        return 0
+    boards = _read_boards(BOARDS_CACHE)
+    workday = boards.setdefault("workday", [])
+    known = {identifier.lower() for identifier in workday}
+    added = 0
+    for identifier in identifiers:
+        if identifier.lower() in known:
+            continue
+        workday.append(identifier)
+        known.add(identifier.lower())
+        added += 1
+    if added:
+        workday.sort(key=str.lower)
+        _write_json_atomic(BOARDS_CACHE, boards)
+    return added
+
+
 def candidates_from_urlscan(domains: list[str]) -> dict[str, str]:
     """urlscan.io's public scan corpus.
 
@@ -1251,15 +1292,63 @@ def discover_workday_boards(
         for path in (BOARDS_SEED, BOARDS_CACHE)
         for identifier in _read_boards(path).get("workday", [])
     }
-    with ThreadPoolExecutor(max_workers=concurrency) as pool:
-        statuses = list(
-            pool.map(
-                lambda identifier: inspect_workday_board(
-                    identifier, RECENT_WINDOW_DAYS
-                ),
-                candidates,
-            )
+    try:
+        progress = json.loads(WORKDAY_DISCOVERY_PROGRESS.read_text())
+    except (OSError, json.JSONDecodeError):
+        progress = {}
+    validations: dict[str, dict] = dict(progress.get("validations") or {})
+    reusable_outcomes = {"live", "invalid_response"}
+    pending = [
+        identifier
+        for identifier in candidates
+        if validations.get(identifier.lower(), {}).get("outcome")
+        not in reusable_outcomes
+    ]
+    reused = len(candidates) - len(pending)
+    if reused:
+        restored = _cache_verified_workday_boards(
+            [
+                status["identifier"]
+                for status in validations.values()
+                if status.get("outcome") == "live"
+            ]
         )
+        print(
+            f"  resuming validation: {reused} completed, {len(pending)} pending/retry; "
+            f"{restored} verified boards restored to cache",
+            file=sys.stderr,
+        )
+    for start in range(0, len(pending), _WORKDAY_VALIDATION_BATCH_SIZE):
+        batch = pending[start:start + _WORKDAY_VALIDATION_BATCH_SIZE]
+        with ThreadPoolExecutor(max_workers=concurrency) as pool:
+            batch_statuses = list(
+                pool.map(
+                    lambda identifier: inspect_workday_board(
+                        identifier, RECENT_WINDOW_DAYS
+                    ),
+                    batch,
+                )
+            )
+        checked_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        for status in batch_statuses:
+            key = status["identifier"].lower()
+            previous = validations.get(key, {})
+            validations[key] = {
+                **status,
+                "checkedAt": checked_at,
+                "attempts": int(previous.get("attempts") or 0) + 1,
+            }
+        added = _cache_verified_workday_boards(
+            [status["identifier"] for status in batch_statuses if status["live"]]
+        )
+        _save_workday_validation_progress(validations)
+        completed = reused + min(start + len(batch), len(pending))
+        print(
+            f"    validation: {completed}/{len(candidates)} complete; "
+            f"{added} newly verified boards saved",
+            file=sys.stderr,
+        )
+    statuses = [validations[identifier.lower()] for identifier in candidates]
     live = [status["identifier"] for status in statuses if status["live"]]
     invalid = [
         status for status in statuses if status.get("outcome") == "invalid_response"
@@ -1314,9 +1403,9 @@ def discover_workday_boards(
         f"{len(newly_cached)} newly cached",
         file=sys.stderr,
     )
-    WORKDAY_DISCOVERY_REPORT.write_text(
-        json.dumps(
-            {
+    _write_json_atomic(
+        WORKDAY_DISCOVERY_REPORT,
+        {
                 "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "candidateCount": len(candidates),
                 "liveCount": len(live),
@@ -1349,9 +1438,7 @@ def discover_workday_boards(
                     }
                     for identifier in retained_only
                 ],
-            },
-            indent=2,
-        )
+        },
     )
     print(
         f"  discovery audit -> {WORKDAY_DISCOVERY_REPORT.name}",
@@ -1429,7 +1516,7 @@ def load_boards(
                 "Both the Wayback Machine and Common Crawl were unreachable. Retry "
                 "later; the bundled boards.seed.json means this phase is optional."
             )
-    BOARDS_CACHE.write_text(json.dumps(boards, indent=2))
+    _write_json_atomic(BOARDS_CACHE, boards)
     if "workday" in ats_list:
         WORKDAY_DISCOVERY_PROGRESS.unlink(missing_ok=True)
     total = sum(len(boards.get(a, [])) for a in ats_list)

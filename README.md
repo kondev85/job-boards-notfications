@@ -137,7 +137,11 @@ identifiers from all available CDX pages, and verifies each candidate with a sma
 request. The archive is paginated because a single CDX response is alphabetically truncated.
 The crawl checkpoints completed CDX pages in `workday-discovery-progress.json`. If Wayback
 rate-limits a request, run the same command again to resume; the checkpoint is removed only
-after every environment has been downloaded successfully.
+after every environment has been downloaded and validated successfully. Validation runs in
+small batches and saves each candidate outcome. Confirmed live boards are atomically added
+to `boards.json` after every batch, while invalid candidates are excluded and request errors
+remain pending for the next retry. A partial run can add verified boards but never remove
+previously known boards.
 
 Workday identifiers use the form `tenant.environment/board`, for example:
 
