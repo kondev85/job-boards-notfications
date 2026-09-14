@@ -17,6 +17,9 @@ Keep that checkpoint until candidate validation succeeds and the board cache is 
 request errors must preserve both the old cache and the completed crawl for a cheap retry.
 Persist validation outcomes in small batches and atomically union confirmed-live boards into
 the cache immediately. Partial runs may add verified boards but must never remove old ones.
+Treat definitive candidate failures such as missing boards and Workday HTTP 422 responses as
+reusable invalid outcomes; reserve retryable request errors for uncertain transport, server,
+rate-limit, and access-denied failures.
 An isolated CDX page failure should be checkpointed and skipped temporarily; abort after
 three consecutive failures, and never mark the crawl complete until every page is resolved.
 When Wayback is broadly unavailable, checkpoint-only validation may process the candidates

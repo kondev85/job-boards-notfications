@@ -776,6 +776,30 @@ def inspect_workday_board(
             "newestPostedAt": newest_posted_at or None,
             "hasRecentJob": has_recent_job,
         }
+    except NotFound as exc:
+        return {
+            "identifier": identifier,
+            "live": False,
+            "outcome": "invalid_response",
+            "errorType": type(exc).__name__,
+            "error": str(exc),
+        }
+    except urllib.error.HTTPError as exc:
+        # Archived career-site paths are noisy. A missing board or Workday's 422
+        # response is a definitive invalid candidate, while access-denied responses
+        # can be tenant policy or temporary bot protection and remain retryable.
+        outcome = (
+            "invalid_response"
+            if exc.code in {400, 404, 410, 422}
+            else "request_error"
+        )
+        return {
+            "identifier": identifier,
+            "live": False,
+            "outcome": outcome,
+            "errorType": type(exc).__name__,
+            "error": str(exc),
+        }
     except Exception as exc:
         return {
             "identifier": identifier,
@@ -1384,6 +1408,25 @@ def discover_workday_boards(
     except (OSError, json.JSONDecodeError):
         progress = {}
     validations: dict[str, dict] = dict(progress.get("validations") or {})
+    reclassified = 0
+    for status in validations.values():
+        if status.get("outcome") != "request_error":
+            continue
+        error_type = status.get("errorType")
+        error = str(status.get("error") or "")
+        if error_type == "NotFound" or (
+            error_type == "HTTPError"
+            and any(f"HTTP Error {code}:" in error for code in (400, 404, 410, 422))
+        ):
+            status["outcome"] = "invalid_response"
+            reclassified += 1
+    if reclassified:
+        _save_workday_validation_progress(validations)
+        print(
+            f"  reclassified {reclassified} saved 404/422 responses as invalid; "
+            "they will not be retried",
+            file=sys.stderr,
+        )
     reusable_outcomes = {"live", "invalid_response"}
     pending = [
         identifier
@@ -1534,8 +1577,10 @@ def discover_workday_boards(
     if request_errors:
         raise RuntimeError(
             f"Workday validation had {len(request_errors)} request errors; "
-            f"{BOARDS_CACHE.name} was not changed and "
-            f"{WORKDAY_DISCOVERY_PROGRESS.name} was retained for retry"
+            f"{len(live)} live boards were verified and {len(newly_cached)} were "
+            f"added to {BOARDS_CACHE.name}; "
+            f"{WORKDAY_DISCOVERY_PROGRESS.name} was retained so only the request "
+            "errors need retrying"
         )
     return sorted(known.values(), key=str.lower)
 

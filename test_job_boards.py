@@ -670,6 +670,8 @@ def test_workday_validation_saves_live_boards_and_preserves_errors_for_retry():
                 job_boards.discover_workday_boards(concurrency=1)
             except RuntimeError as exc:
                 assert "validation had 1 request errors" in str(exc)
+                assert "1 were added to boards.json" in str(exc)
+                assert "only the request errors need retrying" in str(exc)
             else:
                 raise AssertionError("request errors must block cache replacement")
             assert json.loads(job_boards.BOARDS_CACHE.read_text()) == {
@@ -709,12 +711,25 @@ def test_workday_validation_resume_only_retries_request_errors():
             job_boards.BOARDS_SEED.write_text('{"workday": []}')
             job_boards.BOARDS_CACHE.write_text('{"workday": []}')
             job_boards.WORKDAY_DISCOVERY_PROGRESS.write_text(
-                '{"crawlComplete": true}'
+                json.dumps({
+                    "crawlComplete": True,
+                    "validations": {
+                        "missing.wd1/careers": {
+                            "identifier": "missing.wd1/Careers",
+                            "live": False,
+                            "outcome": "request_error",
+                            "errorType": "NotFound",
+                            "error": "missing URL",
+                            "attempts": 1,
+                        },
+                    },
+                })
             )
             job_boards.candidates_from_workday_wayback = lambda *args, **kwargs: {
                 "live.wd1/careers": "live.wd1/Careers",
                 "invalid.wd1/careers": "invalid.wd1/Careers",
                 "flaky.wd1/careers": "flaky.wd1/Careers",
+                "missing.wd1/careers": "missing.wd1/Careers",
             }
 
             def inspect(identifier, recent_days=None):
@@ -758,6 +773,8 @@ def test_workday_validation_resume_only_retries_request_errors():
             assert validations["live.wd1/careers"]["attempts"] == 1
             assert validations["invalid.wd1/careers"]["attempts"] == 1
             assert validations["flaky.wd1/careers"]["attempts"] == 2
+            assert validations["missing.wd1/careers"]["outcome"] == "invalid_response"
+            assert validations["missing.wd1/careers"]["attempts"] == 1
     finally:
         job_boards.candidates_from_workday_wayback = original_candidates
         job_boards.inspect_workday_board = original_inspect
@@ -818,6 +835,35 @@ def test_validate_discovered_uses_checkpoint_without_wayback_and_keeps_it():
         job_boards.BOARDS_CACHE = original_cache
         job_boards.WORKDAY_DISCOVERY_REPORT = original_report
         job_boards.WORKDAY_DISCOVERY_PROGRESS = original_progress
+
+
+def test_workday_validation_classifies_definitive_http_failures_as_invalid():
+    import job_boards
+
+    original_post = job_boards._workday_post_json
+    try:
+        for error in (
+            job_boards.NotFound("missing"),
+            job_boards.urllib.error.HTTPError(
+                "https://example.test", 422, "client error", {}, None
+            ),
+        ):
+            job_boards._workday_post_json = lambda *args, error=error, **kwargs: (
+                (_ for _ in ()).throw(error)
+            )
+            result = job_boards.inspect_workday_board("tenant.wd1/Careers")
+            assert result["outcome"] == "invalid_response"
+
+        forbidden = job_boards.urllib.error.HTTPError(
+            "https://example.test", 403, "client error", {}, None
+        )
+        job_boards._workday_post_json = lambda *args, **kwargs: (
+            (_ for _ in ()).throw(forbidden)
+        )
+        result = job_boards.inspect_workday_board("tenant.wd1/Careers")
+        assert result["outcome"] == "request_error"
+    finally:
+        job_boards._workday_post_json = original_post
 
 
 def test_successful_workday_cache_write_removes_checkpoint():
