@@ -615,6 +615,35 @@ def test_workday_reuses_cached_detail_evidence():
     assert rows[0]["remoteType"] == "hybrid"
 
 
+def test_workday_inspection_reports_recent_jobs():
+    import job_boards
+
+    original_post = job_boards._workday_post_json
+
+    def fake_post(url, payload, timeout=30):
+        return {
+            "total": 12,
+            "jobPostings": [{
+                "title": "Recent role",
+                "externalPath": "/job/Remote/Recent_JR1",
+                "postedOn": "Posted Today",
+            }],
+        }
+
+    job_boards._workday_post_json = fake_post
+    try:
+        status = job_boards.inspect_workday_board(
+            "tenant.wd5/Careers",
+            recent_days=30,
+        )
+    finally:
+        job_boards._workday_post_json = original_post
+    assert status["live"] is True
+    assert status["totalJobs"] == 12
+    assert status["hasRecentJob"] is True
+    assert status["newestPostedAt"]
+
+
 def test_normalizers_survive_explicit_nulls():
     """Every ATS sends JSON null for fields it has no value for.
 

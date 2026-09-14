@@ -14,6 +14,8 @@ Persisted Workday detail evidence should be reused on later imports because Work
 provide a dependable board ETag.
 Board discovery is separate from job scanning; the daily PostgreSQL path must register new
 cache entries without reactivating boards an administrator disabled.
+Automatically discovered boards belong in the gitignored cache and PostgreSQL; the committed
+seed remains a small manual fallback rather than a generated customer directory.
 
 **Why:** Workday has no public board directory, and the same requisition ID can occur on
 different customers. Unbounded fallback probing can also create thousands of requests, while

@@ -39,6 +39,12 @@ uv run job_boards.py --ats workday --refresh-boards --discover-only
 This updates `boards.json`; the next PostgreSQL daily run can then scan the active
 boards stored in PostgreSQL.
 
+Workday discovery also writes `workday-discovery-report.json`. It separates archived
+candidates, live boards, boards whose newest visible posting is within 30 days,
+previously known boards, and newly cached boards. Automatically discovered boards stay
+in the gitignored runtime cache; `boards.seed.json` remains the small manually verified
+fallback committed with the project.
+
 Recommended PostgreSQL workflow:
 
 ```bash

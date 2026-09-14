@@ -55,6 +55,7 @@ HERE = Path(__file__).parent
 # crawl never turns this repo into published competitive intelligence.
 BOARDS_SEED = HERE / "boards.seed.json"
 BOARDS_CACHE = HERE / "boards.json"
+WORKDAY_DISCOVERY_REPORT = HERE / "workday-discovery-report.json"
 COLLINFO = "https://index.commoncrawl.org/collinfo.json"
 WAYBACK_CDX = (
     "https://web.archive.org/cdx/search/cdx?url={domain}"
@@ -715,16 +716,64 @@ def fetch_workday_jobs(
     return all_jobs
 
 
-def workday_board_exists(identifier: str) -> bool:
+def inspect_workday_board(
+    identifier: str,
+    recent_days: int | None = None,
+) -> dict:
+    """Validate one board and optionally inspect its newest visible posting."""
     try:
         result = _workday_post_json(
             workday_board_url(identifier),
             {"appliedFacets": {}, "limit": 1, "offset": 0, "searchText": ""},
             timeout=25,
         )
-        return isinstance(result.get("jobPostings"), list)
-    except Exception:
-        return False
+        postings = result.get("jobPostings")
+        if not isinstance(postings, list):
+            return {"identifier": identifier, "live": False, "error": "invalid response"}
+        newest_posted_at = ""
+        if recent_days is not None and postings:
+            newest = postings[0]
+            newest_posted_at = _workday_posted_at(
+                newest.get("postedOn") or newest.get("postedAt")
+            )
+            if not newest_posted_at and newest.get("externalPath"):
+                try:
+                    details = _workday_details(
+                        _workday_job_url(identifier, newest["externalPath"])
+                    )
+                    newest_posted_at = _workday_posted_at(details.get("datePosted"))
+                except Exception:
+                    pass
+        recent_cutoff = (
+            datetime.now(timezone.utc) - timedelta(days=recent_days)
+            if recent_days is not None
+            else None
+        )
+        has_recent_job = False
+        if newest_posted_at and recent_cutoff is not None:
+            try:
+                has_recent_job = (
+                    datetime.fromisoformat(newest_posted_at) >= recent_cutoff
+                )
+            except ValueError:
+                pass
+        return {
+            "identifier": identifier,
+            "live": True,
+            "totalJobs": int(result.get("total") or len(postings)),
+            "newestPostedAt": newest_posted_at or None,
+            "hasRecentJob": has_recent_job,
+        }
+    except Exception as exc:
+        return {
+            "identifier": identifier,
+            "live": False,
+            "error": str(exc),
+        }
+
+
+def workday_board_exists(identifier: str) -> bool:
+    return bool(inspect_workday_board(identifier).get("live"))
 
 
 SOURCES = {
@@ -1117,21 +1166,84 @@ def discover_workday_boards(
 
     candidates = sorted(seen.values(), key=str.lower)
     print(f"  validating {len(candidates)} Workday board candidates...", file=sys.stderr)
-    checker = SOURCES["workday"]["board_exists"]
+    previously_known = {
+        identifier.lower()
+        for path in (BOARDS_SEED, BOARDS_CACHE)
+        for identifier in _read_boards(path).get("workday", [])
+    }
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
-        live = [
-            identifier
-            for identifier, ok in zip(candidates, pool.map(checker, candidates))
-            if ok
-        ]
+        statuses = list(
+            pool.map(
+                lambda identifier: inspect_workday_board(
+                    identifier, RECENT_WINDOW_DAYS
+                ),
+                candidates,
+            )
+        )
+    live = [status["identifier"] for status in statuses if status["live"]]
+    recent = [
+        status["identifier"]
+        for status in statuses
+        if status["live"] and status.get("hasRecentJob")
+    ]
+    newly_cached = [
+        identifier for identifier in live if identifier.lower() not in previously_known
+    ]
 
     known = {identifier.lower(): identifier for identifier in live}
     for path in (BOARDS_SEED, BOARDS_CACHE):
         for identifier in _read_boards(path).get("workday", []):
             known.setdefault(identifier.lower(), identifier)
+    live_keys = {identifier.lower() for identifier in live}
+    retained_only = [
+        identifier
+        for key, identifier in known.items()
+        if key not in live_keys
+    ]
     print(
-        f"  {len(live)} live Workday boards "
+        f"  {len(live)} live Workday boards, {len(recent)} with a job in the last "
+        f"{RECENT_WINDOW_DAYS} days, {len(newly_cached)} newly cached "
         f"({len(known) - len(live)} retained from seed/cache)",
+        file=sys.stderr,
+    )
+    WORKDAY_DISCOVERY_REPORT.write_text(
+        json.dumps(
+            {
+                "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "candidateCount": len(candidates),
+                "liveCount": len(live),
+                "recentCount": len(recent),
+                "newlyCachedCount": len(newly_cached),
+                "retainedCount": len(retained_only),
+                "boards": [
+                    {
+                        **status,
+                        "previouslyKnown": (
+                            status["identifier"].lower() in previously_known
+                        ),
+                        "newlyCached": status["identifier"] in newly_cached,
+                        "retainedWithoutRediscovery": False,
+                    }
+                    for status in statuses
+                ] + [
+                    {
+                        "identifier": identifier,
+                        "live": None,
+                        "totalJobs": None,
+                        "newestPostedAt": None,
+                        "hasRecentJob": None,
+                        "previouslyKnown": True,
+                        "newlyCached": False,
+                        "retainedWithoutRediscovery": True,
+                    }
+                    for identifier in retained_only
+                ],
+            },
+            indent=2,
+        )
+    )
+    print(
+        f"  discovery audit -> {WORKDAY_DISCOVERY_REPORT.name}",
         file=sys.stderr,
     )
     return sorted(known.values(), key=str.lower)
