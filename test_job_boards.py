@@ -639,9 +639,42 @@ def test_workday_inspection_reports_recent_jobs():
     finally:
         job_boards._workday_post_json = original_post
     assert status["live"] is True
+    assert status["outcome"] == "live"
     assert status["totalJobs"] == 12
     assert status["hasRecentJob"] is True
     assert status["newestPostedAt"]
+
+
+def test_workday_inspection_accounts_for_invalid_responses():
+    import job_boards
+
+    original_post = job_boards._workday_post_json
+    job_boards._workday_post_json = lambda *args, **kwargs: {"total": 1}
+    try:
+        status = job_boards.inspect_workday_board("tenant.wd5/Careers")
+    finally:
+        job_boards._workday_post_json = original_post
+    assert status["live"] is False
+    assert status["outcome"] == "invalid_response"
+    assert "jobPostings" in status["error"]
+
+
+def test_workday_inspection_accounts_for_request_errors():
+    import job_boards
+
+    original_post = job_boards._workday_post_json
+
+    def fail(*args, **kwargs):
+        raise TimeoutError("timed out")
+
+    job_boards._workday_post_json = fail
+    try:
+        status = job_boards.inspect_workday_board("tenant.wd5/Careers")
+    finally:
+        job_boards._workday_post_json = original_post
+    assert status["live"] is False
+    assert status["outcome"] == "request_error"
+    assert status["errorType"] == "TimeoutError"
 
 
 def test_normalizers_survive_explicit_nulls():

@@ -16,11 +16,16 @@ Board discovery is separate from job scanning; the daily PostgreSQL path must re
 cache entries without reactivating boards an administrator disabled.
 Automatically discovered boards belong in the gitignored cache and PostgreSQL; the committed
 seed remains a small manual fallback rather than a generated customer directory.
+Discovery summaries must account for every candidate by validation outcome and reconcile
+validated-live plus retained boards with the final cache count. Refuse completion if a
+validated-live board is absent from the output.
 
 **Why:** Workday has no public board directory, and the same requisition ID can occur on
 different customers. Unbounded fallback probing can also create thousands of requests, while
 per-job detail enrichment can make a board import look stalled. Large shared boards can have
-thousands of postings and no list-level publication dates.
+thousands of postings and no list-level publication dates. Without explicit accounting,
+request failures look like silently discarded candidates and an incomplete run can appear
+successful.
 
 **How to apply:** Keep Workday-specific discovery, request pacing, and ID construction
 inside the adapter boundary; matching, persistence, and recommendation code should remain

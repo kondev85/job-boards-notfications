@@ -729,7 +729,12 @@ def inspect_workday_board(
         )
         postings = result.get("jobPostings")
         if not isinstance(postings, list):
-            return {"identifier": identifier, "live": False, "error": "invalid response"}
+            return {
+                "identifier": identifier,
+                "live": False,
+                "outcome": "invalid_response",
+                "error": "response did not contain a jobPostings list",
+            }
         newest_posted_at = ""
         if recent_days is not None and postings:
             newest = postings[0]
@@ -760,6 +765,7 @@ def inspect_workday_board(
         return {
             "identifier": identifier,
             "live": True,
+            "outcome": "live",
             "totalJobs": int(result.get("total") or len(postings)),
             "newestPostedAt": newest_posted_at or None,
             "hasRecentJob": has_recent_job,
@@ -768,6 +774,8 @@ def inspect_workday_board(
         return {
             "identifier": identifier,
             "live": False,
+            "outcome": "request_error",
+            "errorType": type(exc).__name__,
             "error": str(exc),
         }
 
@@ -912,6 +920,7 @@ def candidates_from_workday_wayback(
         start = datetime.now(timezone.utc) - timedelta(days=since_days)
         window = f"&from={start:%Y%m%d}"
     for environment in _WORKDAY_CDX_ENVS:
+        candidates_before_environment = len(seen)
         pattern = urllib.parse.quote(
             f"{environment}.myworkdayjobs.com/*", safe=""
         )
@@ -988,7 +997,8 @@ def candidates_from_workday_wayback(
                 seen.setdefault(identifier.lower(), identifier)
         print(
             f"    {archived_urls} archived URLs across {page_count} CDX pages -> "
-            f"{len(seen)} Workday candidates so far",
+            f"{len(seen) - candidates_before_environment} new Workday candidates "
+            f"({len(seen)} unique cumulative)",
             file=sys.stderr,
         )
     return seen
@@ -1181,6 +1191,12 @@ def discover_workday_boards(
             )
         )
     live = [status["identifier"] for status in statuses if status["live"]]
+    invalid = [
+        status for status in statuses if status.get("outcome") == "invalid_response"
+    ]
+    request_errors = [
+        status for status in statuses if status.get("outcome") == "request_error"
+    ]
     recent = [
         status["identifier"]
         for status in statuses
@@ -1200,10 +1216,32 @@ def discover_workday_boards(
         for key, identifier in known.items()
         if key not in live_keys
     ]
+    omitted_live = [
+        identifier for identifier in live if identifier.lower() not in known
+    ]
+    if omitted_live:
+        raise RuntimeError(
+            "Workday discovery refused to write an incomplete board list; "
+            f"{len(omitted_live)} validated live boards were omitted: "
+            + ", ".join(omitted_live)
+        )
+    expected_known_count = len(live_keys) + len(retained_only)
+    if len(known) != expected_known_count:
+        raise RuntimeError(
+            "Workday discovery accounting mismatch: "
+            f"{len(live_keys)} live + {len(retained_only)} retained != "
+            f"{len(known)} output boards"
+        )
     print(
-        f"  {len(live)} live Workday boards, {len(recent)} with a job in the last "
-        f"{RECENT_WINDOW_DAYS} days, {len(newly_cached)} newly cached "
-        f"({len(known) - len(live)} retained from seed/cache)",
+        f"  candidate accounting: {len(candidates)} checked = {len(live)} live + "
+        f"{len(invalid)} invalid responses + {len(request_errors)} request errors",
+        file=sys.stderr,
+    )
+    print(
+        f"  boards.json accounting: {len(known)} output = {len(live_keys)} "
+        f"validated live + {len(retained_only)} retained from seed/cache; "
+        f"{len(recent)} live boards have a job in the last {RECENT_WINDOW_DAYS} days; "
+        f"{len(newly_cached)} newly cached",
         file=sys.stderr,
     )
     WORKDAY_DISCOVERY_REPORT.write_text(
@@ -1212,6 +1250,8 @@ def discover_workday_boards(
                 "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "candidateCount": len(candidates),
                 "liveCount": len(live),
+                "invalidResponseCount": len(invalid),
+                "requestErrorCount": len(request_errors),
                 "recentCount": len(recent),
                 "newlyCachedCount": len(newly_cached),
                 "retainedCount": len(retained_only),
@@ -1229,6 +1269,7 @@ def discover_workday_boards(
                     {
                         "identifier": identifier,
                         "live": None,
+                        "outcome": "retained_without_rediscovery",
                         "totalJobs": None,
                         "newestPostedAt": None,
                         "hasRecentJob": None,
