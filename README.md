@@ -105,7 +105,8 @@ If you find a board this misses, add it to `boards.seed.json` and it is permanen
 Workday has no public board directory. Its adapter uses the public CXS jobs endpoint
 behind each `*.myworkdayjobs.com` career site. `--refresh-boards --ats workday` queries
 Wayback CDX for the four common Workday environments, extracts tenant/environment/board
-identifiers from archived URLs, and verifies each candidate with a small POST request.
+identifiers from all available CDX pages, and verifies each candidate with a small POST
+request. The archive is paginated because a single CDX response is alphabetically truncated.
 
 Workday identifiers use the form `tenant.environment/board`, for example:
 

@@ -424,6 +424,8 @@ def test_workday_wayback_parser_extracts_locale_and_job_board():
 
     def fake_fetch(url, **kwargs):
         calls.append(url)
+        if "showNumPages=true" in url:
+            return json.dumps([["numpages"], ["1"]]).encode()
         if "wd1.myworkdayjobs.com" not in url:
             return json.dumps([["original"]]).encode()
         return json.dumps([
@@ -438,7 +440,42 @@ def test_workday_wayback_parser_extracts_locale_and_job_board():
     finally:
         job_boards.fetch = original_fetch
     assert candidates == {"acme.wd1/external_careers": "acme.wd1/External_Careers"}
-    assert len(calls) == 4
+    assert len(calls) == 8
+
+
+def test_workday_wayback_parser_reads_multiple_cdx_pages():
+    import job_boards
+
+    original_fetch = job_boards.fetch
+    calls = []
+
+    def fake_fetch(url, **kwargs):
+        calls.append(url)
+        if "showNumPages=true" in url:
+            pages = "2" if "wd1.myworkdayjobs.com" in url else "1"
+            return json.dumps([["numpages"], [pages]]).encode()
+        if "wd1.myworkdayjobs.com" in url and "page=1" in url:
+            return json.dumps([
+                ["original"],
+                ["https://beta.wd1.myworkdayjobs.com/en-US/Beta_Careers/job/Remote/Role"],
+            ]).encode()
+        if "wd1.myworkdayjobs.com" in url:
+            return json.dumps([
+                ["original"],
+                ["https://acme.wd1.myworkdayjobs.com/en-US/Acme_Careers/job/Remote/Role"],
+            ]).encode()
+        return json.dumps([["original"]]).encode()
+
+    job_boards.fetch = fake_fetch
+    try:
+        candidates = job_boards.candidates_from_workday_wayback()
+    finally:
+        job_boards.fetch = original_fetch
+    assert candidates == {
+        "acme.wd1/acme_careers": "acme.wd1/Acme_Careers",
+        "beta.wd1/beta_careers": "beta.wd1/Beta_Careers",
+    }
+    assert any("page=1" in url for url in calls)
 
 
 def test_workday_cutoff_enrichment_skips_old_list_items():

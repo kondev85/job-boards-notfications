@@ -389,6 +389,7 @@ _WORKDAY_HOST = re.compile(
 _WORKDAY_LOCALE = re.compile(r"^[a-z]{2}(?:-[a-z]{2})?$", re.IGNORECASE)
 _WORKDAY_CDX_ENVS = ("wd1", "wd3", "wd5", "wd12")
 _WORKDAY_CDX_LIMIT = 10_000
+_WORKDAY_CDX_MAX_PAGES = 250
 _WORKDAY_DETAIL_CONCURRENCY = 8
 
 
@@ -865,7 +866,7 @@ def candidates_from_workday_wayback(
         pattern = urllib.parse.quote(
             f"{environment}.myworkdayjobs.com/*", safe=""
         )
-        url = (
+        base_url = (
             "https://web.archive.org/cdx/search/cdx?"
             f"url={pattern}&matchType=domain&fl=original&collapse=urlkey"
             f"&output=json&filter=statuscode:200&limit={_WORKDAY_CDX_LIMIT}{window}"
@@ -874,37 +875,52 @@ def candidates_from_workday_wayback(
             f"  querying the Wayback Machine for Workday {environment}...",
             file=sys.stderr,
         )
-        rows = json.loads(fetch(url, timeout=120, retries=2))
-        for row in rows[1:] if rows else []:
-            original = row[0] if isinstance(row, list) and row else row
-            parsed = urllib.parse.urlsplit(str(original))
-            host = (parsed.hostname or "").lower()
-            host_match = _WORKDAY_HOST.fullmatch(host)
-            if not host_match:
-                continue
-            parts = [urllib.parse.unquote(part) for part in parsed.path.split("/") if part]
-            if not parts:
-                continue
-            board = ""
-            for index, part in enumerate(parts):
-                if part.lower() == "job" and index:
-                    board = parts[index - 1]
-                    break
-            if not board:
-                start = 1 if _WORKDAY_LOCALE.fullmatch(parts[0]) else 0
-                if start < len(parts):
-                    board = parts[start]
-            if not board or board.lower() in {
-                "job", "wday", "assets", "favicon.ico", "robots.txt", "sitemap.xml"
-            }:
-                continue
-            identifier = (
-                f"{host_match.group('tenant')}."
-                f"{host_match.group('environment').lower()}/{board}"
-            )
-            seen.setdefault(identifier.lower(), identifier)
+        page_count_url = f"{base_url}&showNumPages=true"
+        page_count_rows = json.loads(fetch(page_count_url, timeout=120, retries=2))
+        try:
+            page_count = int(page_count_rows[1][0])
+        except (IndexError, TypeError, ValueError):
+            page_count = 1
+        page_count = max(1, min(page_count, _WORKDAY_CDX_MAX_PAGES))
+        archived_urls = 0
+        for page in range(page_count):
+            url = f"{base_url}&page={page}"
+            rows = json.loads(fetch(url, timeout=180, retries=2))
+            archived_urls += max(0, len(rows) - 1)
+            for row in rows[1:] if rows else []:
+                original = row[0] if isinstance(row, list) and row else row
+                parsed = urllib.parse.urlsplit(str(original))
+                host = (parsed.hostname or "").lower()
+                host_match = _WORKDAY_HOST.fullmatch(host)
+                if not host_match:
+                    continue
+                parts = [
+                    urllib.parse.unquote(part)
+                    for part in parsed.path.split("/")
+                    if part
+                ]
+                if not parts:
+                    continue
+                board = ""
+                for index, part in enumerate(parts):
+                    if part.lower() == "job" and index:
+                        board = parts[index - 1]
+                        break
+                if not board:
+                    start = 1 if _WORKDAY_LOCALE.fullmatch(parts[0]) else 0
+                    if start < len(parts):
+                        board = parts[start]
+                if not board or board.lower() in {
+                    "job", "wday", "assets", "favicon.ico", "robots.txt", "sitemap.xml"
+                }:
+                    continue
+                identifier = (
+                    f"{host_match.group('tenant')}."
+                    f"{host_match.group('environment').lower()}/{board}"
+                )
+                seen.setdefault(identifier.lower(), identifier)
         print(
-            f"    {max(0, len(rows) - 1)} archived URLs -> "
+            f"    {archived_urls} archived URLs across {page_count} CDX pages -> "
             f"{len(seen)} Workday candidates so far",
             file=sys.stderr,
         )
@@ -1123,13 +1139,18 @@ def load_boards(
 ) -> dict[str, list[str]]:
     if not refresh and not recent:
         # Merge per platform rather than taking the first file that has anything.
-        # The cache may cover only the platforms the last refresh ran, and picking
-        # it wholesale would silently return zero boards for all the others.
+        # Keep cache order for stable imports, then append verified seed boards that
+        # were discovered after the cache was generated.
         merged: dict[str, list[str]] = {}
-        for path in (BOARDS_SEED, BOARDS_CACHE):  # cache wins where it has entries
+        for path in (BOARDS_CACHE, BOARDS_SEED):
             for ats, slugs in _read_boards(path).items():
-                if slugs:
-                    merged[ats] = slugs
+                if not slugs:
+                    continue
+                existing = {slug.lower() for slug in merged.setdefault(ats, [])}
+                for slug in slugs:
+                    if slug.lower() not in existing:
+                        merged[ats].append(slug)
+                        existing.add(slug.lower())
         got = {a: merged.get(a, []) for a in ats_list}
         if any(got.values()):
             summary = ", ".join(f"{a} {len(v)}" for a, v in got.items())
