@@ -885,14 +885,16 @@ def candidates_from_workday_wayback(
         except Exception as exc:
             print(
                 f"    Workday {environment} CDX page count failed ({exc}); "
-                "continuing with the other environments",
+                "using the normal first response",
                 file=sys.stderr,
             )
-            continue
+            page_count = 1
         page_count = max(1, min(page_count, _WORKDAY_CDX_MAX_PAGES))
         archived_urls = 0
-        for page in range(page_count):
-            url = f"{base_url}&page={page}"
+        page_urls = [base_url] + [
+            f"{base_url}&page={page}" for page in range(1, page_count)
+        ]
+        for page, url in enumerate(page_urls):
             try:
                 rows = json.loads(fetch(url, timeout=180, retries=2))
             except Exception as exc:
