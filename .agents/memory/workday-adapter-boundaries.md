@@ -17,6 +17,8 @@ Keep that checkpoint until candidate validation succeeds and the board cache is 
 request errors must preserve both the old cache and the completed crawl for a cheap retry.
 Persist validation outcomes in small batches and atomically union confirmed-live boards into
 the cache immediately. Partial runs may add verified boards but must never remove old ones.
+An isolated CDX page failure should be checkpointed and skipped temporarily; abort after
+three consecutive failures, and never mark the crawl complete until every page is resolved.
 The CXS list API is capped at 20 results, so cutoff imports should skip unnecessary detail
 requests and use only modest bounded concurrency for the detail pages that remain.
 Persisted Workday detail evidence should be reused on later imports because Workday does not

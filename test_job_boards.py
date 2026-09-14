@@ -509,8 +509,11 @@ def test_workday_wayback_refuses_a_failed_data_page():
     import job_boards
 
     original_fetch = job_boards.fetch
+    original_delay = job_boards._WORKDAY_CDX_DELAY_SECONDS
+    calls = []
 
     def fake_fetch(url, **kwargs):
+        calls.append(url)
         if "showNumPages=true" in url:
             return json.dumps([["numpages"], ["2"]]).encode()
         if "page=1" in url:
@@ -518,16 +521,49 @@ def test_workday_wayback_refuses_a_failed_data_page():
         return json.dumps([["original"]]).encode()
 
     job_boards.fetch = fake_fetch
+    job_boards._WORKDAY_CDX_DELAY_SECONDS = 0
     try:
         try:
             job_boards.candidates_from_workday_wayback(progress_path=None)
         except RuntimeError as exc:
-            assert "page 2/2 failed" in str(exc)
-            assert "progress saved after 1 pages" in str(exc)
+            assert "unresolved pages" in str(exc)
+            assert "progress saved" in str(exc)
         else:
             raise AssertionError("a failed CDX data page must fail discovery")
+        assert any("wd3.myworkdayjobs.com" in url for url in calls)
     finally:
         job_boards.fetch = original_fetch
+        job_boards._WORKDAY_CDX_DELAY_SECONDS = original_delay
+
+
+def test_workday_wayback_stops_after_three_consecutive_page_failures():
+    import job_boards
+
+    original_fetch = job_boards.fetch
+    original_delay = job_boards._WORKDAY_CDX_DELAY_SECONDS
+    calls = []
+
+    def fake_fetch(url, **kwargs):
+        calls.append(url)
+        if "showNumPages=true" in url:
+            return json.dumps([["numpages"], ["5"]]).encode()
+        if any(f"page={page}" in url for page in (1, 2, 3)):
+            raise TimeoutError("timed out")
+        return json.dumps([["original"]]).encode()
+
+    job_boards.fetch = fake_fetch
+    job_boards._WORKDAY_CDX_DELAY_SECONDS = 0
+    try:
+        try:
+            job_boards.candidates_from_workday_wayback(progress_path=None)
+        except RuntimeError as exc:
+            assert "3 consecutive CDX page failures" in str(exc)
+        else:
+            raise AssertionError("three consecutive failures must stop discovery")
+        assert not any("page=4" in url for url in calls)
+    finally:
+        job_boards.fetch = original_fetch
+        job_boards._WORKDAY_CDX_DELAY_SECONDS = original_delay
 
 
 def test_workday_wayback_resumes_from_saved_page():

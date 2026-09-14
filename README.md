@@ -143,6 +143,12 @@ to `boards.json` after every batch, while invalid candidates are excluded and re
 remain pending for the next retry. A partial run can add verified boards but never remove
 previously known boards.
 
+An individual CDX page gets two attempts with a 60-second timeout. If it still fails, the
+page is recorded and the crawler continues so one slow archive shard cannot block hundreds
+of later pages. Three consecutive page failures stop the run because they usually indicate
+a broader Wayback outage. The crawl is never marked complete while recorded pages remain;
+rerunning the same command retries only those unresolved pages.
+
 Workday identifiers use the form `tenant.environment/board`, for example:
 
 ```bash

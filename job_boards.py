@@ -393,6 +393,9 @@ _WORKDAY_CDX_ENVS = ("wd1", "wd3", "wd5", "wd12")
 _WORKDAY_CDX_LIMIT = 10_000
 _WORKDAY_CDX_MAX_PAGES = 1_000
 _WORKDAY_CDX_DELAY_SECONDS = 1.0
+_WORKDAY_CDX_PAGE_TIMEOUT = 60
+_WORKDAY_CDX_PAGE_RETRIES = 2
+_WORKDAY_CDX_MAX_CONSECUTIVE_FAILURES = 3
 _WORKDAY_VALIDATION_BATCH_SIZE = 25
 _WORKDAY_DETAIL_CONCURRENCY = 8
 
@@ -1004,6 +1007,8 @@ def candidates_from_workday_wayback(
             )
         archived_urls = int(environment_progress.get("archivedUrls") or 0)
         completed_pages = set(environment_progress.get("completedPages") or [])
+        failed_pages = dict(environment_progress.get("failedPages") or {})
+        consecutive_failures = 0
         page_urls = [base_url] + [
             f"{base_url}&page={page}" for page in range(1, page_count)
         ]
@@ -1012,14 +1017,45 @@ def candidates_from_workday_wayback(
                 continue
             if completed_pages:
                 time.sleep(_WORKDAY_CDX_DELAY_SECONDS)
+            print(
+                f"    fetching {environment} page {page + 1}/{page_count}...",
+                file=sys.stderr,
+            )
             try:
-                rows = json.loads(fetch(url, timeout=180, retries=6))
+                rows = json.loads(
+                    fetch(
+                        url,
+                        timeout=_WORKDAY_CDX_PAGE_TIMEOUT,
+                        retries=_WORKDAY_CDX_PAGE_RETRIES,
+                    )
+                )
             except Exception as exc:
+                consecutive_failures += 1
+                previous_failure = failed_pages.get(str(page), {})
+                failed_pages[str(page)] = {
+                    "attempts": int(previous_failure.get("attempts") or 0) + 1,
+                    "lastError": f"{type(exc).__name__}: {exc}",
+                    "failedAt": datetime.now(timezone.utc).isoformat(
+                        timespec="seconds"
+                    ),
+                }
+                environment_progress["failedPages"] = failed_pages
                 save_progress()
-                raise RuntimeError(
-                    f"Workday {environment} CDX page {page + 1}/{page_count} "
-                    f"failed; progress saved after {len(completed_pages)} pages"
-                ) from exc
+                print(
+                    f"    warning: {environment} page {page + 1}/{page_count} "
+                    f"failed; recorded for retry ({consecutive_failures}/"
+                    f"{_WORKDAY_CDX_MAX_CONSECUTIVE_FAILURES} consecutive failures)",
+                    file=sys.stderr,
+                )
+                if consecutive_failures >= _WORKDAY_CDX_MAX_CONSECUTIVE_FAILURES:
+                    raise RuntimeError(
+                        f"Workday {environment} stopped after "
+                        f"{consecutive_failures} consecutive CDX page failures; "
+                        "progress saved for retry"
+                    ) from exc
+                continue
+            consecutive_failures = 0
+            failed_pages.pop(str(page), None)
             archived_urls += max(0, len(rows) - 1)
             for row in rows[1:] if rows else []:
                 original = row[0] if isinstance(row, list) and row else row
@@ -1056,6 +1092,7 @@ def candidates_from_workday_wayback(
             completed_pages.add(page)
             environment_progress["completedPages"] = sorted(completed_pages)
             environment_progress["archivedUrls"] = archived_urls
+            environment_progress["failedPages"] = failed_pages
             save_progress()
             if (page + 1) % 10 == 0 or page + 1 == page_count:
                 print(
@@ -1068,6 +1105,30 @@ def candidates_from_workday_wayback(
             f"{len(seen) - candidates_before_environment} new Workday candidates "
             f"({len(seen)} unique cumulative)",
             file=sys.stderr,
+        )
+    unresolved = {
+        environment: sorted(
+            int(page)
+            for page in state.get("failedPages", {})
+            if int(page) not in set(state.get("completedPages") or [])
+        )
+        for environment, state in progress.get("environments", {}).items()
+    }
+    unresolved = {
+        environment: pages for environment, pages in unresolved.items() if pages
+    }
+    if unresolved:
+        save_progress()
+        count = sum(len(pages) for pages in unresolved.values())
+        details = ", ".join(
+            f"{environment}: "
+            + ", ".join(str(page + 1) for page in pages[:10])
+            + ("..." if len(pages) > 10 else "")
+            for environment, pages in unresolved.items()
+        )
+        raise RuntimeError(
+            f"Workday CDX crawl has {count} unresolved pages ({details}); "
+            "progress saved, rerun the same command to retry only those pages"
         )
     progress["crawlComplete"] = True
     save_progress()
