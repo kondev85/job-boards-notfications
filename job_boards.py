@@ -56,6 +56,7 @@ HERE = Path(__file__).parent
 BOARDS_SEED = HERE / "boards.seed.json"
 BOARDS_CACHE = HERE / "boards.json"
 WORKDAY_DISCOVERY_REPORT = HERE / "workday-discovery-report.json"
+WORKDAY_DISCOVERY_PROGRESS = HERE / "workday-discovery-progress.json"
 COLLINFO = "https://index.commoncrawl.org/collinfo.json"
 WAYBACK_CDX = (
     "https://web.archive.org/cdx/search/cdx?url={domain}"
@@ -245,12 +246,12 @@ def fetch(
                 raise NotModified(url)
             if status == 404:
                 raise NotFound(url)
-            if status == 503:
-                raise RateLimited(url)
             if status >= 500:
                 if attempt == retries - 1:
+                    if status == 503:
+                        raise RateLimited(url)
                     raise urllib.error.HTTPError(url, status, "server error", None, None)
-                time.sleep(2**attempt)
+                time.sleep(_retry_delay(headers.get("retry-after"), attempt))
                 continue
             if status in (429, 403):
                 if attempt == retries - 1:
@@ -391,6 +392,7 @@ _WORKDAY_LOCALE = re.compile(r"^[a-z]{2}(?:-[a-z]{2})?$", re.IGNORECASE)
 _WORKDAY_CDX_ENVS = ("wd1", "wd3", "wd5", "wd12")
 _WORKDAY_CDX_LIMIT = 10_000
 _WORKDAY_CDX_MAX_PAGES = 1_000
+_WORKDAY_CDX_DELAY_SECONDS = 1.0
 _WORKDAY_DETAIL_CONCURRENCY = 8
 
 
@@ -907,6 +909,7 @@ def candidates_from_wayback(domains: list[str], since_days: int | None = None) -
 
 def candidates_from_workday_wayback(
     since_days: int | None = None,
+    progress_path: Path | None = WORKDAY_DISCOVERY_PROGRESS,
 ) -> dict[str, str]:
     """Extract tenant/environment/board identifiers from Workday CDX captures.
 
@@ -914,11 +917,35 @@ def candidates_from_workday_wayback(
     domains gives us archived tenant hosts and board paths without probing
     arbitrary company names.
     """
-    seen: dict[str, str] = {}
     window = ""
     if since_days is not None:
         start = datetime.now(timezone.utc) - timedelta(days=since_days)
         window = f"&from={start:%Y%m%d}"
+    progress = {"window": window, "seen": {}, "environments": {}}
+    if progress_path is not None and progress_path.exists():
+        try:
+            saved = json.loads(progress_path.read_text())
+            if saved.get("window") == window:
+                progress = saved
+                print(
+                    f"  resuming Workday discovery from {progress_path.name}",
+                    file=sys.stderr,
+                )
+        except (OSError, json.JSONDecodeError):
+            pass
+    seen: dict[str, str] = dict(progress.get("seen") or {})
+
+    def save_progress() -> None:
+        if progress_path is None:
+            return
+        progress["seen"] = seen
+        progress["updatedAt"] = datetime.now(timezone.utc).isoformat(
+            timespec="seconds"
+        )
+        temporary = progress_path.with_suffix(progress_path.suffix + ".tmp")
+        temporary.write_text(json.dumps(progress, indent=2))
+        temporary.replace(progress_path)
+
     for environment in _WORKDAY_CDX_ENVS:
         candidates_before_environment = len(seen)
         pattern = urllib.parse.quote(
@@ -942,37 +969,55 @@ def candidates_from_workday_wayback(
             f"&filter=statuscode:200&limit={_WORKDAY_CDX_LIMIT}"
             f"{window}&showNumPages=true"
         )
-        try:
-            page_count_rows = json.loads(fetch(page_count_url, timeout=120, retries=2))
-            if (
-                not isinstance(page_count_rows, list)
-                or len(page_count_rows) < 2
-                or page_count_rows[0] != ["numpages"]
-            ):
-                raise ValueError(f"unexpected response: {page_count_rows!r}")
-            page_count = int(page_count_rows[1][0])
-        except Exception as exc:
-            raise RuntimeError(
-                f"Workday {environment} CDX page count failed; "
-                "refusing an incomplete discovery"
-            ) from exc
+        environment_progress = progress.setdefault("environments", {}).setdefault(
+            environment, {}
+        )
+        page_count = environment_progress.get("pageCount")
+        if page_count is None:
+            try:
+                page_count_rows = json.loads(
+                    fetch(page_count_url, timeout=120, retries=6)
+                )
+                if (
+                    not isinstance(page_count_rows, list)
+                    or len(page_count_rows) < 2
+                    or page_count_rows[0] != ["numpages"]
+                ):
+                    raise ValueError(f"unexpected response: {page_count_rows!r}")
+                page_count = int(page_count_rows[1][0])
+            except Exception as exc:
+                save_progress()
+                raise RuntimeError(
+                    f"Workday {environment} CDX page count failed; "
+                    "progress saved for retry"
+                ) from exc
+            environment_progress["pageCount"] = page_count
+            environment_progress["completedPages"] = []
+            environment_progress["archivedUrls"] = 0
+            save_progress()
         page_count = max(1, page_count)
         if page_count > _WORKDAY_CDX_MAX_PAGES:
             raise RuntimeError(
                 f"Workday {environment} has {page_count} CDX pages, above the "
                 f"safety limit of {_WORKDAY_CDX_MAX_PAGES}; refusing to truncate"
             )
-        archived_urls = 0
+        archived_urls = int(environment_progress.get("archivedUrls") or 0)
+        completed_pages = set(environment_progress.get("completedPages") or [])
         page_urls = [base_url] + [
             f"{base_url}&page={page}" for page in range(1, page_count)
         ]
         for page, url in enumerate(page_urls):
+            if page in completed_pages:
+                continue
+            if completed_pages:
+                time.sleep(_WORKDAY_CDX_DELAY_SECONDS)
             try:
-                rows = json.loads(fetch(url, timeout=180, retries=2))
+                rows = json.loads(fetch(url, timeout=180, retries=6))
             except Exception as exc:
+                save_progress()
                 raise RuntimeError(
                     f"Workday {environment} CDX page {page + 1}/{page_count} "
-                    "failed; refusing an incomplete discovery"
+                    f"failed; progress saved after {len(completed_pages)} pages"
                 ) from exc
             archived_urls += max(0, len(rows) - 1)
             for row in rows[1:] if rows else []:
@@ -1007,12 +1052,24 @@ def candidates_from_workday_wayback(
                     f"{host_match.group('environment').lower()}/{board}"
                 )
                 seen.setdefault(identifier.lower(), identifier)
+            completed_pages.add(page)
+            environment_progress["completedPages"] = sorted(completed_pages)
+            environment_progress["archivedUrls"] = archived_urls
+            save_progress()
+            if (page + 1) % 10 == 0 or page + 1 == page_count:
+                print(
+                    f"    {environment}: {page + 1}/{page_count} pages complete, "
+                    f"{len(seen)} unique candidates",
+                    file=sys.stderr,
+                )
         print(
             f"    {archived_urls} archived URLs across {page_count} CDX pages -> "
             f"{len(seen) - candidates_before_environment} new Workday candidates "
             f"({len(seen)} unique cumulative)",
             file=sys.stderr,
         )
+    if progress_path is not None:
+        progress_path.unlink(missing_ok=True)
     return seen
 
 

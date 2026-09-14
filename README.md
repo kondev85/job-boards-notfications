@@ -135,6 +135,9 @@ behind each `*.myworkdayjobs.com` career site. `--refresh-boards --ats workday` 
 Wayback CDX for the four common Workday environments, extracts tenant/environment/board
 identifiers from all available CDX pages, and verifies each candidate with a small POST
 request. The archive is paginated because a single CDX response is alphabetically truncated.
+The crawl checkpoints completed CDX pages in `workday-discovery-progress.json`. If Wayback
+rate-limits a request, run the same command again to resume; the checkpoint is removed only
+after every environment has been downloaded successfully.
 
 Workday identifiers use the form `tenant.environment/board`, for example:
 

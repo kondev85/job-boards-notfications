@@ -11,6 +11,8 @@ slice and can make the board registry appear to stop at a particular company pre
 The CDX `showNumPages` request must not include `fl=original`: current Wayback responses
 then contain an `original: null` row instead of a page count. Treat malformed counts,
 page failures, and safety-limit overflow as an incomplete run, never as page one.
+Long Workday CDX crawls must checkpoint completed pages and extracted candidates so a
+Wayback rate limit can be resumed without replaying hundreds of successful requests.
 The CXS list API is capped at 20 results, so cutoff imports should skip unnecessary detail
 requests and use only modest bounded concurrency for the detail pages that remain.
 Persisted Workday detail evidence should be reused on later imports because Workday does not
