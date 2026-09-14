@@ -12,6 +12,8 @@ The CXS list API is capped at 20 results, so cutoff imports should skip unnecess
 requests and use only modest bounded concurrency for the detail pages that remain.
 Persisted Workday detail evidence should be reused on later imports because Workday does not
 provide a dependable board ETag.
+Board discovery is separate from job scanning; the daily PostgreSQL path must register new
+cache entries without reactivating boards an administrator disabled.
 
 **Why:** Workday has no public board directory, and the same requisition ID can occur on
 different customers. Unbounded fallback probing can also create thousands of requests, while

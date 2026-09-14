@@ -987,6 +987,25 @@ def _ensure_board(
     return cur.fetchone()[0]
 
 
+def _sync_board_registry(
+    cur: psycopg.Cursor,
+    specs: list[tuple[str, str]],
+    seen_at: datetime,
+) -> int:
+    """Register newly discovered boards without changing existing board state."""
+    added = 0
+    for ats, slug in specs:
+        cur.execute(
+            "SELECT board_id FROM job_boards WHERE ats = %s AND slug = %s",
+            (ats, slug),
+        )
+        if cur.fetchone():
+            continue
+        _ensure_board(cur, ats, slug, seen_at)
+        added += 1
+    return added
+
+
 def _board_company_name(cur: psycopg.Cursor, board_id: int) -> str:
     cur.execute(
         "SELECT c.display_name "
@@ -2720,6 +2739,15 @@ def run(args: argparse.Namespace) -> int:
         conn.commit()
         if args.daily:
             selected_ats = _ats_list(args.ats)
+            with conn.cursor() as cur:
+                added_boards = _sync_board_registry(
+                    cur,
+                    specs,
+                    datetime.now(timezone.utc),
+                )
+            if added_boards:
+                conn.commit()
+                print(f"Daily board registry: added {added_boards} newly discovered boards")
             database_specs = _database_board_specs(conn, selected_ats)
             if database_specs or _database_has_board_rows(conn, selected_ats):
                 specs = database_specs

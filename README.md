@@ -30,6 +30,28 @@ export JOB_SCRAPER_CONTACT="you@example.com"
 uv run job_boards.py --refresh-boards --all
 ```
 
+To refresh only the board registry without downloading postings, use:
+
+```bash
+uv run job_boards.py --ats workday --refresh-boards --discover-only
+```
+
+This updates `boards.json`; the next PostgreSQL daily run can then scan the active
+boards stored in PostgreSQL.
+
+Recommended PostgreSQL workflow:
+
+```bash
+# 1. Discover/refresh the Workday board registry only.
+uv run job_boards.py --ats workday --refresh-boards --discover-only
+
+# 2. Scan every active board in PostgreSQL for recent jobs across all ATSes.
+uv run postgres_persistence.py --daily --published-after 2026-08-26
+```
+
+The daily command registers newly discovered boards without reactivating boards that were
+disabled manually, then scans all active, open boards from the PostgreSQL registry.
+
 That is the whole thing. You end up with:
 
 | file | what it is |

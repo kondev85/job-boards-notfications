@@ -875,17 +875,33 @@ def candidates_from_workday_wayback(
             f"  querying the Wayback Machine for Workday {environment}...",
             file=sys.stderr,
         )
-        page_count_url = f"{base_url}&showNumPages=true"
-        page_count_rows = json.loads(fetch(page_count_url, timeout=120, retries=2))
         try:
-            page_count = int(page_count_rows[1][0])
-        except (IndexError, TypeError, ValueError):
-            page_count = 1
+            page_count_url = f"{base_url}&showNumPages=true"
+            page_count_rows = json.loads(fetch(page_count_url, timeout=120, retries=2))
+            try:
+                page_count = int(page_count_rows[1][0])
+            except (IndexError, TypeError, ValueError):
+                page_count = 1
+        except Exception as exc:
+            print(
+                f"    Workday {environment} CDX page count failed ({exc}); "
+                "continuing with the other environments",
+                file=sys.stderr,
+            )
+            continue
         page_count = max(1, min(page_count, _WORKDAY_CDX_MAX_PAGES))
         archived_urls = 0
         for page in range(page_count):
             url = f"{base_url}&page={page}"
-            rows = json.loads(fetch(url, timeout=180, retries=2))
+            try:
+                rows = json.loads(fetch(url, timeout=180, retries=2))
+            except Exception as exc:
+                print(
+                    f"    Workday {environment} CDX page {page + 1}/{page_count} "
+                    f"failed ({exc}); continuing",
+                    file=sys.stderr,
+                )
+                continue
             archived_urls += max(0, len(rows) - 1)
             for row in rows[1:] if rows else []:
                 original = row[0] if isinstance(row, list) and row else row
@@ -1613,6 +1629,12 @@ def main() -> None:
     p.add_argument("--concurrency", type=int, default=8)
     p.add_argument("--refresh-boards", action="store_true", help="re-crawl slug lists")
     p.add_argument(
+        "--discover-only",
+        action="store_true",
+        help="refresh boards.json and exit without fetching job postings; use with "
+        "--refresh-boards or --refresh-recent",
+    )
+    p.add_argument(
         "--workday-bruteforce",
         action="store_true",
         help="when discovering Workday, also probe fallback board names for archived tenants",
@@ -1648,6 +1670,26 @@ def main() -> None:
 
     if args.all and (args.title or args.grep):
         sys.exit("--all takes no filters; drop --title/--grep or drop --all")
+    if args.discover_only:
+        if (
+            args.all
+            or args.title
+            or args.grep
+            or args.since
+            or args.new_only
+            or args.limit is not None
+            or args.remote
+            or args.boards_from
+            or args.no_db
+        ):
+            sys.exit(
+                "--discover-only cannot be combined with scrape filters, --limit, "
+                "--boards-from, or --no-db"
+            )
+        if not args.refresh_boards and not args.refresh_recent:
+            sys.exit(
+                "--discover-only requires --refresh-boards or --refresh-recent"
+            )
     if args.new_only and args.no_db:
         sys.exit("--new-only compares against the database; it cannot be used with --no-db")
     cutoff = None
@@ -1679,6 +1721,20 @@ def main() -> None:
             "the bytes of a normal run.",
             file=sys.stderr,
         )
+
+    if args.discover_only:
+        boards = load_boards(
+            True,
+            ats_list,
+            args.concurrency,
+            recent=args.refresh_recent,
+            workday_bruteforce=args.workday_bruteforce,
+        )
+        print(
+            f"board discovery complete: {sum(len(values) for values in boards.values())} "
+            f"boards cached in {BOARDS_CACHE.name}"
+        )
+        return
 
     if args.boards_from:
         source = Path(args.boards_from)
