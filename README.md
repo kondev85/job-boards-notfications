@@ -143,6 +143,16 @@ to `boards.json` after every batch, while invalid candidates are excluded and re
 remain pending for the next retry. A partial run can add verified boards but never remove
 previously known boards.
 
+If Wayback is unavailable, validate every candidate already preserved in the checkpoint
+without making any archive requests:
+
+```bash
+uv run job_boards.py --ats workday --validate-discovered --discover-only
+```
+
+This keeps the incomplete crawl checkpoint for a later resume. Repeating the command reuses
+completed validation outcomes and retries only request errors.
+
 An individual CDX page gets two attempts with a 60-second timeout. If it still fails, the
 page is recorded and the crawler continues so one slow archive shard cannot block hundreds
 of later pages. Three consecutive page failures stop the run because they usually indicate

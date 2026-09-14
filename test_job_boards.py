@@ -767,6 +767,59 @@ def test_workday_validation_resume_only_retries_request_errors():
         job_boards.WORKDAY_DISCOVERY_PROGRESS = original_progress
 
 
+def test_validate_discovered_uses_checkpoint_without_wayback_and_keeps_it():
+    import job_boards
+
+    original_candidates = job_boards.candidates_from_workday_wayback
+    original_inspect = job_boards.inspect_workday_board
+    original_seed = job_boards.BOARDS_SEED
+    original_cache = job_boards.BOARDS_CACHE
+    original_report = job_boards.WORKDAY_DISCOVERY_REPORT
+    original_progress = job_boards.WORKDAY_DISCOVERY_PROGRESS
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            job_boards.BOARDS_SEED = root / "boards.seed.json"
+            job_boards.BOARDS_CACHE = root / "boards.json"
+            job_boards.WORKDAY_DISCOVERY_REPORT = root / "report.json"
+            job_boards.WORKDAY_DISCOVERY_PROGRESS = root / "progress.json"
+            job_boards.BOARDS_SEED.write_text('{"workday": []}')
+            job_boards.BOARDS_CACHE.write_text('{"workday": []}')
+            job_boards.WORKDAY_DISCOVERY_PROGRESS.write_text(json.dumps({
+                "crawlComplete": False,
+                "seen": {"live.wd1/careers": "live.wd1/Careers"},
+            }))
+            job_boards.candidates_from_workday_wayback = lambda *args, **kwargs: (
+                (_ for _ in ()).throw(AssertionError("Wayback must not be contacted"))
+            )
+            job_boards.inspect_workday_board = lambda identifier, recent_days=None: {
+                "identifier": identifier,
+                "live": True,
+                "outcome": "live",
+                "hasRecentJob": False,
+            }
+
+            boards = job_boards.load_boards(
+                True,
+                ["workday"],
+                concurrency=1,
+                validate_discovered=True,
+            )
+
+            assert boards == {"workday": ["live.wd1/Careers"]}
+            assert job_boards.WORKDAY_DISCOVERY_PROGRESS.exists()
+            progress = json.loads(job_boards.WORKDAY_DISCOVERY_PROGRESS.read_text())
+            assert progress["crawlComplete"] is False
+            assert progress["validations"]["live.wd1/careers"]["outcome"] == "live"
+    finally:
+        job_boards.candidates_from_workday_wayback = original_candidates
+        job_boards.inspect_workday_board = original_inspect
+        job_boards.BOARDS_SEED = original_seed
+        job_boards.BOARDS_CACHE = original_cache
+        job_boards.WORKDAY_DISCOVERY_REPORT = original_report
+        job_boards.WORKDAY_DISCOVERY_PROGRESS = original_progress
+
+
 def test_successful_workday_cache_write_removes_checkpoint():
     import job_boards
 

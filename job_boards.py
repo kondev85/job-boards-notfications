@@ -1265,6 +1265,7 @@ def discover_boards(
     concurrency: int = 8,
     recent_days: int | None = None,
     bruteforce: bool = False,
+    validate_discovered: bool = False,
 ) -> list[str]:
     """Find board slugs for one ATS: harvest candidates, then validate each.
 
@@ -1278,6 +1279,7 @@ def discover_boards(
             concurrency=concurrency,
             recent_days=recent_days,
             bruteforce=bruteforce,
+            validate_discovered=validate_discovered,
         )
     domains = SOURCES[ats]["domains"]
     print(f"{ats}: discovering boards", file=sys.stderr)
@@ -1317,6 +1319,7 @@ def discover_workday_boards(
     concurrency: int = 8,
     recent_days: int | None = None,
     bruteforce: bool = False,
+    validate_discovered: bool = False,
 ) -> list[str]:
     """Discover and verify Workday boards.
 
@@ -1325,12 +1328,35 @@ def discover_workday_boards(
     create thousands of avoidable requests.
     """
     print("workday: discovering boards", file=sys.stderr)
-    try:
-        seen = candidates_from_workday_wayback(recent_days)
-    except Exception as exc:
-        raise RuntimeError(
-            "Workday Wayback discovery failed; boards.json was not changed"
-        ) from exc
+    if validate_discovered:
+        try:
+            checkpoint = json.loads(WORKDAY_DISCOVERY_PROGRESS.read_text())
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                f"{WORKDAY_DISCOVERY_PROGRESS.name} does not exist; "
+                "run Workday discovery first"
+            ) from exc
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"{WORKDAY_DISCOVERY_PROGRESS.name} is not valid JSON"
+            ) from exc
+        seen = dict(checkpoint.get("seen") or {})
+        if not seen:
+            raise RuntimeError(
+                f"{WORKDAY_DISCOVERY_PROGRESS.name} contains no discovered candidates"
+            )
+        print(
+            f"  skipping Wayback; loaded {len(seen)} candidates from "
+            f"{WORKDAY_DISCOVERY_PROGRESS.name}",
+            file=sys.stderr,
+        )
+    else:
+        try:
+            seen = candidates_from_workday_wayback(recent_days)
+        except Exception as exc:
+            raise RuntimeError(
+                "Workday Wayback discovery failed; boards.json was not changed"
+            ) from exc
 
     if bruteforce:
         tenants = {
@@ -1531,6 +1557,7 @@ def load_boards(
     concurrency: int = 8,
     recent: bool = False,
     workday_bruteforce: bool = False,
+    validate_discovered: bool = False,
 ) -> dict[str, list[str]]:
     if not refresh and not recent:
         # Merge per platform rather than taking the first file that has anything.
@@ -1564,6 +1591,7 @@ def load_boards(
                 concurrency,
                 recent_days=RECENT_WINDOW_DAYS if recent else None,
                 bruteforce=workday_bruteforce if ats == "workday" else False,
+                validate_discovered=validate_discovered if ats == "workday" else False,
             )
         except RateLimited:
             sys.exit(
@@ -1578,8 +1606,13 @@ def load_boards(
                 "later; the bundled boards.seed.json means this phase is optional."
             )
     _write_json_atomic(BOARDS_CACHE, boards)
-    if "workday" in ats_list:
-        WORKDAY_DISCOVERY_PROGRESS.unlink(missing_ok=True)
+    if "workday" in ats_list and not validate_discovered:
+        try:
+            workday_progress = json.loads(WORKDAY_DISCOVERY_PROGRESS.read_text())
+        except (OSError, json.JSONDecodeError):
+            workday_progress = {}
+        if workday_progress.get("crawlComplete"):
+            WORKDAY_DISCOVERY_PROGRESS.unlink(missing_ok=True)
     total = sum(len(boards.get(a, [])) for a in ats_list)
     print(f"cached {total} slugs -> {BOARDS_CACHE.name}", file=sys.stderr)
     return {a: boards.get(a, []) for a in ats_list}
@@ -2016,6 +2049,12 @@ def main() -> None:
         "--refresh-boards or --refresh-recent",
     )
     p.add_argument(
+        "--validate-discovered",
+        action="store_true",
+        help="validate Workday candidates already saved in the discovery checkpoint "
+        "without contacting Wayback; use with --ats workday --discover-only",
+    )
+    p.add_argument(
         "--workday-bruteforce",
         action="store_true",
         help="when discovering Workday, also probe fallback board names for archived tenants",
@@ -2067,9 +2106,20 @@ def main() -> None:
                 "--discover-only cannot be combined with scrape filters, --limit, "
                 "--boards-from, or --no-db"
             )
-        if not args.refresh_boards and not args.refresh_recent:
+        if not args.refresh_boards and not args.refresh_recent and not args.validate_discovered:
             sys.exit(
-                "--discover-only requires --refresh-boards or --refresh-recent"
+                "--discover-only requires --refresh-boards, --refresh-recent, "
+                "or --validate-discovered"
+            )
+    if args.validate_discovered:
+        if not args.discover_only:
+            sys.exit("--validate-discovered requires --discover-only")
+        if ats_list != ["workday"]:
+            sys.exit("--validate-discovered requires --ats workday")
+        if args.refresh_boards or args.refresh_recent:
+            sys.exit(
+                "--validate-discovered cannot be combined with "
+                "--refresh-boards or --refresh-recent"
             )
     if args.new_only and args.no_db:
         sys.exit("--new-only compares against the database; it cannot be used with --no-db")
@@ -2110,9 +2160,15 @@ def main() -> None:
             args.concurrency,
             recent=args.refresh_recent,
             workday_bruteforce=args.workday_bruteforce,
+            validate_discovered=args.validate_discovered,
         )
         print(
-            f"board discovery complete: {sum(len(values) for values in boards.values())} "
+            (
+                "saved partial Workday validation"
+                if args.validate_discovered
+                else "board discovery complete"
+            )
+            + f": {sum(len(values) for values in boards.values())} "
             f"boards cached in {BOARDS_CACHE.name}"
         )
         return
