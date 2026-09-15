@@ -130,6 +130,12 @@ identifiers; checking the API with `releasedAfter=2026-08-01T00:00:00Z` found **
 companies with at least one qualifying posting, including Playtech. Those 832 identifiers
 are now in the local `boards.json` cache.
 
+The Ashby attachment contained **3,448** identifiers. The existing cache already had
+3,740, so only the 483 attachment-only candidates were checked. **129** had at least one
+listed posting on or after 2026-08-01 and were added, bringing the Ashby cache to **3,869**
+boards. The other candidates were not added because they had no qualifying job or returned
+a clean 404.
+
 A full `--refresh-boards --all` took **26 minutes** measured before connection pooling —
 most of it discovery, which later runs skip. The scrape half of that is now 41% faster
 (see [Performance](#performance)); the discovery half has not been re-timed since. Note the board/company gap: ~2,000 boards are real customers with nothing
