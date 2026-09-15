@@ -1,7 +1,7 @@
 # job-boards (imported project)
 
 A dependency-free Python CLI that scrapes public job postings from Ashby, Greenhouse,
-Lever, and Workday job boards. See `README.md` for the full product description and
+Lever, SmartRecruiters, and Workday job boards. See `README.md` for the full product description and
 `openwiki/quickstart.md` for the engineering map.
 
 ## Running on Replit
@@ -19,10 +19,7 @@ regression script provisions its `psycopg` dependency automatically when run wit
 export JOB_SCRAPER_CONTACT="you@example.com"
 
 
-# Offline self-check (58 scraper tests, no network)
-uv run test_job_boards.py
-
-# Offline self-check (58 scraper tests, no network)
+# Offline self-check (80 scraper tests, no network)
 uv run test_job_boards.py
 
 # Small test scrape (5 Greenhouse boards, title match "engineer")
@@ -36,6 +33,9 @@ uv run job_boards.py --ats workday --refresh-boards --all
 # Optional fallback-name probing for archived Workday tenants
 uv run job_boards.py --ats workday --refresh-boards --workday-bruteforce --all
 
+# SmartRecruiters discovery (public career/job URL harvest + API verification)
+uv run job_boards.py --ats smartrecruiters --refresh-recent --discover-only
+
 # Import discovered Workday boards into PostgreSQL
 uv run postgres_persistence.py --ats workday --published-after 2026-09-08
 
@@ -46,12 +46,13 @@ uv run job_boards.py --refresh-boards --all
 Output goes to `job-boards.csv`, `job-boards.json`, and an accumulating
 `job-boards.db` SQLite file (all gitignored by design — see `.gitignore` comments).
 
-Verified in this environment: `uv run test_job_boards.py` passes (58/58), and the
+Verified in this environment: `uv run test_job_boards.py` passes (80/80), and the
 PostgreSQL regression suite covers adapter mappings plus a temporary local database.
 A live test scrape (`--ats greenhouse --title "engineer" --limit 5`) successfully hit
 the network and returned 442 matching postings.
 
-No core logic has been modified — the project runs as imported.
+SmartRecruiters support is implemented as another public-board adapter; existing ATS
+behavior remains covered by the regression suites.
 
 ## PostgreSQL persistence (v1)
 
@@ -209,7 +210,7 @@ With `--published-after`, the importer does not close or delete older jobs.
 Repeating the command makes one sequential API request per selected board and
 upserts jobs by `(ats, external_id)`.
 
-### Daily Ashby + Greenhouse + Lever scan
+### Daily Ashby + Greenhouse + Lever + SmartRecruiters scan
 
 The authenticated web app's **Launch search** action remains the manual,
 user-scoped search. For production automation, use a Replit Scheduled
@@ -229,7 +230,7 @@ uv run postgres_persistence.py \
   --published-after 2026-08-26
 ```
 
-`--daily` selects every active PostgreSQL board for Ashby, Greenhouse, and Lever,
+`--daily` selects every active PostgreSQL board for Ashby, Greenhouse, Lever, and SmartRecruiters,
 defaults to the last seven days when no cutoff is supplied, runs the deterministic
 matcher, and writes the combined report plus one report per ATS:
 `reports/matched_roles.csv`, `reports/matched_roles_ashby.csv`,

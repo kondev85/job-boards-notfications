@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""Pull public job postings from Ashby, Greenhouse, Lever, and Workday boards.
+"""Pull public job postings from Ashby, Greenhouse, Lever, SmartRecruiters, and Workday boards.
 
 No API key. Each ATS publishes an unauthenticated per-company posting API with no
 global search, so this runs in two phases: discover board slugs from the Internet
@@ -51,7 +51,7 @@ from pathlib import Path
 HERE = Path(__file__).parent
 # Two files on purpose. The seed is small, curated and committed, so a fresh clone
 # works without touching any archive. The cache is whatever the last crawl produced
-# — potentially three vendors' entire customer lists — and is gitignored, so a full
+# — potentially several vendors' entire customer lists — and is gitignored, so a full
 # crawl never turns this repo into published competitive intelligence.
 BOARDS_SEED = HERE / "boards.seed.json"
 BOARDS_CACHE = HERE / "boards.json"
@@ -94,6 +94,7 @@ FIELDS = [
 
 _HTML_TAG = re.compile(r"<[^>]+>")
 _SPACE = re.compile(r"\s+")
+_SMARTRECRUITERS_DETAIL_CONCURRENCY = 8
 
 
 class NotFound(Exception):
@@ -118,6 +119,7 @@ _POOLED_HOSTS = {
     "api.ashbyhq.com",
     "boards-api.greenhouse.io",
     "api.lever.co",
+    "api.smartrecruiters.com",
 }
 # One connection per thread per host. Sharing across threads would need a lock and
 # serialise the pool; a thread-local dict keeps the 8 workers independent, so a full
@@ -131,7 +133,7 @@ def _lower_headers(items) -> dict:
     urlopen returns an email.message.Message, which looks keys up case-insensitively.
     A plain dict does not, so the pooled path has to normalise or a vendor changing
     `Content-Encoding` to `content-encoding` would silently skip gunzipping and hand
-    back compressed bytes. Not hypothetical: these three APIs already disagree about
+    back compressed bytes. Not hypothetical: the posting APIs already disagree about
     the casing of `ETag`.
     """
     return {k.lower(): v for k, v in (items.items() if hasattr(items, "items") else items)}
@@ -376,6 +378,180 @@ def normalize_lever(job: dict) -> dict | None:
             filter(None, (job.get("descriptionPlain"), job.get("descriptionBodyPlain")))
         ),
     }
+
+
+def _smartrecruiters_location(location: object) -> tuple[str, dict | None]:
+    if not isinstance(location, dict):
+        return "", None
+    label = location.get("fullLocation") or ", ".join(
+        str(value)
+        for value in (
+            location.get("city"),
+            location.get("region"),
+            location.get("country"),
+        )
+        if value
+    )
+    return str(label or ""), location
+
+
+def _smartrecruiters_sections_description(job: dict) -> str:
+    job_ad = job.get("jobAd") or {}
+    sections = job_ad.get("sections") if isinstance(job_ad, dict) else {}
+    if not isinstance(sections, dict):
+        return ""
+    # CompanyDescription is repeated boilerplate and is not role evidence.
+    preferred = ("jobDescription", "qualifications", "additionalInformation")
+    return "\n\n".join(
+        str(sections[name].get("text") or "")
+        for name in preferred
+        if isinstance(sections.get(name), dict) and sections[name].get("text")
+    )
+
+
+def normalize_smartrecruiters(job: dict) -> dict | None:
+    posting_id = str(job.get("id") or "").strip()
+    title = str(job.get("name") or "").strip()
+    if not posting_id or not title:
+        return None
+    location, address = _smartrecruiters_location(job.get("location"))
+    department = job.get("department") or {}
+    function = job.get("function") or {}
+    employment = job.get("typeOfEmployment") or {}
+    location_data = job.get("location") or {}
+    if isinstance(location_data, dict):
+        if location_data.get("remote"):
+            workplace = "remote"
+        elif location_data.get("hybrid"):
+            workplace = "hybrid"
+        else:
+            workplace = "onsite"
+    else:
+        workplace = ""
+    return {
+        "id": posting_id,
+        "title": title,
+        "department": (
+            department.get("label", "")
+            if isinstance(department, dict)
+            else str(department)
+        ),
+        "team": (
+            function.get("label", "")
+            if isinstance(function, dict)
+            else str(function)
+        ),
+        "employmentType": (
+            employment.get("label", "")
+            if isinstance(employment, dict)
+            else str(employment)
+        ),
+        "location": location,
+        "isRemote": workplace == "remote",
+        "workplaceType": workplace,
+        "address": address,
+        "publishedAt": job.get("releasedDate") or "",
+        "jobUrl": job.get("postingUrl") or job.get("applyUrl") or "",
+        "_description": _smartrecruiters_sections_description(job),
+        "_sourceUpdatedAt": job.get("updatedDate") or job.get("updatedAt") or "",
+    }
+
+
+def smartrecruiters_board_url(identifier: str) -> str:
+    return (
+        "https://api.smartrecruiters.com/v1/companies/"
+        f"{urllib.parse.quote(str(identifier), safe='')}/postings"
+    )
+
+
+def _smartrecruiters_detail_url(identifier: str, posting_id: str) -> str:
+    return (
+        f"{smartrecruiters_board_url(identifier)}/"
+        f"{urllib.parse.quote(str(posting_id), safe='')}"
+    )
+
+
+def _smartrecruiters_detail(identifier: str, posting_id: str) -> dict:
+    return json.loads(
+        fetch(_smartrecruiters_detail_url(identifier, posting_id), timeout=30, retries=3)
+    )
+
+
+def _smartrecruiters_career_page_exists(identifier: str) -> bool:
+    url = (
+        "https://careers.smartrecruiters.com/"
+        f"{urllib.parse.quote(str(identifier), safe='')}"
+    )
+    request = urllib.request.Request(url, headers={"User-Agent": UA})
+    try:
+        with urllib.request.urlopen(request, timeout=25) as response:
+            final_path = urllib.parse.urlparse(response.geturl()).path.strip("/")
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError):
+        return False
+    first_segment = urllib.parse.unquote(final_path).split("/", 1)[0]
+    return first_segment.casefold() == str(identifier).strip().casefold()
+
+
+def fetch_smartrecruiters_jobs(
+    identifier: str,
+    published_after: datetime | None = None,
+) -> list[dict]:
+    """Fetch active public postings and enrich them with job details."""
+    limit = 100
+    offset = 0
+    postings: list[dict] = []
+    while True:
+        params = {"limit": str(limit), "offset": str(offset)}
+        if published_after is not None:
+            params["releasedAfter"] = published_after.isoformat(
+                timespec="milliseconds"
+            )
+        url = smartrecruiters_board_url(identifier) + "?" + urllib.parse.urlencode(params)
+        payload = json.loads(fetch(url, timeout=30, retries=3))
+        page = payload.get("content")
+        if not isinstance(page, list):
+            raise ValueError(
+                f"smartrecruiters/{identifier}: response has no content array"
+            )
+        postings.extend(item for item in page if isinstance(item, dict))
+        total = int(payload.get("totalFound") or 0)
+        if len(page) < limit or (total and offset + len(page) >= total):
+            break
+        offset += len(page)
+
+    def enrich(item: dict) -> dict:
+        posting_id = str(item.get("id") or "")
+        if not posting_id:
+            return item
+        try:
+            detail = _smartrecruiters_detail(identifier, posting_id)
+        except Exception as exc:
+            # Keep the listing data usable; a later import will retry details.
+            print(
+                f"  smartrecruiters/{identifier}/{posting_id}: detail request failed "
+                f"({exc})",
+                file=sys.stderr,
+            )
+            return item
+        merged = dict(item)
+        merged.update(detail)
+        return merged
+
+    with ThreadPoolExecutor(max_workers=_SMARTRECRUITERS_DETAIL_CONCURRENCY) as pool:
+        return list(pool.map(enrich, postings))
+
+
+def smartrecruiters_board_exists(identifier: str) -> bool:
+    try:
+        url = smartrecruiters_board_url(identifier) + "?limit=1&offset=0"
+        payload = json.loads(fetch(url, timeout=25, retries=2))
+        if not isinstance(payload.get("content"), list):
+            return False
+        if int(payload.get("totalFound") or 0) > 0:
+            return True
+        return _smartrecruiters_career_page_exists(identifier)
+    except Exception:
+        return False
 
 
 _WORKDAY_ID = re.compile(
@@ -843,6 +1019,16 @@ SOURCES = {
         "content_param": None,
         "junk_prefixes": (),
     },
+    "smartrecruiters": {
+        "domains": ["careers.smartrecruiters.com", "jobs.smartrecruiters.com"],
+        "api": "https://api.smartrecruiters.com/v1/companies/{slug}/postings",
+        "jobs": lambda payload: payload.get("content"),
+        "normalize": normalize_smartrecruiters,
+        "content_param": None,
+        "junk_prefixes": ("api", "assets", "static"),
+        "fetch_jobs": fetch_smartrecruiters_jobs,
+        "board_exists": smartrecruiters_board_exists,
+    },
     "workday": {
         "domains": [
             f"{environment}.myworkdayjobs.com"
@@ -880,6 +1066,8 @@ def _sqlite_value(value: object) -> str:
 def board_url(ats: str, slug: str, want_content: bool = False) -> str:
     if ats == "workday":
         return workday_board_url(slug)
+    if ats == "smartrecruiters":
+        return smartrecruiters_board_url(slug)
     url = SOURCES[ats]["api"].format(slug=urllib.parse.quote(slug))
     param = SOURCES[ats]["content_param"]
     if want_content and param:
@@ -922,16 +1110,28 @@ def candidates_from_wayback(domains: list[str], since_days: int | None = None) -
         start = datetime.now(timezone.utc) - timedelta(days=since_days)
         window = f"&from={start:%Y%m%d}"
     seen: dict[str, str] = {}
+    failures = []
     for domain in domains:
         scope = f"last {since_days}d of " if since_days else ""
         print(f"  querying the Wayback Machine for {scope}{domain}...", file=sys.stderr)
-        rows = json.loads(
-            fetch(WAYBACK_CDX.format(domain=domain) + window, timeout=300, retries=3)
-        )
+        try:
+            rows = json.loads(
+                fetch(
+                    WAYBACK_CDX.format(domain=domain) + window,
+                    timeout=300,
+                    retries=3,
+                )
+            )
+        except Exception as exc:
+            failures.append((domain, exc))
+            print(f"    Wayback failed for {domain}: {exc}; continuing", file=sys.stderr)
+            continue
         for row in rows[1:]:  # first row is the header
             _add(seen, row[0])
         print(f"    {len(rows) - 1} archived URLs -> {len(seen)} candidates so far",
               file=sys.stderr)
+    if not seen and failures:
+        raise failures[-1][1]
     return seen
 
 
@@ -1269,13 +1469,15 @@ def plausible(slug: str, ats: str = "ashby") -> bool:
 
 
 def board_exists(ats: str, slug: str) -> bool:
-    """HEAD the posting API: 200 for a real board, 404 otherwise.
+    """Validate a board with the cheapest provider-specific public request.
 
-    HEAD returns the status with a zero-length body, so validating thousands of
-    candidates costs nothing. A GET would download hundreds of kilobytes per live
-    board — gigabytes just to learn which slugs are real.
+    The original APIs support cheap HEAD probes. SmartRecruiters uses a one-item GET
+    because its public endpoint does not reliably expose the same HEAD behavior.
     """
     try:
+        custom = SOURCES[ats].get("board_exists")
+        if custom:
+            return bool(custom(slug))
         fetch(board_url(ats, slug), timeout=25, retries=2, method="HEAD")
         return True
     except NotFound:
@@ -1772,7 +1974,7 @@ def scan_board(
         norm = source["normalize"](job)
         if norm is None:
             continue
-        if ats == "workday":
+        if ats in {"smartrecruiters", "workday"}:
             norm["id"] = f"{slug}:{norm['id']}"
         norm = _clean(norm)
         if cutoff is not None and not published_within(norm["publishedAt"], cutoff):

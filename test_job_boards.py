@@ -23,6 +23,7 @@ from job_boards import (
     normalize_ashby,
     normalize_greenhouse,
     normalize_lever,
+    normalize_smartrecruiters,
     normalize_workday,
     plain_text,
     plausible,
@@ -272,6 +273,25 @@ def test_board_exists_uses_head_and_maps_404_to_false():
     assert calls == ["HEAD", "HEAD"], f"expected HEAD probes, got {calls}"
 
 
+def test_smartrecruiters_board_exists_rejects_empty_unknown_identifier():
+    import job_boards
+
+    original_fetch = job_boards.fetch
+    original_career = job_boards._smartrecruiters_career_page_exists
+    job_boards.fetch = lambda *args, **kwargs: json.dumps({
+        "totalFound": 0, "content": []
+    }).encode()
+    job_boards._smartrecruiters_career_page_exists = (
+        lambda identifier: identifier == "valid-empty-board"
+    )
+    try:
+        assert job_boards.board_exists("smartrecruiters", "valid-empty-board") is True
+        assert job_boards.board_exists("smartrecruiters", "unknown-board") is False
+    finally:
+        job_boards.fetch = original_fetch
+        job_boards._smartrecruiters_career_page_exists = original_career
+
+
 # --------------------------------------------------------------------------- #
 # Per-ATS normalisation
 # --------------------------------------------------------------------------- #
@@ -347,6 +367,81 @@ def test_normalize_lever():
     # epoch ms -> ISO, or it sorts wrongly against the other platforms
     assert row["publishedAt"].startswith("2025-06-17T"), row["publishedAt"]
     assert "T" in row["publishedAt"] and row["publishedAt"].endswith("+00:00")
+
+
+def test_normalize_smartrecruiters():
+    row = normalize_smartrecruiters({
+        "id": 744000148454651,
+        "name": "Data Operations Consultant ",
+        "releasedDate": "2026-09-09T09:43:26.403Z",
+        "location": {
+            "city": "Poland",
+            "region": "Remote",
+            "country": "pl",
+            "remote": True,
+            "hybrid": False,
+            "fullLocation": "Poland, Remote, Poland",
+        },
+        "department": {"id": "5408931", "label": "Technical Services"},
+        "function": {"id": "information_technology", "label": "Information Technology"},
+        "typeOfEmployment": {"id": "contract", "label": "Contract"},
+        "postingUrl": "https://jobs.smartrecruiters.com/acme/744000148454651-role",
+        "jobAd": {
+            "sections": {
+                "companyDescription": {"text": "<p>Boilerplate</p>"},
+                "jobDescription": {"text": "<p>Build APIs</p>"},
+                "qualifications": {"text": "<ul><li>Python</li></ul>"},
+            }
+        },
+    })
+    assert row["id"] == "744000148454651"
+    assert row["location"] == "Poland, Remote, Poland"
+    assert row["workplaceType"] == "remote"
+    assert row["department"] == "Technical Services"
+    assert row["team"] == "Information Technology"
+    assert row["employmentType"] == "Contract"
+    assert "Build APIs" in row["_description"]
+    assert "Boilerplate" not in row["_description"]
+
+
+def test_smartrecruiters_adapter_paginates_and_enriches_details():
+    import job_boards
+
+    original_fetch = job_boards.fetch
+    calls = []
+
+    def fake_fetch(url, **kwargs):
+        calls.append(url)
+        if "/postings/101" in url:
+            return json.dumps({
+                "id": "101",
+                "name": "Recent Engineer",
+                "releasedDate": "2026-09-15T00:00:00Z",
+                "jobAd": {"sections": {"jobDescription": {"text": "<p>Python</p>"}}},
+            }).encode()
+        if "offset=0" in url:
+            return json.dumps({
+                "offset": 0, "limit": 100, "totalFound": 101,
+                "content": (
+                    [{"id": "101", "name": "Recent Engineer"}]
+                    + [{"id": str(i), "name": f"Engineer {i}"} for i in range(2, 101)]
+                ),
+            }).encode()
+        return json.dumps({
+            "offset": 100, "limit": 100, "totalFound": 101,
+            "content": [{"id": "102", "name": "Second Engineer"}],
+        }).encode()
+
+    job_boards.fetch = fake_fetch
+    try:
+        rows = job_boards.fetch_smartrecruiters_jobs(
+            "acme", datetime(2026, 9, 14, tzinfo=timezone.utc)
+        )
+    finally:
+        job_boards.fetch = original_fetch
+    assert len(rows) == 101
+    assert any(url.endswith("offset=0&releasedAfter=2026-09-14T00%3A00%3A00.000%2B00%3A00") for url in calls)
+    assert any("/postings/101" in url for url in calls)
 
 
 def test_normalize_workday():

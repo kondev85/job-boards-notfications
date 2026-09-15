@@ -165,7 +165,7 @@ CREATE TABLE IF NOT EXISTS companies (
 CREATE TABLE IF NOT EXISTS job_boards (
     board_id    BIGSERIAL PRIMARY KEY,
     company_id  BIGINT NOT NULL REFERENCES companies(company_id),
-    ats         TEXT NOT NULL CHECK (ats IN ('ashby', 'greenhouse', 'lever', 'workday')),
+    ats         TEXT NOT NULL CHECK (ats IN ('ashby', 'greenhouse', 'lever', 'smartrecruiters', 'workday')),
     slug        TEXT NOT NULL,
     active      BOOLEAN NOT NULL DEFAULT TRUE,
     source_url  TEXT NOT NULL,
@@ -182,7 +182,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     job_id             BIGSERIAL PRIMARY KEY,
     board_id           BIGINT NOT NULL REFERENCES job_boards(board_id),
     company            TEXT,
-    ats                TEXT NOT NULL CHECK (ats IN ('ashby', 'greenhouse', 'lever', 'workday')),
+    ats                TEXT NOT NULL CHECK (ats IN ('ashby', 'greenhouse', 'lever', 'smartrecruiters', 'workday')),
     external_id        TEXT NOT NULL,
     title              TEXT NOT NULL,
     department         TEXT,
@@ -213,10 +213,10 @@ ALTER TABLE job_boards
     ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE job_boards DROP CONSTRAINT IF EXISTS job_boards_ats_check;
 ALTER TABLE job_boards ADD CONSTRAINT job_boards_ats_check
-    CHECK (ats IN ('ashby', 'greenhouse', 'lever', 'workday'));
+    CHECK (ats IN ('ashby', 'greenhouse', 'lever', 'smartrecruiters', 'workday'));
 ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_ats_check;
 ALTER TABLE jobs ADD CONSTRAINT jobs_ats_check
-    CHECK (ats IN ('ashby', 'greenhouse', 'lever', 'workday'));
+    CHECK (ats IN ('ashby', 'greenhouse', 'lever', 'smartrecruiters', 'workday'));
 
 CREATE TABLE IF NOT EXISTS users (
     user_id                 BIGSERIAL PRIMARY KEY,
@@ -631,6 +631,7 @@ def _source_updated_at(ats: str, raw_job: dict[str, Any]) -> datetime | None:
         "ashby": ("updatedAt", "updated_at", "modifiedAt", "modified_at"),
         "greenhouse": ("updated_at", "updatedAt", "modified_at", "modifiedAt"),
         "lever": ("updatedAt", "updated_at", "modifiedAt", "modified_at"),
+        "smartrecruiters": ("updatedDate", "updatedAt", "updated_at", "modifiedAt"),
         "workday": ("updatedAt", "updated_at", "modifiedAt", "modified_at"),
     }
     for key in keys_by_ats[ats]:
@@ -1025,7 +1026,7 @@ def _fetch_normalized(
         normalized = source["normalize"](raw_job)
         if normalized is None:
             continue
-        if ats == "workday":
+        if ats in {"smartrecruiters", "workday"}:
             normalized["id"] = f"{slug}:{normalized['id']}"
         normalized = job_boards._clean(normalized)
         published_at = _timestamp(normalized.get("publishedAt"))
@@ -3381,7 +3382,8 @@ def main() -> None:
         "--daily",
         action="store_true",
             help=(
-            "scan cached Ashby, Greenhouse, Lever, and Workday boards, match immediately, "
+            "scan cached Ashby, Greenhouse, Lever, SmartRecruiters, and Workday boards, "
+            "match immediately, "
             "and export ATS-specific reports; combine with --ats to select one "
             "or more ATSes; defaults to the last 7 days"
         ),
@@ -3428,7 +3430,7 @@ def main() -> None:
                 "--daily never requests Greenhouse descriptions; omit --greenhouse-content"
             )
         if args.ats is None:
-            args.ats = "ashby,greenhouse,lever,workday"
+            args.ats = "ashby,greenhouse,lever,smartrecruiters,workday"
         _ats_list(args.ats)
         args.daily_all_ats = daily_all_ats
         args.match = True

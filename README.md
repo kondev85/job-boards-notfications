@@ -1,12 +1,13 @@
 # job-boards
 
-Pull every public job posting from **Ashby, Greenhouse, Lever, and Workday** job boards.
+Pull every public job posting from **Ashby, Greenhouse, Lever, SmartRecruiters, and Workday** job boards.
 No API key, no account, no dependencies.
 
-The original three platforms publish unauthenticated posting APIs that are per-company,
-keyed by a board slug, with no global search endpoint. This finds **13,146** boards
-across those platforms — then fans out across all of them. **~308,000 live postings**
-before Workday discovery.
+The original four platforms publish unauthenticated posting APIs that are per-company,
+keyed by a board slug, with no global search endpoint. SmartRecruiters uses the public
+company identifier in its career-page URL and supports server-side publication cutoffs.
+The scraper discovers identifiers from public career/job URLs, then fans out across all
+supported boards.
 
 > **Engineers and coding agents:** the [`openwiki/`](openwiki/quickstart.md) wiki is the
 > map of the code — architecture, workflows, data model, runbook. Agents should start
@@ -97,6 +98,7 @@ covers `--since` for a fresher dataset.
 ```bash
 uv run job_boards.py --ats greenhouse --title "swe"  # one platform
 uv run job_boards.py --ats ashby,lever --all         # a subset
+uv run job_boards.py --ats smartrecruiters --refresh-recent --discover-only
 uv run job_boards.py --ats workday --refresh-boards --all
 uv run job_boards.py --title "software engineer"
 uv run job_boards.py --title "software engineer" --match exact
@@ -121,6 +123,10 @@ Measured by a real `--refresh-boards --all`, not estimated:
 That is the `--refresh-boards` figure; [`--refresh-recent`](#closing-the-discovery-gap---refresh-recent)
 has since taken the cached board list to **13,146**, which is the count the runtimes below
 are measured over.
+
+SmartRecruiters is tracked separately because its public API was added after this
+historical measurement; the first recent discovery validated **144** public company
+identifiers.
 
 A full `--refresh-boards --all` took **26 minutes** measured before connection pooling —
 most of it discovery, which later runs skip. The scrape half of that is now 41% faster
@@ -228,10 +234,10 @@ the top; the default `--sort board` groups by platform and company, which buries
 | 12 hours | 4,441 |
 | 24 hours | 5,980 |
 
-None of the three APIs support server-side date filtering — `updated_after` and friends
-are silently ignored, verified against all three — so every board is fetched and the
-window is applied locally. ~4 minutes is therefore the floor for a full sweep, and the
-only way to see a posting sooner is to run more often.
+Ashby, Greenhouse, and Lever do not support server-side date filtering — `updated_after`
+and friends are silently ignored — so every board is fetched and their window is applied
+locally. SmartRecruiters supports `releasedAfter`; the importer still applies the shared
+inclusive cutoff locally after normalization.
 
 `--since` accepts `7d`, `2w`, `3m`, `1y`, or a bare number of days:
 
@@ -499,6 +505,7 @@ search endpoint. So this is two phases, run per platform.
 | Ashby | `api.ashbyhq.com/posting-api/job-board/{slug}` | `jobs.ashbyhq.com` |
 | Greenhouse | `boards-api.greenhouse.io/v1/boards/{slug}/jobs` | `boards.greenhouse.io`, `job-boards.greenhouse.io` |
 | Lever | `api.lever.co/v0/postings/{slug}?mode=json` | `jobs.lever.co` |
+| SmartRecruiters | `api.smartrecruiters.com/v1/companies/{slug}/postings` | `careers.smartrecruiters.com`, `jobs.smartrecruiters.com` |
 
 **Phase 1 — discover slugs.** Query the **Wayback Machine's** CDX index for everything
 archived under each platform's domains, take the first path segment of each URL as a
@@ -512,6 +519,7 @@ Measured funnels:
 ashby       191,117 archived URLs  ->  7,463 candidates  ->  3,617 live boards
 greenhouse  1,348,314              -> 14,430             ->  6,797 live boards
 lever       1,302,426              ->  8,681             ->  2,718 live boards
+smartrecruiters  recent Wayback + urlscan -> 144 validated boards (first recent run)
 ```
 
 Three details make that work:
@@ -534,31 +542,37 @@ healthy run sees zero 404s; any that do appear get pruned from `boards.json`.
 
 ### Normalisation, and two traps
 
-| row field | Ashby | Greenhouse | Lever |
-|---|---|---|---|
-| `title` | `title` | `title` | **`text`** |
-| `location` | `location` | `location.name` | `categories.location` |
-| `employmentType` | `employmentType` | — | `categories.commitment` |
-| `isRemote` | `isRemote` | inferred from location | `workplaceType == "remote"` |
-| `publishedAt` | `publishedAt` ISO | `first_published` ISO | **`createdAt` epoch-ms** |
-| `jobUrl` | `jobUrl` | `absolute_url` | `hostedUrl` |
-| description | always present | opt-in, 26x bytes | always present |
+| row field | Ashby | Greenhouse | Lever | SmartRecruiters |
+|---|---|---|---|---|
+| `title` | `title` | `title` | **`text`** | `name` |
+| `location` | `location` | `location.name` | `categories.location` | `location.fullLocation` |
+| `employmentType` | `employmentType` | — | `categories.commitment` | `typeOfEmployment.label` |
+| `isRemote` | `isRemote` | inferred from location | `workplaceType == "remote"` | `location.remote` |
+| `publishedAt` | `publishedAt` ISO | `first_published` ISO | **`createdAt` epoch-ms** | `releasedDate` ISO |
+| `jobUrl` | `jobUrl` | `absolute_url` | `hostedUrl` | `postingUrl` |
+| description | always present | opt-in, 26x bytes | always present | detail endpoint sections |
 
 The two bolded cells are the ones that fail quietly. Reading `title` on Lever yields an
 empty column rather than an error, and treating its `createdAt` as ISO makes every Lever
 posting sort wrongly against the other two. Both are pinned by tests.
 
 Greenhouse exposes no remote flag on this endpoint, so `isRemote` is inferred from the
-location label containing "remote" — weaker than the other two, and worth knowing before
+location label containing "remote" — weaker than the other platforms, and worth knowing before
 you trust `--remote` there.
+
+SmartRecruiters list responses are intentionally followed through each posting's `ref`
+detail endpoint because the list can omit the job-ad sections. The detail request preserves
+role description and qualifications for matching. Company-description boilerplate is not
+included in the stored role evidence.
 
 ## Facts verified against live endpoints (2026-07-27)
 
 | Fact | Note |
 |---|---|
-| All three posting APIs | 200, no auth, no account |
-| Invalid slug, all three | 404 — this is the validator |
-| `HEAD`, all three | 200 with a 0-byte body — free validation |
+| All four posting APIs | 200, no auth, no account |
+| Invalid slug, original three | 404 — this is the validator |
+| `HEAD`, original three | 200 with a 0-byte body — free validation |
+| SmartRecruiters validation | public `GET` list with `limit=1`, because validation is board-specific |
 | Ashby slugs may contain spaces | `A1%20Garage%20Door%20Service` → 200 |
 | gzip, Ashby | 1.73MB → 220KB, **8x** |
 | gzip, Greenhouse | 317KB → 25KB, **12x** |
@@ -598,7 +612,7 @@ docs a repeatedly-abusive IP can be blocked for 24 hours, so the script raises a
 error with that guidance rather than burning retries. CDX requests are throttled to
 1/second, and `showNumPages` is avoided because it is the most expensive query they offer.
 
-`boards.seed.json` (60 verified boards across the three platforms) is bundled regardless,
+`boards.seed.json` (60 verified boards across the original three platforms) is bundled regardless,
 so **Phase 1 is always optional** and a fresh clone works without either index.
 
 ## For coding agents (LLMs)
@@ -696,9 +710,8 @@ it. Keep that warning.
   the words are present but not contiguous. `--grep` covers most of this need already.
 - **Per-board caching** — postings change daily; caching mostly serves staleness.
 - **Rate-limit backoff** — no 429s observed on any platform. Add on first sighting.
-- **More ATS platforms** — SmartRecruiters and Workable expose similar public APIs and
-  would each be one `SOURCES` entry plus a normaliser. Workday is per-tenant and would
-  need real work.
+- **More ATS platforms** — Workable exposes a similar public API and would be the next
+  `SOURCES` entry plus normaliser. Workday is per-tenant and would need real work.
 
 ## Keeping the wiki in sync
 
