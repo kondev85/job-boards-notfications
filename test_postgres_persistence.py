@@ -1214,6 +1214,13 @@ def test_matching_normalizes_accents_for_relocation_locations():
     ) is None
 
 
+def test_matching_normalizes_british_programme_spelling():
+    assert persistence._text_similarity(
+        "Program Manager",
+        "Programme Manager",
+    ) == 1.0
+
+
 def test_remote_location_evidence_is_user_specific_and_conservative():
     europe_user = {
         "base_city": "Estepona",

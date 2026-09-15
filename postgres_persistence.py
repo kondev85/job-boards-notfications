@@ -502,6 +502,7 @@ _PROFILE_RECENCY_WEIGHTS = {
     "unknown": 0.85,
 }
 _MATCH_WORD_ALIASES = {
+    "programme": "program",
     "management": "manager",
     "managerial": "manager",
     "leadership": "leader",
