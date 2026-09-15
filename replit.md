@@ -242,6 +242,12 @@ It never requests Greenhouse
 export use the same inclusive cutoff, so the reports contain only roles in that
 window.
 
+Daily board failures are tolerated only when they are strictly below 1% of the
+run's original board snapshot. In that case downstream matching, recommendations,
+and reports continue and the run finishes as `completed_with_errors`. At 1% or
+more, the run remains `running` so the next identical command retries only the
+failed boards.
+
 To scan and report one ATS only, pass `--ats`:
 
 ```bash

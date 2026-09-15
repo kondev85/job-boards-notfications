@@ -364,6 +364,14 @@ def test_daily_run_refuses_a_concurrent_daily_process():
                     raise AssertionError("a concurrent daily run must be rejected")
 
 
+def test_daily_failure_threshold_is_strictly_below_one_percent():
+    assert persistence._daily_failures_allow_downstream(0, 0)
+    assert persistence._daily_failures_allow_downstream(9, 1889)
+    assert persistence._daily_failures_allow_downstream(1, 101)
+    assert not persistence._daily_failures_allow_downstream(1, 100)
+    assert not persistence._daily_failures_allow_downstream(10, 999)
+
+
 def test_daily_resume_keeps_snapshot_and_separates_scope_and_cutoff():
     with _temporary_postgres() as dsn:
         cutoff = datetime(2026, 8, 26, tzinfo=timezone.utc)

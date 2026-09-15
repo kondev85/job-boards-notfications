@@ -934,6 +934,13 @@ def _daily_import_counts(
     return dict(zip(("pending", "failed", "completed", "empty"), row))
 
 
+def _daily_failures_allow_downstream(failed_boards: int, board_count: int) -> bool:
+    """Allow downstream work only when failures are strictly below one percent."""
+    return failed_boards == 0 or (
+        board_count > 0 and failed_boards * 100 < board_count
+    )
+
+
 def _finish_daily_import_run(
     dsn: str,
     import_run_id: int,
@@ -3152,14 +3159,30 @@ def _run(args: argparse.Namespace) -> int:
                 f"{daily_counts['empty']} empty + {daily_failed_boards} failed + "
                 f"{daily_counts['pending']} pending"
             )
-            if daily_failed_boards or daily_counts["pending"]:
+            failures_allowed = _daily_failures_allow_downstream(
+                daily_failed_boards, daily_board_count
+            )
+            if daily_counts["pending"] or not failures_allowed:
+                failure_rate = (
+                    daily_failed_boards * 100 / daily_board_count
+                    if daily_board_count
+                    else 0
+                )
                 print(
                     f"Daily import run {daily_import_run_id} remains incomplete; "
-                    "rerun the same command to retry only failed/pending boards. "
+                    f"failed boards are {failure_rate:.2f}% of the snapshot "
+                    "(the continuation threshold is strictly below 1%). "
+                    "Rerun the same command to retry only failed/pending boards. "
                     "Matching, recommendations, and reports were not started.",
                     file=sys.stderr,
                 )
                 return 1
+            if daily_failed_boards:
+                print(
+                    f"Daily import run {daily_import_run_id}: continuing with "
+                    f"{daily_failed_boards}/{daily_board_count} failed boards "
+                    "(strictly below 1%)"
+                )
         if match_requested:
             match_stats = run_matching(
                 conn,
@@ -3232,7 +3255,8 @@ def _run(args: argparse.Namespace) -> int:
             failed += 1
 
     if daily_import_run_id is not None:
-        if failed:
+        downstream_failed = failed > daily_failed_boards
+        if downstream_failed:
             print(
                 f"Daily import run {daily_import_run_id} remains incomplete because "
                 "matching, recommendation, or report processing failed; rerun the "
@@ -3243,10 +3267,13 @@ def _run(args: argparse.Namespace) -> int:
             _finish_daily_import_run(
                 dsn,
                 daily_import_run_id,
-                failed_boards=0,
+                failed_boards=daily_failed_boards,
                 downstream_failed=False,
             )
-            print(f"Daily import run {daily_import_run_id}: completed")
+            final_status = (
+                "completed_with_errors" if daily_failed_boards else "completed"
+            )
+            print(f"Daily import run {daily_import_run_id}: {final_status}")
 
     if specs:
         print(

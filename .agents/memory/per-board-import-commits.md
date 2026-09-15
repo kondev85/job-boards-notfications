@@ -18,8 +18,9 @@ connection after a later board is interrupted.
 
 Long daily imports use a PostgreSQL run record keyed by the canonical ATS scope and exact
 cutoff, with an immutable ordered board snapshot. Completed and empty boards are skipped on
-resume; failed and pending boards are retried before matching or report generation. Only one
-daily import may run at a time because an all-ATS scope overlaps every subset.
+resume. Failures strictly below 1% of the snapshot allow downstream work and a
+`completed_with_errors` result; at 1% or more they remain retryable. Only one daily import
+may run at a time because an all-ATS scope overlaps every subset.
 
 **Why:** Workspace restarts can interrupt multi-hour Workday scans, and a mutable current
 registry or latest job ID cannot reliably identify progress, especially for empty boards.
