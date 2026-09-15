@@ -57,6 +57,22 @@ uv run postgres_persistence.py --daily --published-after 2026-08-26
 
 The daily command registers newly discovered boards without reactivating boards that were
 disabled manually, then scans all active, open boards from the PostgreSQL registry.
+It automatically resumes the latest incomplete run whose exact cutoff and ATS scope match
+the command. The original ordered board list is preserved in PostgreSQL, and each board is
+marked completed, empty, or failed in the same transaction that saves its jobs. For example,
+both of these scopes resume independently after interruption:
+
+```bash
+uv run postgres_persistence.py --daily --published-after 2026-08-26
+uv run postgres_persistence.py --daily --ats workday --published-after 2026-08-26
+```
+
+`--resume` may be added to make the intent explicit, but is not required. A changed cutoff
+or changed ATS selection starts a new run. Once a run completes, repeating the same command
+also starts a fresh run. Failed boards keep the run incomplete: the next identical command
+retries only those boards, and matching, recommendations, and reports begin only after every
+board has completed or returned an empty result. Only one daily import can run at a time,
+including when one command selects all ATSes and another selects a subset.
 
 That is the whole thing. You end up with:
 

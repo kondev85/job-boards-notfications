@@ -15,3 +15,14 @@ writes since the run began.
 cached evidence, close the read transaction; then perform each board's upserts in a fresh
 top-level transaction. Regression tests should observe committed progress from a second
 connection after a later board is interrupted.
+
+Long daily imports use a PostgreSQL run record keyed by the canonical ATS scope and exact
+cutoff, with an immutable ordered board snapshot. Completed and empty boards are skipped on
+resume; failed and pending boards are retried before matching or report generation. Only one
+daily import may run at a time because an all-ATS scope overlaps every subset.
+
+**Why:** Workspace restarts can interrupt multi-hour Workday scans, and a mutable current
+registry or latest job ID cannot reliably identify progress, especially for empty boards.
+
+**How to apply:** Daily commands resume automatically when scope and cutoff match an
+incomplete run. A changed scope/cutoff or a completed prior run starts a fresh snapshot.

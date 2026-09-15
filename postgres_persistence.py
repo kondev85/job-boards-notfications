@@ -291,6 +291,46 @@ CREATE INDEX IF NOT EXISTS job_boards_company_id_idx
     ON job_boards (company_id);
 CREATE INDEX IF NOT EXISTS job_boards_ats_idx
     ON job_boards (ats);
+
+CREATE TABLE IF NOT EXISTS daily_import_runs (
+    import_run_id              BIGSERIAL PRIMARY KEY,
+    ats_scope                  TEXT[] NOT NULL,
+    published_after            TIMESTAMPTZ NOT NULL,
+    status                     TEXT NOT NULL DEFAULT 'running'
+                               CHECK (status IN (
+                                   'running', 'completed', 'completed_with_errors'
+                               )),
+    started_at                 TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at                 TIMESTAMPTZ NOT NULL DEFAULT now(),
+    completed_at               TIMESTAMPTZ,
+    board_count                INTEGER NOT NULL,
+    failed_board_count         INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS daily_import_runs_resume_idx
+    ON daily_import_runs (published_after, updated_at DESC)
+    WHERE status = 'running';
+
+CREATE TABLE IF NOT EXISTS daily_import_run_boards (
+    import_run_id  BIGINT NOT NULL
+                   REFERENCES daily_import_runs(import_run_id) ON DELETE CASCADE,
+    board_id       BIGINT NOT NULL REFERENCES job_boards(board_id),
+    position       INTEGER NOT NULL,
+    status         TEXT NOT NULL DEFAULT 'pending'
+                   CHECK (status IN ('pending', 'completed', 'empty', 'failed')),
+    attempts       INTEGER NOT NULL DEFAULT 0,
+    jobs_fetched   INTEGER NOT NULL DEFAULT 0,
+    jobs_inserted  INTEGER NOT NULL DEFAULT 0,
+    jobs_updated   INTEGER NOT NULL DEFAULT 0,
+    error_type     TEXT,
+    error_message  TEXT,
+    completed_at   TIMESTAMPTZ,
+    PRIMARY KEY (import_run_id, board_id),
+    UNIQUE (import_run_id, position)
+);
+
+CREATE INDEX IF NOT EXISTS daily_import_run_boards_status_idx
+    ON daily_import_run_boards (import_run_id, status, position);
 CREATE INDEX IF NOT EXISTS companies_category_idx
     ON companies (category);
 CREATE INDEX IF NOT EXISTS companies_industry_idx
@@ -735,6 +775,190 @@ def _database_has_board_rows(
             (ats_list,),
         ).fetchone()[0]
     )
+
+
+def _prepare_daily_import_run(
+    conn: psycopg.Connection,
+    ats_scope: list[str],
+    published_after: datetime,
+) -> tuple[int, list[tuple[int, int, str, str]], bool, int]:
+    """Resume a matching incomplete run or snapshot a new ordered board list."""
+    canonical_scope = sorted(set(ats_scope))
+    with conn.transaction():
+        existing = conn.execute(
+            """
+            SELECT import_run_id, board_count
+            FROM daily_import_runs
+            WHERE status = 'running'
+              AND ats_scope = %s
+              AND published_after = %s
+            ORDER BY started_at DESC
+            LIMIT 1
+            """,
+            (canonical_scope, published_after),
+        ).fetchone()
+        resumed = existing is not None
+        if existing:
+            import_run_id, board_count = existing
+            conn.execute(
+                "UPDATE daily_import_runs SET updated_at = now() "
+                "WHERE import_run_id = %s",
+                (import_run_id,),
+            )
+        else:
+            board_rows = conn.execute(
+                """
+                SELECT board_id, ats, slug
+                FROM job_boards
+                WHERE ats = ANY(%s)
+                  AND active IS TRUE
+                  AND closed_at IS NULL
+                ORDER BY ats, slug
+                """,
+                (canonical_scope,),
+            ).fetchall()
+            board_count = len(board_rows)
+            import_run_id = conn.execute(
+                """
+                INSERT INTO daily_import_runs (
+                    ats_scope, published_after, board_count
+                ) VALUES (%s, %s, %s)
+                RETURNING import_run_id
+                """,
+                (canonical_scope, published_after, board_count),
+            ).fetchone()[0]
+            with conn.cursor() as cur:
+                cur.executemany(
+                    """
+                    INSERT INTO daily_import_run_boards (
+                        import_run_id, board_id, position
+                    ) VALUES (%s, %s, %s)
+                    """,
+                    [
+                        (import_run_id, board_id, position)
+                        for position, (board_id, _, _) in enumerate(board_rows, 1)
+                    ],
+                )
+    pending = conn.execute(
+        """
+        SELECT rb.position, rb.board_id, b.ats, b.slug
+        FROM daily_import_run_boards AS rb
+        JOIN job_boards AS b ON b.board_id = rb.board_id
+        WHERE rb.import_run_id = %s
+          AND rb.status IN ('pending', 'failed')
+        ORDER BY rb.position
+        """,
+        (import_run_id,),
+    ).fetchall()
+    conn.commit()
+    return import_run_id, pending, resumed, board_count
+
+
+def _record_daily_board_success(
+    cur: psycopg.Cursor,
+    import_run_id: int,
+    board_id: int,
+    *,
+    fetched: int,
+    inserted: int,
+    updated: int,
+    status: str | None = None,
+) -> None:
+    cur.execute(
+        """
+        UPDATE daily_import_run_boards
+        SET status = %s,
+            attempts = attempts + 1,
+            jobs_fetched = %s,
+            jobs_inserted = %s,
+            jobs_updated = %s,
+            error_type = NULL,
+            error_message = NULL,
+            completed_at = now()
+        WHERE import_run_id = %s AND board_id = %s
+        """,
+        (
+            status or ("completed" if fetched else "empty"),
+            fetched,
+            inserted,
+            updated,
+            import_run_id,
+            board_id,
+        ),
+    )
+
+
+def _record_daily_board_failure(
+    conn: psycopg.Connection,
+    import_run_id: int,
+    board_id: int,
+    exc: BaseException,
+) -> None:
+    with conn.transaction():
+        conn.execute(
+            """
+            UPDATE daily_import_run_boards
+            SET status = 'failed',
+                attempts = attempts + 1,
+                error_type = %s,
+                error_message = %s,
+                completed_at = now()
+            WHERE import_run_id = %s AND board_id = %s
+            """,
+            (type(exc).__name__, str(exc)[:4000], import_run_id, board_id),
+        )
+        conn.execute(
+            "UPDATE daily_import_runs SET updated_at = now() "
+            "WHERE import_run_id = %s",
+            (import_run_id,),
+        )
+
+
+def _daily_import_counts(
+    conn: psycopg.Connection,
+    import_run_id: int,
+) -> dict[str, int]:
+    row = conn.execute(
+        """
+        SELECT
+            count(*) FILTER (WHERE status = 'pending'),
+            count(*) FILTER (WHERE status = 'failed'),
+            count(*) FILTER (WHERE status = 'completed'),
+            count(*) FILTER (WHERE status = 'empty')
+        FROM daily_import_run_boards
+        WHERE import_run_id = %s
+        """,
+        (import_run_id,),
+    ).fetchone()
+    conn.commit()
+    return dict(zip(("pending", "failed", "completed", "empty"), row))
+
+
+def _finish_daily_import_run(
+    dsn: str,
+    import_run_id: int,
+    *,
+    failed_boards: int,
+    downstream_failed: bool,
+) -> None:
+    status = (
+        "completed_with_errors"
+        if failed_boards or downstream_failed
+        else "completed"
+    )
+    with psycopg.connect(dsn) as conn:
+        with conn.transaction():
+            conn.execute(
+                """
+                UPDATE daily_import_runs
+                SET status = %s,
+                    failed_board_count = %s,
+                    updated_at = now(),
+                    completed_at = now()
+                WHERE import_run_id = %s
+                """,
+                (status, failed_boards, import_run_id),
+            )
 
 
 def _ats_list(value: str) -> list[str]:
@@ -2698,7 +2922,7 @@ def run_recommendations(
     }
 
 
-def run(args: argparse.Namespace) -> int:
+def _run(args: argparse.Namespace) -> int:
     match_requested = getattr(args, "match", False)
     recommend_requested = getattr(args, "recommend", False)
     profile_requested = getattr(args, "generate_profile", False)
@@ -2733,6 +2957,9 @@ def run(args: argparse.Namespace) -> int:
     total_closed = 0
     failed = 0
     unchanged = 0
+    daily_import_run_id: int | None = None
+    daily_failed_boards = 0
+    daily_board_count = 0
 
     with psycopg.connect(dsn) as conn:
         conn.execute(SCHEMA_SQL)
@@ -2758,6 +2985,24 @@ def run(args: argparse.Namespace) -> int:
             # The registry SELECTs above start an implicit transaction. End it
             # before importing so each board write below can commit independently.
             conn.commit()
+            (
+                daily_import_run_id,
+                daily_scan_items,
+                resumed,
+                daily_board_count,
+            ) = _prepare_daily_import_run(conn, selected_ats, published_after)
+            completed_before = daily_board_count - len(daily_scan_items)
+            action = "resuming" if resumed else "started"
+            print(
+                f"Daily import run {daily_import_run_id}: {action}; "
+                f"{completed_before}/{daily_board_count} boards already accounted for, "
+                f"{len(daily_scan_items)} pending/retry"
+            )
+        else:
+            daily_scan_items = [
+                (position, 0, ats, slug)
+                for position, (ats, slug) in enumerate(specs, 1)
+            ]
         if profile_requested:
             try:
                 generated = generate_profile_for_user(
@@ -2774,10 +3019,10 @@ def run(args: argparse.Namespace) -> int:
             )
             return 0
 
-        for index, (ats, slug) in enumerate(specs, 1):
+        for position, tracked_board_id, ats, slug in daily_scan_items:
             try:
                 print(
-                    f"{index}/{len(specs)} {ats}/{slug}: fetching...",
+                    f"{position}/{daily_board_count or len(specs)} {ats}/{slug}: fetching...",
                     flush=True,
                 )
                 board_id, stored_etag, cached_published_after = _board_fetch_state(
@@ -2815,6 +3060,7 @@ def run(args: argparse.Namespace) -> int:
                         board_id = _ensure_board(cur, ats, slug, seen_at)
                         company = _board_company_name(cur, board_id)
                         existing = _count_existing(cur, rows)
+                        new = len(rows) - existing
                         _, closed = _upsert_board_jobs(
                             cur,
                             board_id,
@@ -2830,13 +3076,21 @@ def run(args: argparse.Namespace) -> int:
                             seen_at,
                             published_after,
                         )
-                new = len(rows) - existing
+                        if daily_import_run_id is not None:
+                            _record_daily_board_success(
+                                cur,
+                                daily_import_run_id,
+                                board_id,
+                                fetched=len(rows),
+                                inserted=new,
+                                updated=existing,
+                            )
                 total_jobs += len(rows)
                 total_new += new
                 total_updated += existing
                 total_closed += closed
                 print(
-                    f"{index}/{len(specs)} {ats}/{slug}: "
+                    f"{position}/{daily_board_count or len(specs)} {ats}/{slug}: "
                     f"{len(rows)} jobs ({new} new, {existing} updated, "
                     f"{skipped} before cutoff, {closed} closed)"
                 )
@@ -2852,20 +3106,60 @@ def run(args: argparse.Namespace) -> int:
                                 seen_at,
                                 published_after,
                             )
+                            if daily_import_run_id is not None:
+                                _record_daily_board_success(
+                                    cur,
+                                    daily_import_run_id,
+                                    board_id,
+                                    fetched=0,
+                                    inserted=0,
+                                    updated=0,
+                                    status="completed",
+                                )
                 print(
-                    f"{index}/{len(specs)} {ats}/{slug}: unchanged (304, ETag)"
+                    f"{position}/{daily_board_count or len(specs)} "
+                    f"{ats}/{slug}: unchanged (304, ETag)"
                 )
-            except job_boards.NotFound:
+            except job_boards.NotFound as exc:
                 failed += 1
-                print(f"{index}/{len(specs)} {ats}/{slug}: 404", file=sys.stderr)
+                if daily_import_run_id is not None:
+                    _record_daily_board_failure(
+                        conn, daily_import_run_id, tracked_board_id, exc
+                    )
+                print(
+                    f"{position}/{daily_board_count or len(specs)} "
+                    f"{ats}/{slug}: 404",
+                    file=sys.stderr,
+                )
             except Exception as exc:
                 failed += 1
+                if daily_import_run_id is not None:
+                    _record_daily_board_failure(
+                        conn, daily_import_run_id, tracked_board_id, exc
+                    )
                 print(
-                    f"{index}/{len(specs)} {ats}/{slug}: "
+                    f"{position}/{daily_board_count or len(specs)} {ats}/{slug}: "
                     f"{type(exc).__name__}: {exc}",
                     file=sys.stderr,
                 )
 
+        if daily_import_run_id is not None:
+            daily_counts = _daily_import_counts(conn, daily_import_run_id)
+            daily_failed_boards = daily_counts["failed"]
+            print(
+                "Daily import board accounting: "
+                f"{daily_board_count} total = {daily_counts['completed']} completed + "
+                f"{daily_counts['empty']} empty + {daily_failed_boards} failed + "
+                f"{daily_counts['pending']} pending"
+            )
+            if daily_failed_boards or daily_counts["pending"]:
+                print(
+                    f"Daily import run {daily_import_run_id} remains incomplete; "
+                    "rerun the same command to retry only failed/pending boards. "
+                    "Matching, recommendations, and reports were not started.",
+                    file=sys.stderr,
+                )
+                return 1
         if match_requested:
             match_stats = run_matching(
                 conn,
@@ -2937,6 +3231,23 @@ def run(args: argparse.Namespace) -> int:
             )
             failed += 1
 
+    if daily_import_run_id is not None:
+        if failed:
+            print(
+                f"Daily import run {daily_import_run_id} remains incomplete because "
+                "matching, recommendation, or report processing failed; rerun the "
+                "same command to continue.",
+                file=sys.stderr,
+            )
+        else:
+            _finish_daily_import_run(
+                dsn,
+                daily_import_run_id,
+                failed_boards=0,
+                downstream_failed=False,
+            )
+            print(f"Daily import run {daily_import_run_id}: completed")
+
     if specs:
         print(
             f"\nPostgreSQL import complete: {total_jobs} current jobs, "
@@ -2950,6 +3261,27 @@ def run(args: argparse.Namespace) -> int:
             f"{unchanged} unchanged, {failed} failed boards"
         )
     return 1 if failed else 0
+
+
+def run(args: argparse.Namespace) -> int:
+    """Serialize daily runs, while leaving explicitly scoped imports independent."""
+    if not getattr(args, "daily", False):
+        return _run(args)
+    dsn = os.environ.get("DATABASE_URL")
+    if not dsn:
+        raise SystemExit("DATABASE_URL is not set; use the Replit-managed database")
+    # A global lock is intentional: an all-ATS run overlaps every ATS-specific
+    # scope, so scope-specific locks would still allow the same boards to run twice.
+    with psycopg.connect(dsn, autocommit=True) as lock_conn:
+        acquired = lock_conn.execute(
+            "SELECT pg_try_advisory_lock(hashtext('daily-import'))"
+        ).fetchone()[0]
+        if not acquired:
+            raise SystemExit(
+                "another daily import is already running; wait for it to finish "
+                "or stop it before starting a new one"
+            )
+        return _run(args)
 
 
 def main() -> None:
@@ -3027,6 +3359,14 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--resume",
+        action="store_true",
+        help=(
+            "explicitly request daily resume behavior; --daily already resumes the "
+            "latest incomplete run with the same ATS scope and cutoff automatically"
+        ),
+    )
+    parser.add_argument(
         "--export-report",
         action="store_true",
         help="export the matched-role CSV and JSON report for Konstantin after matching",
@@ -3071,6 +3411,8 @@ def main() -> None:
             args.published_after = (
                 datetime.now(timezone.utc) - timedelta(days=7)
             ).date().isoformat()
+    elif args.resume:
+        parser.error("--resume requires --daily")
     elif args.ats is None:
         args.ats = "all"
     if args.limit is not None and args.limit < 1:

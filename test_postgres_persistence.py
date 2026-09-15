@@ -208,6 +208,221 @@ def test_completed_board_commits_before_later_import_is_interrupted():
             ).fetchall() == [("first.wd1/Careers:req-1",)]
 
 
+def test_daily_run_automatically_resumes_same_scope_and_cutoff():
+    with _temporary_postgres() as dsn:
+        args = argparse.Namespace(
+            ats="workday",
+            board=None,
+            boards_from=None,
+            daily=True,
+            daily_all_ats=False,
+            resume=False,
+            match=False,
+            recommend=False,
+            generate_profile=False,
+            export_report=False,
+            export_recommendations=False,
+            published_after="2026-08-26",
+            greenhouse_content=False,
+            workday_bruteforce=False,
+            recommend_batch_size=10,
+            user_email=None,
+        )
+        specs = [
+            ("workday", "first.wd1/Careers"),
+            ("workday", "second.wd1/Careers"),
+        ]
+        phase = "first"
+        calls: list[tuple[str, str]] = []
+
+        def fetch(ats, slug, *args, **kwargs):
+            calls.append((phase, slug))
+            if phase == "first" and slug.startswith("second."):
+                raise KeyboardInterrupt("simulated workspace restart")
+            if phase == "second" and slug.startswith("first."):
+                raise AssertionError("completed board must be skipped on resume")
+            row = _row(
+                f"{slug}:req-1",
+                ats="workday",
+                published_at=datetime(2026, 9, 1, tzinfo=timezone.utc),
+            )
+            return [row], 0
+
+        with patch.dict(persistence.os.environ, {"DATABASE_URL": dsn}), patch.object(
+            persistence, "_board_specs", return_value=specs
+        ), patch.object(persistence, "_fetch_normalized", side_effect=fetch):
+            try:
+                persistence.run(args)
+            except KeyboardInterrupt:
+                pass
+            else:
+                raise AssertionError("the first invocation must be interrupted")
+
+            phase = "second"
+            assert persistence.run(args) == 0
+
+        assert calls == [
+            ("first", "first.wd1/Careers"),
+            ("first", "second.wd1/Careers"),
+            ("second", "second.wd1/Careers"),
+        ]
+        with psycopg.connect(dsn) as observer:
+            run_rows = observer.execute(
+                """
+                SELECT status, ats_scope, published_after, board_count
+                FROM daily_import_runs
+                ORDER BY import_run_id
+                """
+            ).fetchall()
+            assert run_rows == [
+                (
+                    "completed",
+                    ["workday"],
+                    datetime(2026, 8, 26, tzinfo=timezone.utc),
+                    2,
+                )
+            ]
+            board_rows = observer.execute(
+                """
+                SELECT rb.position, rb.status, rb.attempts
+                FROM daily_import_run_boards AS rb
+                ORDER BY rb.position
+                """
+            ).fetchall()
+            assert board_rows == [(1, "completed", 1), (2, "completed", 1)]
+
+
+def test_daily_run_retries_only_failed_boards_before_completion():
+    with _temporary_postgres() as dsn:
+        args = argparse.Namespace(
+            ats="workday", board=None, boards_from=None, daily=True,
+            daily_all_ats=False, resume=False, match=False, recommend=False,
+            generate_profile=False, export_report=False,
+            export_recommendations=False, published_after="2026-08-26",
+            greenhouse_content=False, workday_bruteforce=False,
+            recommend_batch_size=10, user_email=None,
+        )
+        specs = [
+            ("workday", "first.wd1/Careers"),
+            ("workday", "flaky.wd1/Careers"),
+        ]
+        flaky_attempts = 0
+        calls: list[str] = []
+
+        def fetch(ats, slug, *args, **kwargs):
+            nonlocal flaky_attempts
+            calls.append(slug)
+            if slug.startswith("flaky.") and flaky_attempts == 0:
+                flaky_attempts += 1
+                raise TimeoutError("temporary failure")
+            return [
+                _row(
+                    f"{slug}:req-1",
+                    ats="workday",
+                    published_at=datetime(2026, 9, 1, tzinfo=timezone.utc),
+                )
+            ], 0
+
+        with patch.dict(persistence.os.environ, {"DATABASE_URL": dsn}), patch.object(
+            persistence, "_board_specs", return_value=specs
+        ), patch.object(persistence, "_fetch_normalized", side_effect=fetch):
+            assert persistence.run(args) == 1
+            assert persistence.run(args) == 0
+
+        assert calls == [
+            "first.wd1/Careers",
+            "flaky.wd1/Careers",
+            "flaky.wd1/Careers",
+        ]
+        with psycopg.connect(dsn) as observer:
+            assert observer.execute(
+                "SELECT status FROM daily_import_runs"
+            ).fetchone()[0] == "completed"
+            assert observer.execute(
+                """
+                SELECT attempts, status
+                FROM daily_import_run_boards AS rb
+                JOIN job_boards AS b ON b.board_id = rb.board_id
+                WHERE b.slug = 'flaky.wd1/Careers'
+                """
+            ).fetchone() == (2, "completed")
+
+
+def test_daily_run_refuses_a_concurrent_daily_process():
+    with _temporary_postgres() as dsn:
+        args = argparse.Namespace(daily=True)
+        with psycopg.connect(dsn, autocommit=True) as owner:
+            assert owner.execute(
+                "SELECT pg_try_advisory_lock(hashtext('daily-import'))"
+            ).fetchone()[0]
+            with patch.dict(persistence.os.environ, {"DATABASE_URL": dsn}):
+                try:
+                    persistence.run(args)
+                except SystemExit as exc:
+                    assert "another daily import is already running" in str(exc)
+                else:
+                    raise AssertionError("a concurrent daily run must be rejected")
+
+
+def test_daily_resume_keeps_snapshot_and_separates_scope_and_cutoff():
+    with _temporary_postgres() as dsn:
+        cutoff = datetime(2026, 8, 26, tzinfo=timezone.utc)
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    first_id = persistence._ensure_board(
+                        cur, "workday", "first.wd1/Careers", cutoff
+                    )
+                    second_id = persistence._ensure_board(
+                        cur, "workday", "second.wd1/Careers", cutoff
+                    )
+            run_id, items, resumed, count = persistence._prepare_daily_import_run(
+                conn, ["workday"], cutoff
+            )
+            assert resumed is False and count == 2
+            assert [item[1] for item in items] == [first_id, second_id]
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    persistence._record_daily_board_success(
+                        cur, run_id, first_id, fetched=0, inserted=0, updated=0
+                    )
+                    persistence._ensure_board(
+                        cur, "workday", "third.wd1/Careers", cutoff
+                    )
+                    cur.execute(
+                        "UPDATE job_boards SET active=FALSE WHERE board_id=%s",
+                        (second_id,),
+                    )
+
+            same_id, remaining, resumed, count = persistence._prepare_daily_import_run(
+                conn, ["workday"], cutoff
+            )
+            assert resumed is True and same_id == run_id and count == 2
+            assert [(item[1], item[3]) for item in remaining] == [
+                (second_id, "second.wd1/Careers")
+            ]
+
+            newer_id, newer_items, resumed, count = (
+                persistence._prepare_daily_import_run(
+                    conn,
+                    ["workday"],
+                    datetime(2026, 8, 27, tzinfo=timezone.utc),
+                )
+            )
+            assert resumed is False and newer_id != run_id and count == 2
+            assert [item[3] for item in newer_items] == [
+                "first.wd1/Careers",
+                "third.wd1/Careers",
+            ]
+
+            ashby_id, ashby_items, resumed, count = (
+                persistence._prepare_daily_import_run(conn, ["ashby"], cutoff)
+            )
+            assert resumed is False and ashby_id not in {run_id, newer_id}
+            assert count == 0 and ashby_items == []
+
+
 def test_adapter_mappings_are_offline_and_keep_descriptions():
     ashby_rows, skipped = _with_fetch(
         {
@@ -491,6 +706,8 @@ def test_postgres_schema_constraints_repeat_import_and_lifecycle():
                 "jobs",
                 "users",
                 "job_matches",
+                "daily_import_runs",
+                "daily_import_run_boards",
                 "profile_recommendation_runs",
                 "job_profile_reviews",
                 "user_job_state",
