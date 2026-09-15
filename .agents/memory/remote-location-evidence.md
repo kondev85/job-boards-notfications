@@ -25,3 +25,16 @@ preferences before scoring. Use description text only as a cautious fallback,
 prefer a concrete country/city match over broad Europe/EMEA wording, and never
 treat short ISO country codes as free-text country names unless they are
 country-labelled structured data.
+
+For office-based work, a user's base or relocation country is not enough to
+authorize every city in that country. Country preferences can authorize remote
+work from that country, while onsite and hybrid roles require an allowed primary
+city; secondary offices must not override the primary location.
+
+**Why:** The user needs Spain-wide remote eligibility without receiving office
+roles in Madrid, Barcelona, or other Spanish cities outside the approved
+relocation list.
+
+**How to apply:** Keep remote country matching separate from onsite/hybrid city
+matching. Treat unknown-city office roles conservatively until verified city
+evidence is available.

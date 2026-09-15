@@ -115,6 +115,11 @@ The matcher considers active users and jobs whose `closed_at` is NULL. It reject
 jobs whose workplace type is not allowed or whose location is incompatible with
 the user's concrete city/country preferences. Location is a hard filter and
 contributes no points, so a location-incompatible job cannot enter the ranking.
+Country preferences are sufficient for remote work: for example, `base_country =
+Spain` allows a remote Spain role. Onsite and hybrid roles are stricter and require
+their primary city to be one of the user's `base_city` or allowed
+`relocation_cities`; the country alone does not make every city eligible. A
+secondary office in an allowed city cannot override an ineligible primary city.
 For remote jobs, explicit provider address evidence and explicit location labels
 are preferred over text. A remote Europe/EU/EEA scope can match a user whose
 concrete work country is in that scope, while a specific different country such

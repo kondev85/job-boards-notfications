@@ -2050,7 +2050,7 @@ def _location_matches_city_scope(
     primary_address_text = _primary_address_text(job.get("address"))
     if any(_phrase_in_text(city, primary_address_text) for city in allowed_cities):
         return True
-    return not _location_city_groups(primary_address_text)
+    return False
 
 
 def _location_scope_groups(text: Any) -> tuple[set[str], bool, bool]:
