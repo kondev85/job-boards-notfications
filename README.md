@@ -125,8 +125,10 @@ has since taken the cached board list to **13,146**, which is the count the runt
 are measured over.
 
 SmartRecruiters is tracked separately because its public API was added after this
-historical measurement; the first recent discovery validated **144** public company
-identifiers.
+historical measurement. The imported public company registry contained **2,747** unique
+identifiers; checking the API with `releasedAfter=2026-08-01T00:00:00Z` found **832**
+companies with at least one qualifying posting, including Playtech. Those 832 identifiers
+are now in the local `boards.json` cache.
 
 A full `--refresh-boards --all` took **26 minutes** measured before connection pooling —
 most of it discovery, which later runs skip. The scrape half of that is now 41% faster
@@ -519,7 +521,7 @@ Measured funnels:
 ashby       191,117 archived URLs  ->  7,463 candidates  ->  3,617 live boards
 greenhouse  1,348,314              -> 14,430             ->  6,797 live boards
 lever       1,302,426              ->  8,681             ->  2,718 live boards
-smartrecruiters  recent Wayback + urlscan -> 144 validated boards (first recent run)
+smartrecruiters  external registry 2,747 -> 832 with a posting released since 2026-08-01
 ```
 
 Three details make that work:
