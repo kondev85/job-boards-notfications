@@ -385,10 +385,13 @@ def test_daily_resume_keeps_snapshot_and_separates_scope_and_cutoff():
                     second_id = persistence._ensure_board(
                         cur, "workday", "second.wd1/Careers", cutoff
                     )
-            run_id, items, resumed, count = persistence._prepare_daily_import_run(
+            run_id, items, resumed, count, effective_cutoff = (
+                persistence._prepare_daily_import_run(
                 conn, ["workday"], cutoff
+                )
             )
             assert resumed is False and count == 2
+            assert effective_cutoff == cutoff
             assert [item[1] for item in items] == [first_id, second_id]
             with conn.transaction():
                 with conn.cursor() as cur:
@@ -403,15 +406,16 @@ def test_daily_resume_keeps_snapshot_and_separates_scope_and_cutoff():
                         (second_id,),
                     )
 
-            same_id, remaining, resumed, count = persistence._prepare_daily_import_run(
-                conn, ["workday"], cutoff
+            same_id, remaining, resumed, count, effective_cutoff = (
+                persistence._prepare_daily_import_run(conn, ["workday"], cutoff)
             )
             assert resumed is True and same_id == run_id and count == 2
+            assert effective_cutoff == cutoff
             assert [(item[1], item[3]) for item in remaining] == [
                 (second_id, "second.wd1/Careers")
             ]
 
-            newer_id, newer_items, resumed, count = (
+            newer_id, newer_items, resumed, count, effective_cutoff = (
                 persistence._prepare_daily_import_run(
                     conn,
                     ["workday"],
@@ -419,16 +423,71 @@ def test_daily_resume_keeps_snapshot_and_separates_scope_and_cutoff():
                 )
             )
             assert resumed is False and newer_id != run_id and count == 2
+            assert effective_cutoff == datetime(2026, 8, 27, tzinfo=timezone.utc)
             assert [item[3] for item in newer_items] == [
                 "first.wd1/Careers",
                 "third.wd1/Careers",
             ]
 
-            ashby_id, ashby_items, resumed, count = (
+            ashby_id, ashby_items, resumed, count, effective_cutoff = (
                 persistence._prepare_daily_import_run(conn, ["ashby"], cutoff)
             )
             assert resumed is False and ashby_id not in {run_id, newer_id}
             assert count == 0 and ashby_items == []
+            assert effective_cutoff == cutoff
+
+
+def test_auto_resume_reclaims_expired_run_and_keeps_original_cutoff():
+    with _temporary_postgres() as dsn:
+        original_cutoff = datetime(2026, 8, 26, tzinfo=timezone.utc)
+        next_cutoff = datetime(2026, 8, 27, tzinfo=timezone.utc)
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    board_id = persistence._ensure_board(
+                        cur, "smartrecruiters", "acme", original_cutoff
+                    )
+
+            run_id, items, resumed, count, effective_cutoff = (
+                persistence._prepare_daily_import_run(
+                    conn,
+                    ["smartrecruiters"],
+                    original_cutoff,
+                    auto_resume=True,
+                    worker_id="old-worker",
+                )
+            )
+            assert not resumed and count == 1
+            assert items[0][1] == board_id
+            assert effective_cutoff == original_cutoff
+
+            with conn.transaction():
+                conn.execute(
+                    """
+                    UPDATE daily_import_runs
+                    SET lease_expires_at = now() - interval '1 minute'
+                    WHERE import_run_id = %s
+                    """,
+                    (run_id,),
+                )
+
+            resumed_id, pending, resumed, count, effective_cutoff = (
+                persistence._prepare_daily_import_run(
+                    conn,
+                    ["smartrecruiters"],
+                    next_cutoff,
+                    auto_resume=True,
+                    worker_id="new-worker",
+                )
+            )
+            assert resumed and resumed_id == run_id
+            assert count == 1 and len(pending) == 1
+            assert effective_cutoff == original_cutoff
+            assert conn.execute(
+                "SELECT worker_id FROM daily_import_runs WHERE import_run_id = %s",
+                (run_id,),
+            ).fetchone() == ("new-worker",)
 
 
 def test_adapter_mappings_are_offline_and_keep_descriptions():

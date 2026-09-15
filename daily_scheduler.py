@@ -6,12 +6,38 @@ Run this from a Replit Scheduled Deployment (normally every 24 hours):
 """
 from __future__ import annotations
 
+import argparse
 import os
+import sys
 from datetime import date, datetime, time, timedelta, timezone
 
 import psycopg
 
 import postgres_persistence as persistence
+
+
+def _daily_import_args(published_after: datetime) -> argparse.Namespace:
+    """Build the shared resumable importer configuration for scheduled runs."""
+    return argparse.Namespace(
+        ats="all",
+        board=None,
+        boards_from=None,
+        limit=None,
+        workday_bruteforce=False,
+        published_after=published_after.date().isoformat(),
+        greenhouse_content=False,
+        match=False,
+        recommend=False,
+        recommend_batch_size=persistence.RECOMMENDATION_BATCH_SIZE,
+        daily=True,
+        daily_all_ats=True,
+        resume=False,
+        auto_resume=True,
+        export_report=False,
+        export_recommendations=False,
+        generate_profile=False,
+        user_email=None,
+    )
 
 
 def main() -> None:
@@ -22,30 +48,16 @@ def main() -> None:
         if not conn.execute("SELECT pg_try_advisory_lock(hashtext(%s))",
                             ("northstar.daily_scheduler",)).fetchone()[0]:
             return
-        boards = conn.execute(
-            """SELECT b.board_id,b.ats,b.slug,c.display_name
-               FROM job_boards b JOIN companies c USING(company_id)
-               WHERE b.active IS TRUE AND b.closed_at IS NULL
-               ORDER BY b.board_id"""
-        ).fetchall()
-        board_failures: list[str] = []
-        for board_id, ats, slug, company in boards:
-            try:
-                rows, _ = persistence._fetch_normalized(
-                    ats, slug, published_after=published_after
-                )
-                now = datetime.now(timezone.utc)
-                with conn.transaction():
-                    persistence._upsert_board_jobs(
-                        conn, board_id, company, rows, now, close_missing=False
-                    )
-                    conn.execute(
-                        "UPDATE job_boards SET last_seen=%s,closed_at=NULL WHERE board_id=%s",
-                        (now, board_id),
-                    )
-            except Exception as exc:
-                board_failures.append(f"{ats}/{slug}: {type(exc).__name__}")
         conn.commit()
+        import_status = persistence.run(_daily_import_args(published_after))
+        if import_status:
+            print(
+                "Scheduled board import did not complete; skipping matching and "
+                "recommendations so the next scheduled invocation can resume it.",
+                file=sys.stderr,
+            )
+            return
+
         users = conn.execute(
             "SELECT user_id,profile_json,cv_text FROM users WHERE active IS TRUE ORDER BY user_id"
         ).fetchall()
@@ -101,11 +113,6 @@ def main() -> None:
                         f"recommendations failed: {type(exc).__name__}"
                     )
                 notes = []
-                if board_failures:
-                    notes.append(
-                        f"{len(board_failures)} board import(s) failed: "
-                        + ", ".join(board_failures[:10])
-                    )
                 if recommendation_failure:
                     notes.append(recommendation_failure)
                 note = " | ".join(notes) if notes else None

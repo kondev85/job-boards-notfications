@@ -214,12 +214,13 @@ upserts jobs by `(ats, external_id)`.
 
 The authenticated web app's **Launch search** action remains the manual,
 user-scoped search. For production automation, use a Replit Scheduled
-Deployment running `npm run daily` once every 24 hours (the command runs once
-and exits; it does not install a local cron). It imports active boards once,
-then processes each eligible user independently and records a scheduled
-`search_runs` row. The default inclusive overlap is two days, configurable with
-`DAILY_SEARCH_OVERLAP_DAYS`, so a missed invocation is recovered while the
-database uniqueness rules deduplicate jobs.
+Deployment running `npm run daily` (the command runs once and exits; it does not
+install a local cron). The scheduler uses the same PostgreSQL resumable importer
+as the CLI, including per-board checkpoints, heartbeats, expired-lease recovery,
+and retry backoff. It then processes each eligible user independently and
+records a scheduled `search_runs` row. The default inclusive overlap is two
+days, configurable with `DAILY_SEARCH_OVERLAP_DAYS`, so a missed invocation is
+recovered while the database uniqueness rules deduplicate jobs.
 
 Run the lightweight daily scan, deterministic matching, Gemini recommendations,
 and both Konstantin reports as one command:

@@ -38,6 +38,7 @@ import hashlib
 import json
 import os
 import re
+import socket
 import sys
 import unicodedata
 from datetime import datetime, timedelta, timezone
@@ -53,6 +54,11 @@ import job_boards
 
 
 ATS_NAMES = tuple(job_boards.SOURCES)
+DAILY_IMPORT_LEASE_SECONDS = 15 * 60
+
+
+def _daily_worker_id() -> str:
+    return f"{socket.gethostname()}:{os.getpid()}"
 
 KONSTANTIN_EMAIL = "infobettor@gmail.com"
 KONSTANTIN_PROFILE_TEXT = "Professional profile"
@@ -302,13 +308,22 @@ CREATE TABLE IF NOT EXISTS daily_import_runs (
                                )),
     started_at                 TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at                 TIMESTAMPTZ NOT NULL DEFAULT now(),
+    heartbeat_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
+    lease_expires_at           TIMESTAMPTZ,
+    worker_id                  TEXT,
     completed_at               TIMESTAMPTZ,
     board_count                INTEGER NOT NULL,
     failed_board_count         INTEGER NOT NULL DEFAULT 0
 );
 
+ALTER TABLE daily_import_runs
+    ADD COLUMN IF NOT EXISTS heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE daily_import_runs
+    ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ;
+ALTER TABLE daily_import_runs
+    ADD COLUMN IF NOT EXISTS worker_id TEXT;
 CREATE INDEX IF NOT EXISTS daily_import_runs_resume_idx
-    ON daily_import_runs (published_after, updated_at DESC)
+    ON daily_import_runs (ats_scope, started_at)
     WHERE status = 'running';
 
 CREATE TABLE IF NOT EXISTS daily_import_run_boards (
@@ -324,11 +339,14 @@ CREATE TABLE IF NOT EXISTS daily_import_run_boards (
     jobs_updated   INTEGER NOT NULL DEFAULT 0,
     error_type     TEXT,
     error_message  TEXT,
+    retry_after    TIMESTAMPTZ,
     completed_at   TIMESTAMPTZ,
     PRIMARY KEY (import_run_id, board_id),
     UNIQUE (import_run_id, position)
 );
 
+ALTER TABLE daily_import_run_boards
+    ADD COLUMN IF NOT EXISTS retry_after TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS daily_import_run_boards_status_idx
     ON daily_import_run_boards (import_run_id, status, position);
 CREATE INDEX IF NOT EXISTS companies_category_idx
@@ -783,29 +801,63 @@ def _prepare_daily_import_run(
     conn: psycopg.Connection,
     ats_scope: list[str],
     published_after: datetime,
-) -> tuple[int, list[tuple[int, int, str, str]], bool, int]:
-    """Resume a matching incomplete run or snapshot a new ordered board list."""
+    *,
+    auto_resume: bool = False,
+    worker_id: str | None = None,
+) -> tuple[int, list[tuple[int, int, str, str]], bool, int, datetime]:
+    """Resume an incomplete run or snapshot a new ordered board list.
+
+    Manual runs retain exact scope/cutoff matching. Automatic scheduled runs
+    reclaim the oldest expired lease for the scope and continue using that
+    run's original cutoff, preserving the run's reproducibility.
+    """
     canonical_scope = sorted(set(ats_scope))
+    lease_seconds = DAILY_IMPORT_LEASE_SECONDS
     with conn.transaction():
-        existing = conn.execute(
-            """
-            SELECT import_run_id, board_count
-            FROM daily_import_runs
-            WHERE status = 'running'
-              AND ats_scope = %s
-              AND published_after = %s
-            ORDER BY started_at DESC
-            LIMIT 1
-            """,
-            (canonical_scope, published_after),
-        ).fetchone()
+        if auto_resume:
+            existing = conn.execute(
+                """
+                SELECT import_run_id, board_count, published_after
+                FROM daily_import_runs
+                WHERE status = 'running'
+                  AND ats_scope = %s
+                  AND (
+                      lease_expires_at IS NULL
+                      OR lease_expires_at < now()
+                  )
+                ORDER BY started_at ASC
+                LIMIT 1
+                FOR UPDATE SKIP LOCKED
+                """,
+                (canonical_scope,),
+            ).fetchone()
+        else:
+            existing = conn.execute(
+                """
+                SELECT import_run_id, board_count, published_after
+                FROM daily_import_runs
+                WHERE status = 'running'
+                  AND ats_scope = %s
+                  AND published_after = %s
+                ORDER BY started_at DESC
+                LIMIT 1
+                FOR UPDATE
+                """,
+                (canonical_scope, published_after),
+            ).fetchone()
         resumed = existing is not None
         if existing:
-            import_run_id, board_count = existing
+            import_run_id, board_count, effective_published_after = existing
             conn.execute(
-                "UPDATE daily_import_runs SET updated_at = now() "
-                "WHERE import_run_id = %s",
-                (import_run_id,),
+                """
+                UPDATE daily_import_runs
+                SET updated_at = now(),
+                    heartbeat_at = now(),
+                    lease_expires_at = now() + make_interval(secs => %s),
+                    worker_id = %s
+                WHERE import_run_id = %s
+                """,
+                (lease_seconds, worker_id, import_run_id),
             )
         else:
             board_rows = conn.execute(
@@ -823,12 +875,23 @@ def _prepare_daily_import_run(
             import_run_id = conn.execute(
                 """
                 INSERT INTO daily_import_runs (
-                    ats_scope, published_after, board_count
-                ) VALUES (%s, %s, %s)
+                    ats_scope, published_after, board_count,
+                    heartbeat_at, lease_expires_at, worker_id
+                ) VALUES (
+                    %s, %s, %s, now(),
+                    now() + make_interval(secs => %s), %s
+                )
                 RETURNING import_run_id
                 """,
-                (canonical_scope, published_after, board_count),
+                (
+                    canonical_scope,
+                    published_after,
+                    board_count,
+                    lease_seconds,
+                    worker_id,
+                ),
             ).fetchone()[0]
+            effective_published_after = published_after
             with conn.cursor() as cur:
                 cur.executemany(
                     """
@@ -848,12 +911,22 @@ def _prepare_daily_import_run(
         JOIN job_boards AS b ON b.board_id = rb.board_id
         WHERE rb.import_run_id = %s
           AND rb.status IN ('pending', 'failed')
+          AND (
+              rb.retry_after IS NULL
+              OR rb.retry_after <= now()
+          )
         ORDER BY rb.position
         """,
         (import_run_id,),
     ).fetchall()
     conn.commit()
-    return import_run_id, pending, resumed, board_count
+    return (
+        import_run_id,
+        pending,
+        resumed,
+        board_count,
+        effective_published_after,
+    )
 
 
 def _record_daily_board_success(
@@ -865,6 +938,7 @@ def _record_daily_board_success(
     inserted: int,
     updated: int,
     status: str | None = None,
+    worker_id: str | None = None,
 ) -> None:
     cur.execute(
         """
@@ -876,6 +950,7 @@ def _record_daily_board_success(
             jobs_updated = %s,
             error_type = NULL,
             error_message = NULL,
+            retry_after = NULL,
             completed_at = now()
         WHERE import_run_id = %s AND board_id = %s
         """,
@@ -888,6 +963,17 @@ def _record_daily_board_success(
             board_id,
         ),
     )
+    cur.execute(
+        """
+        UPDATE daily_import_runs
+        SET updated_at = now(),
+            heartbeat_at = now(),
+            lease_expires_at = now() + make_interval(secs => %s),
+            worker_id = COALESCE(%s, worker_id)
+        WHERE import_run_id = %s
+        """,
+        (DAILY_IMPORT_LEASE_SECONDS, worker_id, import_run_id),
+    )
 
 
 def _record_daily_board_failure(
@@ -895,6 +981,9 @@ def _record_daily_board_failure(
     import_run_id: int,
     board_id: int,
     exc: BaseException,
+    *,
+    worker_id: str | None = None,
+    automatic_retry: bool = False,
 ) -> None:
     with conn.transaction():
         conn.execute(
@@ -904,15 +993,36 @@ def _record_daily_board_failure(
                 attempts = attempts + 1,
                 error_type = %s,
                 error_message = %s,
+                retry_after = CASE
+                    WHEN %s THEN now() + make_interval(
+                        secs => LEAST(
+                            3600,
+                            60 * power(2, LEAST(attempts + 1, 6))
+                        )
+                    )
+                    ELSE NULL
+                END,
                 completed_at = now()
             WHERE import_run_id = %s AND board_id = %s
             """,
-            (type(exc).__name__, str(exc)[:4000], import_run_id, board_id),
+            (
+                type(exc).__name__,
+                str(exc)[:4000],
+                automatic_retry,
+                import_run_id,
+                board_id,
+            ),
         )
         conn.execute(
-            "UPDATE daily_import_runs SET updated_at = now() "
-            "WHERE import_run_id = %s",
-            (import_run_id,),
+            """
+            UPDATE daily_import_runs
+            SET updated_at = now(),
+                heartbeat_at = now(),
+                lease_expires_at = now() + make_interval(secs => %s),
+                worker_id = COALESCE(%s, worker_id)
+            WHERE import_run_id = %s
+            """,
+            (DAILY_IMPORT_LEASE_SECONDS, worker_id, import_run_id),
         )
 
 
@@ -963,6 +1073,9 @@ def _finish_daily_import_run(
                 SET status = %s,
                     failed_board_count = %s,
                     updated_at = now(),
+                    heartbeat_at = now(),
+                    lease_expires_at = NULL,
+                    worker_id = NULL,
                     completed_at = now()
                 WHERE import_run_id = %s
                 """,
@@ -2969,6 +3082,7 @@ def _run(args: argparse.Namespace) -> int:
     daily_import_run_id: int | None = None
     daily_failed_boards = 0
     daily_board_count = 0
+    worker_id = _daily_worker_id()
 
     with psycopg.connect(dsn) as conn:
         conn.execute(SCHEMA_SQL)
@@ -2999,7 +3113,15 @@ def _run(args: argparse.Namespace) -> int:
                 daily_scan_items,
                 resumed,
                 daily_board_count,
-            ) = _prepare_daily_import_run(conn, selected_ats, published_after)
+                effective_published_after,
+            ) = _prepare_daily_import_run(
+                conn,
+                selected_ats,
+                published_after,
+                auto_resume=getattr(args, "auto_resume", False),
+                worker_id=worker_id,
+            )
+            published_after = effective_published_after
             completed_before = daily_board_count - len(daily_scan_items)
             action = "resuming" if resumed else "started"
             print(
@@ -3093,6 +3215,7 @@ def _run(args: argparse.Namespace) -> int:
                                 fetched=len(rows),
                                 inserted=new,
                                 updated=existing,
+                                worker_id=worker_id,
                             )
                 total_jobs += len(rows)
                 total_new += new
@@ -3124,6 +3247,7 @@ def _run(args: argparse.Namespace) -> int:
                                     inserted=0,
                                     updated=0,
                                     status="completed",
+                                    worker_id=worker_id,
                                 )
                 print(
                     f"{position}/{daily_board_count or len(specs)} "
@@ -3133,7 +3257,12 @@ def _run(args: argparse.Namespace) -> int:
                 failed += 1
                 if daily_import_run_id is not None:
                     _record_daily_board_failure(
-                        conn, daily_import_run_id, tracked_board_id, exc
+                        conn,
+                        daily_import_run_id,
+                        tracked_board_id,
+                        exc,
+                        worker_id=worker_id,
+                        automatic_retry=getattr(args, "auto_resume", False),
                     )
                 print(
                     f"{position}/{daily_board_count or len(specs)} "
@@ -3144,7 +3273,12 @@ def _run(args: argparse.Namespace) -> int:
                 failed += 1
                 if daily_import_run_id is not None:
                     _record_daily_board_failure(
-                        conn, daily_import_run_id, tracked_board_id, exc
+                        conn,
+                        daily_import_run_id,
+                        tracked_board_id,
+                        exc,
+                        worker_id=worker_id,
+                        automatic_retry=getattr(args, "auto_resume", False),
                     )
                 print(
                     f"{position}/{daily_board_count or len(specs)} {ats}/{slug}: "
@@ -3397,6 +3531,14 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--auto-resume",
+        action="store_true",
+        help=(
+            "in scheduled daily mode, reclaim the oldest expired incomplete run "
+            "for the ATS scope before creating a new run"
+        ),
+    )
+    parser.add_argument(
         "--export-report",
         action="store_true",
         help="export the matched-role CSV and JSON report for Konstantin after matching",
@@ -3443,6 +3585,8 @@ def main() -> None:
             ).date().isoformat()
     elif args.resume:
         parser.error("--resume requires --daily")
+    elif args.auto_resume:
+        parser.error("--auto-resume requires --daily")
     elif args.ats is None:
         args.ats = "all"
     if args.limit is not None and args.limit < 1:

@@ -76,6 +76,14 @@ recommendations, and reports continue and the run finishes as `completed_with_er
 boards before downstream work starts. Only one daily import can run at a time, including
 when one command selects all ATSes and another selects a subset.
 
+The scheduled runner (`python3 daily_scheduler.py`) uses the same importer with automatic
+lease recovery. It claims the oldest expired incomplete run for the full ATS scope before
+creating a new run, keeps the original cutoff for that resumed run, and retries failed
+boards with exponential delays up to one hour. A killed process therefore leaves completed
+board checkpoints intact; the next scheduled invocation continues the same run. The
+importer heartbeat is refreshed after every board, and the PostgreSQL advisory lock
+prevents overlapping scheduled invocations.
+
 That is the whole thing. You end up with:
 
 | file | what it is |
