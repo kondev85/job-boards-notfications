@@ -2755,6 +2755,9 @@ def run(args: argparse.Namespace) -> int:
                     f"Daily board registry: {len(specs)} active PostgreSQL boards "
                     f"({', '.join(f'{ats}={sum(item[0] == ats for item in specs)}' for ats in selected_ats)})"
                 )
+            # The registry SELECTs above start an implicit transaction. End it
+            # before importing so each board write below can commit independently.
+            conn.commit()
         if profile_requested:
             try:
                 generated = generate_profile_for_user(
@@ -2792,6 +2795,11 @@ def run(args: argparse.Namespace) -> int:
                     if ats == "workday"
                     else None
                 )
+                # Psycopg starts an implicit transaction for the state reads above.
+                # Without ending it here, conn.transaction() creates only a
+                # savepoint and every board remains uncommitted until the full run
+                # reaches matching/recommendations.
+                conn.commit()
                 rows, skipped = _fetch_normalized(
                     ats,
                     slug,
@@ -2837,7 +2845,6 @@ def run(args: argparse.Namespace) -> int:
                 with conn.transaction():
                     with conn.cursor() as cur:
                         seen_at = datetime.now(timezone.utc)
-                        board_id, _, _ = _board_fetch_state(conn, ats, slug)
                         if board_id is not None:
                             _mark_board_unchanged(
                                 cur,

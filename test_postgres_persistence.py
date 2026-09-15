@@ -14,6 +14,7 @@ database or requires network access.
 from __future__ import annotations
 
 import getpass
+import argparse
 import json
 import shutil
 import socket
@@ -150,6 +151,61 @@ def _temporary_postgres() -> Iterator[str]:
                     stderr=subprocess.PIPE,
                     text=True,
                 )
+
+
+def test_completed_board_commits_before_later_import_is_interrupted():
+    with _temporary_postgres() as dsn:
+        args = argparse.Namespace(
+            ats="workday",
+            board=None,
+            boards_from=None,
+            daily=False,
+            match=False,
+            recommend=False,
+            generate_profile=False,
+            export_report=False,
+            export_recommendations=False,
+            published_after=None,
+            greenhouse_content=False,
+            workday_bruteforce=False,
+            recommend_batch_size=10,
+            user_email=None,
+        )
+        first_row = _row(
+            "first.wd1/Careers:req-1",
+            ats="workday",
+            published_at=datetime(2026, 9, 1, tzinfo=timezone.utc),
+        )
+        fetch_results = iter([
+            ([first_row], 0),
+            KeyboardInterrupt("simulated interruption"),
+        ])
+
+        def fetch(*args, **kwargs):
+            result = next(fetch_results)
+            if isinstance(result, BaseException):
+                raise result
+            return result
+
+        with patch.dict(persistence.os.environ, {"DATABASE_URL": dsn}), patch.object(
+            persistence,
+            "_board_specs",
+            return_value=[
+                ("workday", "first.wd1/Careers"),
+                ("workday", "second.wd1/Careers"),
+            ],
+        ), patch.object(persistence, "_fetch_normalized", side_effect=fetch):
+            try:
+                persistence.run(args)
+            except KeyboardInterrupt:
+                pass
+            else:
+                raise AssertionError("the simulated second-board interruption must escape")
+
+        with psycopg.connect(dsn) as observer:
+            assert observer.execute(
+                "SELECT external_id FROM jobs ORDER BY external_id"
+            ).fetchall() == [("first.wd1/Careers:req-1",)]
 
 
 def test_adapter_mappings_are_offline_and_keep_descriptions():

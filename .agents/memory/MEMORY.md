@@ -1,6 +1,7 @@
 - [Wayback discovery transport](wayback-discovery-transport.md) — Ashby archive discovery may stall over HTTP in this environment; HTTPS can return the same CDX data successfully.
 - [Greenhouse discovery quirks](greenhouse-discovery-quirks.md) — HEAD validation can pass while content GETs return 406 after a large discovery sweep.
 - [PostgreSQL test harness](postgres-test-harness.md) — temporary local clusters need an explicit writable Unix socket directory.
+- [Per-board import commits](per-board-import-commits.md) — end implicit read transactions before board writes or nested savepoints hide and lose partial-run progress.
 - [Profile-aware role ranking](profile-aware-role-ranking.md) — role-specific functional depth should outweigh ambiguous top-level title seniority.
 - [Remote location evidence](remote-location-evidence.md) — prefer structured provider geography; treat unknown remote scope conservatively per user preference.
 - [Gemini recommendation sizing](gemini-recommendation-sizing.md) — use deterministic gating before Gemini; cap deep reviews and keep finalist comparisons to five jobs.
