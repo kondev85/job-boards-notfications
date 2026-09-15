@@ -1844,14 +1844,18 @@ _LOCATION_COUNTRY_ALIASES = {
     "sg": {"sg", "singapore"},
 }
 _LOCATION_CITY_COUNTRIES = {
+    "estepona": "es",
+    "marbella": "es",
     "madrid": "es",
     "malaga": "es",
     "barcelona": "es",
     "valencia": "es",
     "seville": "es",
+    "sevilla": "es",
     "lisbon": "pt",
     "porto": "pt",
     "faro": "pt",
+    "gibraltar": "gi",
     "paris": "fr",
     "berlin": "de",
     "hamburg": "de",
@@ -2000,6 +2004,55 @@ def _concrete_location_preferences(user: dict[str, Any]) -> list[str]:
     return values
 
 
+def _city_location_preferences(user: dict[str, Any]) -> list[str]:
+    """Return cities where the user can work from an office."""
+    values: list[str] = []
+    values.extend(_preference_values(user.get("base_city")))
+    if user.get("willing_to_relocate"):
+        values.extend(_preference_values(user.get("relocation_cities")))
+    return values
+
+
+def _location_city_groups(text: Any) -> set[str]:
+    normalized = _normalized_search_text(text)
+    return {
+        country
+        for city, country in _LOCATION_CITY_COUNTRIES.items()
+        if _phrase_in_text(city, normalized)
+    }
+
+
+def _primary_address_text(value: Any) -> str:
+    """Read only a provider's primary address when secondary offices exist."""
+    if isinstance(value, dict) and isinstance(value.get("primary"), dict):
+        return _address_text(value["primary"])
+    return _address_text(value)
+
+
+def _location_matches_city_scope(
+    job: dict[str, Any],
+    user: dict[str, Any],
+) -> bool:
+    """Require an onsite or hybrid role to name an allowed primary city."""
+    allowed_cities = _city_location_preferences(user)
+    if not allowed_cities:
+        return False
+
+    location_text = _normalized_search_text(job.get("location_raw"))
+    if any(_phrase_in_text(city, location_text) for city in allowed_cities):
+        return True
+    if _location_city_groups(location_text):
+        return False
+
+    # Some normalized provider payloads keep the primary city only in address.
+    # Do not inspect secondary offices when the primary location is already
+    # concrete; an allowed secondary office must not override it.
+    primary_address_text = _primary_address_text(job.get("address"))
+    if any(_phrase_in_text(city, primary_address_text) for city in allowed_cities):
+        return True
+    return not _location_city_groups(primary_address_text)
+
+
 def _location_scope_groups(text: Any) -> tuple[set[str], bool, bool]:
     """Return location groups and distinguish Europe from broad EMEA scope."""
     normalized = _normalized_search_text(text)
@@ -2022,10 +2075,17 @@ def _location_matches_concrete_scope(
     job: dict[str, Any],
     user: dict[str, Any],
 ) -> bool:
-    """Require a remote role to permit work from a concrete user location."""
+    """Require a role to permit work from a concrete user location.
+
+    Country preferences are sufficient for remote roles, where Spain means
+    remote work from anywhere in Spain. Office-based roles are stricter: their
+    primary city must be one of the user's allowed cities.
+    """
     concrete_preferences = _concrete_location_preferences(user)
     if not concrete_preferences:
         return True
+    if _workplace_kind(job) in {"onsite", "hybrid"}:
+        return _location_matches_city_scope(job, user)
 
     allowed_groups: set[str] = set()
     allowed_terms: set[str] = set()

@@ -1691,6 +1691,77 @@ def test_concrete_location_scope_rejects_other_european_countries():
     ) is False
 
 
+def test_country_preference_allows_remote_spain_but_not_other_office_cities():
+    user = {
+        "base_city": "Estepona",
+        "base_country": "Spain",
+        "remote_allowed": True,
+        "onsite_allowed": True,
+        "hybrid_allowed": True,
+        "willing_to_relocate": True,
+        "relocation_cities": ["Marbella", "Málaga", "Gibraltar"],
+        "relocation_countries": ["Gibraltar"],
+    }
+
+    def job(location, workplace_type, is_remote=False, address=None):
+        return {
+            "location_raw": location,
+            "is_remote": is_remote,
+            "workplace_type": workplace_type,
+            "address": address,
+            "description_text": None,
+        }
+
+    # Spain is a country-level preference for remote work.
+    assert persistence._location_matches(
+        job("Remote - Spain", "remote", is_remote=True), user
+    ) is True
+    assert persistence._location_matches(
+        job("Madrid, Spain", "remote", is_remote=True), user
+    ) is True
+
+    # Office-based work requires the explicitly allowed city, not merely Spain.
+    assert persistence._location_matches(
+        job("Estepona, Spain", "onsite"), user
+    ) is True
+    assert persistence._location_matches(
+        job("Marbella, Spain", "hybrid"), user
+    ) is True
+    assert persistence._location_matches(
+        job("Málaga, Spain", "onsite"), user
+    ) is True
+    assert persistence._location_matches(
+        job("Madrid, Spain", "onsite"), user
+    ) is False
+    assert persistence._location_matches(
+        job("Barcelona, Spain", "hybrid"), user
+    ) is False
+    assert persistence._location_matches(
+        job("Sevilla, Spain", "onsite"), user
+    ) is False
+
+    # Explicit Portugal is not permitted by this user's current preferences.
+    assert persistence._location_matches(
+        job("Lisbon, Portugal", "hybrid"), user
+    ) is False
+    assert persistence._location_matches(
+        job("Remote - Portugal", "remote", is_remote=True), user
+    ) is False
+
+    # A secondary allowed office must not override an ineligible primary city.
+    assert persistence._location_matches(
+        job(
+            "Barcelona, Spain",
+            "hybrid",
+            address={
+                "primary": {"city": "Barcelona", "country": "Spain"},
+                "secondaryLocations": [{"location": "Marbella, Spain"}],
+            },
+        ),
+        user,
+    ) is False
+
+
 def test_location_filter_rejects_stale_match_rows():
     with _temporary_postgres() as dsn:
         with psycopg.connect(dsn) as conn:
