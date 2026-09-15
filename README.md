@@ -136,6 +136,17 @@ listed posting on or after 2026-08-01 and were added, bringing the Ashby cache t
 boards. The other candidates were not added because they had no qualifying job or returned
 a clean 404.
 
+The Greenhouse attachment contained **6,031** identifiers. The cache had no Greenhouse
+entries, so all were checked; **4,066** had a `first_published` timestamp on or after
+2026-08-01 and were added. The remaining candidates had no qualifying posting or returned
+a clean invalid-board response.
+
+The Workday attachment contained **3,530** identifiers. After converting the CSV's
+`tenant/board` form to the API's `tenant.wdN/board` form, **2,222** candidates were
+confirmed with a clearly recent posting and added, bringing the Workday cache to **4,111**.
+Ambiguous `30+ days ago` labels, invalid boards, access-denied boards, and still
+unverified rate-limited boards were not added.
+
 A full `--refresh-boards --all` took **26 minutes** measured before connection pooling —
 most of it discovery, which later runs skip. The scrape half of that is now 41% faster
 (see [Performance](#performance)); the discovery half has not been re-timed since. Note the board/company gap: ~2,000 boards are real customers with nothing
