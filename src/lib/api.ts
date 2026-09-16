@@ -1,6 +1,6 @@
 export type JobStatus = "new" | "saved" | "applied" | "rejected";
 export interface Me { user_id:number; name:string; email:string; target_roles:string[]; target_industries:string[]; min_match_score:number|null }
-export interface MatchedJob { job_id:number; ats:string; external_id:string; company:string; title:string; location_raw:string; workplace_type:string; published_at:string; job_url:string; score:number; status:JobStatus; viewed:boolean; viewed_at?:string|null }
+export interface MatchedJob { job_id:number; ats:string; external_id:string; company:string; title:string; location_raw:string; workplace_type:string; published_at:string; job_url:string; score:number|null; matched:boolean; status:JobStatus; viewed:boolean; viewed_at?:string|null }
 export interface SearchRun { run_id:number; progress:number; status:"queued"|"running"|"completed"|"completed_with_warnings"|"failed"; cutoff:string; run_type:"manual"|"scheduled"; error?:string }
 export interface Profile {
   [key:string]: any;
@@ -32,7 +32,7 @@ export const getMe = () => request<Me>("/api/me");
 export const getProfileSummary = () => request<Record<string,unknown>>("/api/profile/summary");
 export const updateProfile = (profile:Partial<Profile>) => request<Profile>("/api/profile",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(profile)});
 export const getBoardOptions = () => request<unknown[]>("/api/boards/options");
-export const getMatchedJobs = (query:Record<string,string|number>={}) => request<{rows:MatchedJob[];total:number;page:number;limit:number}>(`/api/jobs/matched?${new URLSearchParams(Object.entries(query).map(([k,v])=>[k,String(v)]))}`);
+export const getMatchedJobs = (query:Record<string,string|number>={}) => request<{rows:MatchedJob[];total:number;page:number;limit:number;scope:"matched"|"all"}>(`/api/jobs/matched?${new URLSearchParams(Object.entries(query).map(([k,v])=>[k,String(v)]))}`);
 export const getLatestRecommendations = () => request<Recommendation[]>("/api/recommendations/latest");
 export const updateJobStatus = (jobId:number,status:JobStatus) => request<{status:JobStatus}>(`/api/jobs/${jobId}/status`, { method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({status}) });
 export const markJobViewed = (jobId:number) => request<{viewed:boolean;viewedAt:string}>(`/api/jobs/${jobId}/viewed`, { method:"POST" });

@@ -328,8 +328,22 @@ app.get("/api/boards/search", async (req, res) => {
   res.json(r.rows);
 });
 app.get("/api/jobs/matched", async (req: AuthedRequest, res) => {
-  const q = req.query as Record<string, string>; const limit = Math.min(Number(q.limit || 25), 100); const page = Math.max(Number(q.page || 1), 1);
-  const where = ["jm.user_id=$1", "j.closed_at IS NULL", "EXISTS (SELECT 1 FROM job_boards ab WHERE ab.board_id=j.board_id AND ab.active IS TRUE)"]; const params: unknown[] = [uid(req)];
+  const q = req.query as Record<string, string>;
+  const requestedScope = q.scope || "matched";
+  if (!["matched", "all"].includes(requestedScope)) {
+    return res.status(400).json({ error: "scope must be matched or all" });
+  }
+  const scope = requestedScope as "matched" | "all";
+  const parsedLimit = Number.parseInt(q.limit || "25", 10);
+  const parsedPage = Number.parseInt(q.page || "1", 10);
+  const limit = Number.isFinite(parsedLimit) && parsedLimit > 0
+    ? Math.min(parsedLimit, 100)
+    : 25;
+  const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const matchJoin = scope === "matched"
+    ? "JOIN job_matches jm ON jm.job_id=j.job_id AND jm.user_id=$1 AND jm.match_status='matched'"
+    : "LEFT JOIN job_matches jm ON jm.job_id=j.job_id AND jm.user_id=$1 AND jm.match_status='matched'";
+  const where = ["j.closed_at IS NULL", "EXISTS (SELECT 1 FROM job_boards ab WHERE ab.board_id=j.board_id AND ab.active IS TRUE)"]; const params: unknown[] = [uid(req)];
   const add = (sql: string, value: unknown) => { params.push(value); where.push(sql.replace("?", `$${params.length}`)); };
   if (q.search) {
     params.push(`%${q.search}%`);
@@ -344,10 +358,10 @@ app.get("/api/jobs/matched", async (req: AuthedRequest, res) => {
   if (q.status) { params.push(q.status); where.push(`COALESCE(s.status,'new')=$${params.length}`); }
   if (date) add("j.published_at>=?", date);
   const sort = ["date", "published_at"].includes(q.sort) ? "j.published_at DESC NULLS LAST" : q.sort === "title" ? "j.title ASC" : "jm.score DESC NULLS LAST";
-  const count = await pool.query(`SELECT count(*) FROM job_matches jm JOIN jobs j USING(job_id) LEFT JOIN user_job_state s ON s.user_id=jm.user_id AND s.job_id=j.job_id WHERE ${where.join(" AND ")}`, params);
+  const count = await pool.query(`SELECT count(*) FROM jobs j ${matchJoin} LEFT JOIN user_job_state s ON s.user_id=$1 AND s.job_id=j.job_id WHERE ${where.join(" AND ")}`, params);
   params.push(limit, (page - 1) * limit);
-  const rows = await pool.query(`SELECT jm.match_id,j.job_id,j.ats,j.external_id,j.company,j.title,j.location_raw,j.workplace_type,j.published_at,j.job_url,jm.score,COALESCE(s.status,'new') status,s.viewed_at,(s.viewed_at IS NOT NULL) AS viewed FROM job_matches jm JOIN jobs j USING(job_id) LEFT JOIN user_job_state s ON s.user_id=jm.user_id AND s.job_id=j.job_id WHERE ${where.join(" AND ")} ORDER BY ${sort} LIMIT $${params.length-1} OFFSET $${params.length}`, params);
-  res.json({ rows: rows.rows, total: Number(count.rows[0].count), page, limit });
+  const rows = await pool.query(`SELECT jm.match_id,j.job_id,j.ats,j.external_id,j.company,j.title,j.location_raw,j.workplace_type,j.published_at,j.job_url,jm.score,(jm.job_id IS NOT NULL) AS matched,COALESCE(s.status,'new') status,s.viewed_at,(s.viewed_at IS NOT NULL) AS viewed FROM jobs j ${matchJoin} LEFT JOIN user_job_state s ON s.user_id=$1 AND s.job_id=j.job_id WHERE ${where.join(" AND ")} ORDER BY ${sort} LIMIT $${params.length-1} OFFSET $${params.length}`, params);
+  res.json({ rows: rows.rows, total: Number(count.rows[0].count), page, limit, scope });
 });
 app.get("/api/recommendations/latest", async (req: AuthedRequest, res) => {
   const r = await pool.query("SELECT r.*,j.title,j.company,j.job_url,j.ats,j.external_id,j.location_raw,j.workplace_type,j.published_at,j.description_text FROM job_profile_reviews r JOIN jobs j USING(job_id) JOIN job_boards b ON b.board_id=j.board_id AND b.active IS TRUE WHERE r.user_id=$1 AND r.final_fit_score >= $2 AND r.recommendation_run_id=(SELECT run_id FROM profile_recommendation_runs WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1) ORDER BY r.final_rank NULLS LAST", [uid(req), pinnedRecommendationFloor]); res.json(r.rows);
