@@ -9,9 +9,10 @@ import { parse } from "csv-parse/sync";
 import { spawn } from "node:child_process";
 import { createServer as createHttpServer } from "node:http";
 import path from "node:path";
-import { readFileSync } from "node:fs";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const SEARCH_WORKER_STALE_MS = Number(process.env.SEARCH_WORKER_STALE_MS || 10 * 60 * 1000);
+const DAILY_IMPORT_STALE_MS = Number(process.env.DAILY_IMPORT_STALE_MS || 15 * 60 * 1000);
 const pinnedRecommendationFloor = Math.max(
   0,
   Math.min(100, Number(process.env.PINNED_RECOMMENDATION_FLOOR || 70)),
@@ -21,9 +22,233 @@ app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 app.use(cors({ credentials: true, origin: true }));
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
+
+type HealthStatus = "ok" | "degraded" | "down";
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isStale(value: unknown, thresholdMs: number): boolean {
+  if (!value) return true;
+  const timestamp = new Date(String(value)).getTime();
+  return !Number.isFinite(timestamp) || Date.now() - timestamp > thresholdMs;
+}
+
+async function healthSnapshot() {
+  const checkedAt = new Date().toISOString();
+  const snapshot: {
+    status: HealthStatus;
+    checked_at: string;
+    web: { status: "up" };
+    database: {
+      status: HealthStatus;
+      schema: "ready" | "not_ready" | "unknown";
+      latency_ms?: number;
+      missing_tables?: string[];
+      error?: string;
+    };
+    daily_import: {
+      status: string;
+      latest_run_id: number | null;
+      latest_status: string | null;
+      latest_started_at: unknown;
+      latest_updated_at: unknown;
+      latest_completed_at: unknown;
+      heartbeat_at: unknown;
+      board_count: number | null;
+      failed_board_count: number | null;
+      last_successful_at: unknown;
+    };
+    search_worker: {
+      status: "idle" | "running" | "stale" | "never" | "unknown";
+      active_runs: number;
+      stale_runs: number;
+      latest_run_id: number | null;
+      latest_status: string | null;
+      latest_updated_at: unknown;
+      last_successful_at: unknown;
+    };
+    last_successful_job_at: unknown;
+  } = {
+    status: "degraded",
+    checked_at: checkedAt,
+    web: { status: "up" },
+    database: { status: "down", schema: "unknown" },
+    daily_import: {
+      status: "unknown",
+      latest_run_id: null,
+      latest_status: null,
+      latest_started_at: null,
+      latest_updated_at: null,
+      latest_completed_at: null,
+      heartbeat_at: null,
+      board_count: null,
+      failed_board_count: null,
+      last_successful_at: null,
+    },
+    search_worker: {
+      status: "unknown",
+      active_runs: 0,
+      stale_runs: 0,
+      latest_run_id: null,
+      latest_status: null,
+      latest_updated_at: null,
+      last_successful_at: null,
+    },
+    last_successful_job_at: null,
+  };
+
+  const databaseStartedAt = Date.now();
+  try {
+    await pool.query("SELECT 1");
+    snapshot.database.status = "ok";
+    snapshot.database.latency_ms = Date.now() - databaseStartedAt;
+  } catch (error) {
+    snapshot.database.error = errorMessage(error);
+    console.error("[health] database check failed:", snapshot.database.error);
+    return snapshot;
+  }
+
+  try {
+    const schema = await pool.query<{ table_name: string | null }>(
+      `SELECT table_name
+       FROM unnest(ARRAY[
+         'users',
+         'search_runs',
+         'daily_import_runs',
+         'daily_import_run_boards'
+       ]::text[]) AS required(table_name)
+       WHERE to_regclass('public.' || table_name) IS NULL`,
+    );
+    const missingTables = schema.rows.map((row) => row.table_name).filter(Boolean) as string[];
+    if (missingTables.length) {
+      snapshot.database.status = "degraded";
+      snapshot.database.schema = "not_ready";
+      snapshot.database.missing_tables = missingTables;
+      console.error("[health] database schema is not ready; missing:", missingTables.join(", "));
+      return snapshot;
+    }
+    snapshot.database.schema = "ready";
+
+    const [dailyLatest, dailySuccess, searchLatest, searchState, searchSuccess] = await Promise.all([
+      pool.query(
+        `SELECT import_run_id, status, started_at, updated_at, completed_at,
+                heartbeat_at, board_count, failed_board_count
+         FROM daily_import_runs
+         ORDER BY started_at DESC
+         LIMIT 1`,
+      ),
+      pool.query(
+        `SELECT max(completed_at) AS last_successful_at
+         FROM daily_import_runs
+         WHERE status IN ('completed', 'completed_with_errors')`,
+      ),
+      pool.query(
+        `SELECT run_id, status, progress, error, created_at, updated_at
+         FROM search_runs
+         ORDER BY created_at DESC
+         LIMIT 1`,
+      ),
+      pool.query(
+        `SELECT
+           count(*) FILTER (WHERE status IN ('queued', 'running'))::int AS active_runs,
+           count(*) FILTER (
+             WHERE status IN ('queued', 'running')
+               AND updated_at < now() - make_interval(secs => $1)
+           )::int AS stale_runs
+         FROM search_runs`,
+        [SEARCH_WORKER_STALE_MS / 1000],
+      ),
+      pool.query(
+        `SELECT max(updated_at) AS last_successful_at
+         FROM search_runs
+         WHERE status IN ('completed', 'completed_with_warnings')`,
+      ),
+    ]);
+
+    const latestDaily = dailyLatest.rows[0];
+    const latestSearch = searchLatest.rows[0];
+    const searchCounts = searchState.rows[0] || { active_runs: 0, stale_runs: 0 };
+    const dailyStatus = latestDaily?.status || null;
+    const dailyStale = dailyStatus === "running" && isStale(latestDaily.heartbeat_at, DAILY_IMPORT_STALE_MS);
+    const activeRuns = Number(searchCounts.active_runs || 0);
+    const staleRuns = Number(searchCounts.stale_runs || 0);
+
+    snapshot.daily_import = {
+      status: dailyStale ? "stale" : dailyStatus || "never",
+      latest_run_id: latestDaily ? Number(latestDaily.import_run_id) : null,
+      latest_status: dailyStatus,
+      latest_started_at: latestDaily?.started_at || null,
+      latest_updated_at: latestDaily?.updated_at || null,
+      latest_completed_at: latestDaily?.completed_at || null,
+      heartbeat_at: latestDaily?.heartbeat_at || null,
+      board_count: latestDaily ? Number(latestDaily.board_count) : null,
+      failed_board_count: latestDaily ? Number(latestDaily.failed_board_count) : null,
+      last_successful_at: dailySuccess.rows[0]?.last_successful_at || null,
+    };
+    snapshot.search_worker = {
+      status:
+        activeRuns === 0
+          ? latestSearch
+            ? "idle"
+            : "never"
+          : staleRuns > 0
+            ? "stale"
+            : "running",
+      active_runs: activeRuns,
+      stale_runs: staleRuns,
+      latest_run_id: latestSearch ? Number(latestSearch.run_id) : null,
+      latest_status: latestSearch?.status || null,
+      latest_updated_at: latestSearch?.updated_at || null,
+      last_successful_at: searchSuccess.rows[0]?.last_successful_at || null,
+    };
+
+    const successfulJobTimestamps = [
+      snapshot.daily_import.last_successful_at,
+      snapshot.search_worker.last_successful_at,
+    ]
+      .filter(Boolean)
+      .map((value) => new Date(String(value)).getTime())
+      .filter(Number.isFinite);
+    snapshot.last_successful_job_at = successfulJobTimestamps.length
+      ? new Date(Math.max(...successfulJobTimestamps)).toISOString()
+      : null;
+    snapshot.status =
+      snapshot.database.status === "ok" &&
+      !dailyStale &&
+      staleRuns === 0
+        ? "ok"
+        : "degraded";
+  } catch (error) {
+    snapshot.database.status = "degraded";
+    snapshot.database.schema = "not_ready";
+    snapshot.database.error = errorMessage(error);
+    console.error("[health] operational status query failed:", snapshot.database.error);
+  }
+
+  return snapshot;
+}
+
+async function sendHealth(_req: Request, res: Response) {
+  const snapshot = await healthSnapshot();
+  res.status(snapshot.status === "ok" ? 200 : 503).json(snapshot);
+}
+
+// Liveness remains available even when PostgreSQL is unavailable. Readiness and
+// the detailed operational view report the dependency state separately.
+app.get("/healthz", (_req, res) => {
+  res.status(200).json({ status: "ok", checked_at: new Date().toISOString(), web: { status: "up" } });
+});
+app.get("/readyz", sendHealth);
+app.get("/api/health", sendHealth);
+
 app.use(clerkMiddleware((req) => ({
   publishableKey: publishableKeyFromHost(getClerkProxyHost(req) ?? "", process.env.CLERK_PUBLISHABLE_KEY),
 })));
+pool.on("error", (error) => {
+  console.error("[database] idle client error:", errorMessage(error));
+});
 type AuthedRequest = Request & { localUserId?: number };
 async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
   const auth = getAuth(req);
@@ -176,9 +401,10 @@ app.post("/api/import", upload.single("file"), async (req: AuthedRequest, res) =
 app.get("/api/export.csv", async (req: AuthedRequest, res) => { const r = await pool.query("SELECT j.ats,j.external_id,j.company,j.title,j.location_raw,j.job_url,jm.score,COALESCE(s.status,'new') status FROM job_matches jm JOIN jobs j USING(job_id) JOIN job_boards b ON b.board_id=j.board_id AND b.active IS TRUE LEFT JOIN user_job_state s ON s.user_id=jm.user_id AND s.job_id=j.job_id WHERE jm.user_id=$1 ORDER BY jm.score DESC", [uid(req)]); const header = "ats,external_id,company,title,location,job_url,score,status\n"; const csv = header + r.rows.map(x => Object.values(x).map(v => `"${String(v ?? "").replaceAll('"','""')}"`).join(",")).join("\n"); res.type("text/csv").attachment("matched-jobs.csv").send(csv); });
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => res.status(500).json({ error: err.message }));
 async function start() {
-  // The CLI remains the canonical owner of the large base schema; this small
-  // migration is safe to apply repeatedly when the web service starts.
-  await pool.query(readFileSync(path.resolve("migrations/001_authenticated_app.sql"), "utf8"));
+  console.log(
+    "[startup] Database migrations are not run by the web process; "
+    + "apply schema changes through the project migration/publish flow.",
+  );
   const httpServer = createHttpServer(app);
   if (process.env.NODE_ENV === "production") {
     app.use(express.static(path.resolve("dist")));

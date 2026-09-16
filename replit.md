@@ -70,6 +70,29 @@ users
 job_matches
 ```
 
+### Schema changes and web readiness
+
+The web process does not apply SQL migrations during startup. The SQL in
+`migrations/` is the schema source of truth: development changes are applied by
+the project's post-merge setup, and production changes are applied when the
+project is republished through Replit's database migration flow. This keeps a
+temporary database outage or a migration failure from preventing the web
+process from opening its port.
+
+The service exposes:
+
+```text
+/healthz       web liveness; returns 200 when the process is running
+/readyz        database and job readiness; returns 503 when degraded
+/api/health    same detailed readiness payload
+```
+
+The detailed payload includes database reachability and schema readiness, the
+latest daily import and heartbeat, search-worker run state, and the timestamp
+of the last successful job. A `stale` worker/import means the database still
+shows an active run whose progress timestamp has exceeded the configured
+health threshold.
+
 The initial company row is source-scoped to each `(ats, slug)` board. The
 persistence layer does not automatically merge companies across ATS platforms.
 Jobs are unique by `(ats, external_id)`. Ashby and Lever descriptions are stored
