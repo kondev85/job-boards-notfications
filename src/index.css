@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+.scope-toggle{display:inline-flex;gap:2px;padding:3px;background:#e6eee3;border-radius:7px}.scope-toggle button{border:0;background:transparent;color:var(--muted);padding:5px 8px;border-radius:5px;font-size:11px;font-weight:700;cursor:pointer}.scope-toggle button.active{background:var(--surface);color:var(--teal-dark);box-shadow:0 1px 3px rgba(34,62,51,.12)}.read-only-status{display:inline-block;border-radius:20px;padding:5px 8px;font-size:11px;font-weight:700;background:#edf1eb;color:var(--muted)}
 :root{
   --ink:#19282a; --muted:#6c7b79; --line:#d9e3dc; --paper:#f4f7f1; --surface:#fbfcf8;
   --teal:#126b63; --teal-dark:#0d4d49; --lime:#c6dd63; --amber:#e4a34c; --coral:#d97862;
