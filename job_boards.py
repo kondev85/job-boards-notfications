@@ -495,6 +495,7 @@ def _smartrecruiters_career_page_exists(identifier: str) -> bool:
 def fetch_smartrecruiters_jobs(
     identifier: str,
     published_after: datetime | None = None,
+    detail_concurrency: int | None = None,
 ) -> list[dict]:
     """Fetch active public postings and enrich them with job details."""
     limit = 100
@@ -537,7 +538,9 @@ def fetch_smartrecruiters_jobs(
         merged.update(detail)
         return merged
 
-    with ThreadPoolExecutor(max_workers=_SMARTRECRUITERS_DETAIL_CONCURRENCY) as pool:
+    with ThreadPoolExecutor(
+        max_workers=detail_concurrency or _SMARTRECRUITERS_DETAIL_CONCURRENCY
+    ) as pool:
         return list(pool.map(enrich, postings))
 
 
@@ -828,6 +831,7 @@ def fetch_workday_jobs(
     identifier: str,
     published_after: datetime | None = None,
     cached_jobs: dict[str, dict] | None = None,
+    detail_concurrency: int | None = None,
 ) -> list[dict]:
     """Fetch paginated Workday postings, stopping at a known publication cutoff."""
     url = workday_board_url(identifier)
@@ -875,7 +879,7 @@ def fetch_workday_jobs(
                     detail_items.append(item)
         if detail_items:
             with ThreadPoolExecutor(
-                max_workers=_WORKDAY_DETAIL_CONCURRENCY
+                max_workers=detail_concurrency or _WORKDAY_DETAIL_CONCURRENCY
             ) as pool:
                 list(pool.map(_enrich_workday_item, detail_items))
         all_jobs.extend(page_items)

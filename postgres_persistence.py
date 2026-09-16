@@ -41,6 +41,8 @@ import re
 import socket
 import sys
 import unicodedata
+from collections import deque
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime, timedelta, timezone
 from html import unescape
 from pathlib import Path
@@ -55,6 +57,12 @@ import job_boards
 
 ATS_NAMES = tuple(job_boards.SOURCES)
 DAILY_IMPORT_LEASE_SECONDS = 15 * 60
+DAILY_BOARD_WORKERS = 4
+DAILY_DETAIL_CONCURRENCY = 4
+DAILY_ATS_CONCURRENCY = {
+    "workday": 1,
+    "smartrecruiters": 1,
+}
 
 
 def _daily_worker_id() -> str:
@@ -1083,6 +1091,340 @@ def _finish_daily_import_run(
             )
 
 
+def _daily_board_limit(ats: str) -> int:
+    return DAILY_ATS_CONCURRENCY.get(ats, DAILY_BOARD_WORKERS)
+
+
+def _heartbeat_daily_import(
+    conn: psycopg.Connection,
+    import_run_id: int,
+    worker_id: str,
+) -> None:
+    with conn.transaction():
+        conn.execute(
+            """
+            UPDATE daily_import_runs
+            SET updated_at = now(),
+                heartbeat_at = now(),
+                lease_expires_at = now() + make_interval(secs => %s),
+                worker_id = %s
+            WHERE import_run_id = %s
+              AND status = 'running'
+            """,
+            (DAILY_IMPORT_LEASE_SECONDS, worker_id, import_run_id),
+        )
+
+
+def _import_daily_board(
+    dsn: str,
+    item: tuple[int, int, str, str],
+    daily_board_count: int,
+    import_run_id: int,
+    published_after: datetime | None,
+    greenhouse_content: bool,
+    worker_id: str,
+    automatic_retry: bool,
+) -> dict[str, int]:
+    """Fetch and commit one daily board using a connection owned by this worker."""
+    position, tracked_board_id, ats, slug = item
+    board_id: int | None = tracked_board_id or None
+    connection: psycopg.Connection | None = None
+    board_worker_id = f"{worker_id}:board-{tracked_board_id}"
+
+    try:
+        connection = psycopg.connect(dsn)
+        print(
+            f"{position}/{daily_board_count} {ats}/{slug}: fetching...",
+            flush=True,
+        )
+        board_id, stored_etag, cached_published_after = _board_fetch_state(
+            connection, ats, slug
+        )
+        conditional_etag = (
+            stored_etag
+            if stored_etag
+            and _etag_covers(cached_published_after, published_after)
+            else None
+        )
+        fetch_meta: dict[str, Any] = {}
+        cached_workday_jobs = (
+            _cached_workday_jobs(connection, board_id, slug)
+            if ats == "workday"
+            else None
+        )
+        # End the implicit read transaction before fetching and before the write
+        # transaction. This keeps the board commit independently visible.
+        connection.commit()
+        rows, skipped = _fetch_normalized(
+            ats,
+            slug,
+            published_after,
+            greenhouse_content=greenhouse_content,
+            etag=conditional_etag,
+            meta=fetch_meta,
+            cached_workday_jobs=cached_workday_jobs,
+            detail_concurrency=DAILY_DETAIL_CONCURRENCY,
+        )
+        with connection.transaction():
+            with connection.cursor() as cur:
+                seen_at = datetime.now(timezone.utc)
+                board_id = _ensure_board(cur, ats, slug, seen_at)
+                company = _board_company_name(cur, board_id)
+                existing = _count_existing(cur, rows)
+                new = len(rows) - existing
+                _, closed = _upsert_board_jobs(
+                    cur,
+                    board_id,
+                    company,
+                    rows,
+                    seen_at,
+                    close_missing=published_after is None,
+                )
+                _save_board_etag(
+                    cur,
+                    board_id,
+                    fetch_meta.get("etag"),
+                    seen_at,
+                    published_after,
+                )
+                _record_daily_board_success(
+                    cur,
+                    import_run_id,
+                    board_id,
+                    fetched=len(rows),
+                    inserted=new,
+                    updated=existing,
+                    worker_id=board_worker_id,
+                )
+        print(
+            f"{position}/{daily_board_count} {ats}/{slug}: "
+            f"{len(rows)} jobs ({new} new, {existing} updated, "
+            f"{skipped} before cutoff, {closed} closed)",
+            flush=True,
+        )
+        return {
+            "jobs": len(rows),
+            "new": new,
+            "updated": existing,
+            "closed": closed,
+            "unchanged": 0,
+            "failed": 0,
+        }
+    except job_boards.NotModified:
+        if connection is not None:
+            connection.rollback()
+            try:
+                with connection.transaction():
+                    with connection.cursor() as cur:
+                        seen_at = datetime.now(timezone.utc)
+                        if board_id is not None:
+                            _mark_board_unchanged(
+                                cur,
+                                board_id,
+                                seen_at,
+                                published_after,
+                            )
+                            _record_daily_board_success(
+                                cur,
+                                import_run_id,
+                                board_id,
+                                fetched=0,
+                                inserted=0,
+                                updated=0,
+                                status="completed",
+                                worker_id=board_worker_id,
+                            )
+            except Exception:
+                raise
+        print(
+            f"{position}/{daily_board_count} {ats}/{slug}: unchanged (304, ETag)",
+            flush=True,
+        )
+        return {
+            "jobs": 0,
+            "new": 0,
+            "updated": 0,
+            "closed": 0,
+            "unchanged": 1,
+            "failed": 0,
+        }
+    except job_boards.NotFound as exc:
+        if connection is not None:
+            connection.rollback()
+        if connection is not None:
+            _record_daily_board_failure(
+                connection,
+                import_run_id,
+                board_id or tracked_board_id,
+                exc,
+                worker_id=board_worker_id,
+                automatic_retry=automatic_retry,
+            )
+        print(
+            f"{position}/{daily_board_count} {ats}/{slug}: 404",
+            file=sys.stderr,
+            flush=True,
+        )
+        return {
+            "jobs": 0,
+            "new": 0,
+            "updated": 0,
+            "closed": 0,
+            "unchanged": 0,
+            "failed": 1,
+        }
+    except Exception as exc:
+        if connection is not None:
+            connection.rollback()
+            try:
+                _record_daily_board_failure(
+                    connection,
+                    import_run_id,
+                    board_id or tracked_board_id,
+                    exc,
+                    worker_id=board_worker_id,
+                    automatic_retry=automatic_retry,
+                )
+            except Exception as record_exc:
+                print(
+                    f"{position}/{daily_board_count} {ats}/{slug}: "
+                    f"could not record failure ({record_exc})",
+                    file=sys.stderr,
+                    flush=True,
+                )
+        print(
+            f"{position}/{daily_board_count} {ats}/{slug}: "
+            f"{type(exc).__name__}: {exc}",
+            file=sys.stderr,
+            flush=True,
+        )
+        return {
+            "jobs": 0,
+            "new": 0,
+            "updated": 0,
+            "closed": 0,
+            "unchanged": 0,
+            "failed": 1,
+        }
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+def _run_daily_boards_parallel(
+    dsn: str,
+    daily_scan_items: list[tuple[int, int, str, str]],
+    daily_board_count: int,
+    import_run_id: int,
+    published_after: datetime | None,
+    greenhouse_content: bool,
+    worker_id: str,
+    automatic_retry: bool,
+) -> dict[str, int]:
+    """Run the immutable daily snapshot with bounded, fair board concurrency."""
+    queues: dict[str, deque[tuple[int, int, str, str]]] = {}
+    ats_order: list[str] = []
+    for item in daily_scan_items:
+        ats = item[2]
+        if ats not in queues:
+            queues[ats] = deque()
+            ats_order.append(ats)
+        queues[ats].append(item)
+
+    active: dict[Any, tuple[str, tuple[int, int, str, str]]] = {}
+    active_by_ats: dict[str, int] = {ats: 0 for ats in ats_order}
+    round_robin_index = 0
+    stats = {
+        "jobs": 0,
+        "new": 0,
+        "updated": 0,
+        "closed": 0,
+        "unchanged": 0,
+        "failed": 0,
+    }
+    print(
+        f"Daily import parallelism: {DAILY_BOARD_WORKERS} total board workers; "
+        "Workday=1, SmartRecruiters=1; detail concurrency=4",
+        flush=True,
+    )
+
+    with psycopg.connect(dsn) as heartbeat_connection:
+        with ThreadPoolExecutor(max_workers=DAILY_BOARD_WORKERS) as pool:
+            while active or any(queues[ats] for ats in ats_order):
+                while len(active) < DAILY_BOARD_WORKERS and ats_order:
+                    selected: tuple[str, tuple[int, int, str, str]] | None = None
+                    for offset in range(len(ats_order)):
+                        index = (round_robin_index + offset) % len(ats_order)
+                        ats = ats_order[index]
+                        if (
+                            queues[ats]
+                            and active_by_ats[ats] < _daily_board_limit(ats)
+                        ):
+                            selected = (ats, queues[ats].popleft())
+                            round_robin_index = (index + 1) % len(ats_order)
+                            break
+                    if selected is None:
+                        break
+                    ats, item = selected
+                    active_by_ats[ats] += 1
+                    future = pool.submit(
+                        _import_daily_board,
+                        dsn,
+                        item,
+                        daily_board_count,
+                        import_run_id,
+                        published_after,
+                        greenhouse_content,
+                        worker_id,
+                        automatic_retry,
+                    )
+                    active[future] = (ats, item)
+
+                if not active:
+                    # This should only be possible if the scheduler configuration is
+                    # invalid; avoid spinning forever if it ever happens.
+                    raise RuntimeError(
+                        "daily board scheduler could not dispatch pending work"
+                    )
+
+                completed, _ = wait(
+                    active,
+                    timeout=30,
+                    return_when=FIRST_COMPLETED,
+                )
+                if not completed:
+                    _heartbeat_daily_import(
+                        heartbeat_connection,
+                        import_run_id,
+                        worker_id,
+                    )
+                    continue
+                for future in completed:
+                    ats, item = active.pop(future)
+                    active_by_ats[ats] -= 1
+                    try:
+                        result = future.result()
+                    except Exception as exc:
+                        position, _, failed_ats, slug = item
+                        print(
+                            f"{position}/{daily_board_count} {failed_ats}/{slug}: "
+                            f"worker failure {type(exc).__name__}: {exc}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                        result = {
+                            "jobs": 0,
+                            "new": 0,
+                            "updated": 0,
+                            "closed": 0,
+                            "unchanged": 0,
+                            "failed": 1,
+                        }
+                    for key in stats:
+                        stats[key] += result[key]
+    return stats
+
+
 def _ats_list(value: str) -> list[str]:
     ats_list = list(ATS_NAMES) if value == "all" else [
         item.strip() for item in value.split(",") if item.strip()
@@ -1103,6 +1445,7 @@ def _fetch_normalized(
     etag: str | None = None,
     meta: dict[str, Any] | None = None,
     cached_workday_jobs: dict[str, dict[str, Any]] | None = None,
+    detail_concurrency: int | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
     source = job_boards.SOURCES[ats]
     if source.get("fetch_jobs"):
@@ -1111,6 +1454,13 @@ def _fetch_normalized(
                 slug,
                 published_after,
                 cached_workday_jobs,
+                detail_concurrency,
+            )
+        elif ats == "smartrecruiters" and detail_concurrency is not None:
+            raw_jobs = source["fetch_jobs"](
+                slug,
+                published_after,
+                detail_concurrency,
             )
         else:
             raw_jobs = source["fetch_jobs"](slug, published_after)
@@ -3209,6 +3559,27 @@ def _run(args: argparse.Namespace) -> int:
                 f"for {args.user_email}"
             )
             return 0
+
+        if daily_import_run_id is not None:
+            parallel_stats = _run_daily_boards_parallel(
+                dsn,
+                daily_scan_items,
+                daily_board_count,
+                daily_import_run_id,
+                published_after,
+                greenhouse_content,
+                worker_id,
+                getattr(args, "auto_resume", False),
+            )
+            total_jobs += parallel_stats["jobs"]
+            total_new += parallel_stats["new"]
+            total_updated += parallel_stats["updated"]
+            total_closed += parallel_stats["closed"]
+            unchanged += parallel_stats["unchanged"]
+            failed += parallel_stats["failed"]
+            # The parallel worker has consumed the entire immutable snapshot.
+            # Leave the existing loop for explicitly scoped, non-daily imports.
+            daily_scan_items = []
 
         for position, tracked_board_id, ats, slug in daily_scan_items:
             try:
