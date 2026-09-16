@@ -372,6 +372,27 @@ def test_daily_failure_threshold_is_strictly_below_one_percent():
     assert not persistence._daily_failures_allow_downstream(10, 999)
 
 
+def test_daily_workday_workers_promote_after_other_ats_drain():
+    queues = {
+        "ashby": [("ashby", "board")],
+        "workday": [("workday", "one"), ("workday", "two")],
+    }
+    active = {"ashby": 0, "workday": 1}
+
+    assert persistence._daily_workday_limit(queues, active) == 1
+
+    queues["ashby"].clear()
+    active["ashby"] = 1
+    assert persistence._daily_workday_limit(queues, active) == 1
+
+    active["ashby"] = 0
+    assert persistence._daily_workday_limit(queues, active) == 2
+    assert persistence._daily_workday_limit(
+        {"workday": queues["workday"]},
+        {"workday": 0},
+    ) == 1
+
+
 def test_daily_resume_keeps_snapshot_and_separates_scope_and_cutoff():
     with _temporary_postgres() as dsn:
         cutoff = datetime(2026, 8, 26, tzinfo=timezone.utc)

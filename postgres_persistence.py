@@ -1091,7 +1091,29 @@ def _finish_daily_import_run(
             )
 
 
-def _daily_board_limit(ats: str) -> int:
+def _daily_workday_limit(
+    queues: dict[str, deque[tuple[int, int, str, str]]],
+    active_by_ats: dict[str, int],
+) -> int:
+    """Promote Workday only after included non-Workday work has finished."""
+    if not any(ats != "workday" for ats in queues):
+        return 1
+    other_queued = any(
+        queue for ats, queue in queues.items() if ats != "workday"
+    )
+    other_active = any(
+        count for ats, count in active_by_ats.items() if ats != "workday"
+    )
+    return 1 if other_queued or other_active else 2
+
+
+def _daily_board_limit(
+    ats: str,
+    queues: dict[str, deque[tuple[int, int, str, str]]] | None = None,
+    active_by_ats: dict[str, int] | None = None,
+) -> int:
+    if ats == "workday" and queues is not None and active_by_ats is not None:
+        return _daily_workday_limit(queues, active_by_ats)
     return DAILY_ATS_CONCURRENCY.get(ats, DAILY_BOARD_WORKERS)
 
 
@@ -1334,6 +1356,7 @@ def _run_daily_boards_parallel(
     active: dict[Any, tuple[str, tuple[int, int, str, str]]] = {}
     active_by_ats: dict[str, int] = {ats: 0 for ats in ats_order}
     round_robin_index = 0
+    last_workday_limit: int | None = None
     stats = {
         "jobs": 0,
         "new": 0,
@@ -1356,9 +1379,27 @@ def _run_daily_boards_parallel(
                     for offset in range(len(ats_order)):
                         index = (round_robin_index + offset) % len(ats_order)
                         ats = ats_order[index]
+                        workday_limit = _daily_workday_limit(
+                            queues,
+                            active_by_ats,
+                        )
+                        if workday_limit != last_workday_limit:
+                            print(
+                                f"Daily Workday board limit: {workday_limit} "
+                                "(promoted after non-Workday work drains)"
+                                if workday_limit == 2
+                                else "Daily Workday board limit: 1",
+                                flush=True,
+                            )
+                            last_workday_limit = workday_limit
                         if (
                             queues[ats]
-                            and active_by_ats[ats] < _daily_board_limit(ats)
+                            and active_by_ats[ats]
+                            < (
+                                workday_limit
+                                if ats == "workday"
+                                else _daily_board_limit(ats)
+                            )
                         ):
                             selected = (ats, queues[ats].popleft())
                             round_robin_index = (index + 1) % len(ats_order)
