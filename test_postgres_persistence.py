@@ -874,13 +874,33 @@ def test_postgres_schema_constraints_repeat_import_and_lifecycle():
             assert {"preferred_regions", "excluded_regions"}.isdisjoint(user_columns)
 
             # Schema initialization can run repeatedly without creating a
-            # second seed profile or changing the job import rows.
+            # second seed profile, changing job import rows, or overwriting
+            # preferences that the user changed after the initial seed.
+            conn.execute(
+                """
+                UPDATE users
+                SET relocation_cities = ARRAY['Barcelona']::TEXT[],
+                    relocation_countries = ARRAY['Spain']::TEXT[],
+                    remote_allowed = FALSE,
+                    updated_at = now()
+                WHERE email = %s
+                """,
+                (persistence.KONSTANTIN_EMAIL,),
+            )
             conn.execute(persistence.SCHEMA_SQL)
             assert conn.execute(
                 "SELECT COUNT(*) FROM users WHERE email = %s",
                 (persistence.KONSTANTIN_EMAIL,),
             ).fetchone()[0] == 1
             assert conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 2
+            assert conn.execute(
+                """
+                SELECT relocation_cities, relocation_countries, remote_allowed
+                FROM users
+                WHERE email = %s
+                """,
+                (persistence.KONSTANTIN_EMAIL,),
+            ).fetchone() == (["Barcelona"], ["Spain"], False)
 
             indexes = {
                 row[0]

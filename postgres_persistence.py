@@ -600,31 +600,12 @@ INSERT INTO users (
     {_sql_text_array(KONSTANTIN_RELOCATION_COUNTRIES)},
     55
 )
-ON CONFLICT (email) DO UPDATE SET
-    name = EXCLUDED.name,
-    active = EXCLUDED.active,
-    is_default = EXCLUDED.is_default,
-    target_roles = EXCLUDED.target_roles,
-    target_industries = EXCLUDED.target_industries,
-    base_city = EXCLUDED.base_city,
-    base_country = EXCLUDED.base_country,
-    base_latitude = EXCLUDED.base_latitude,
-    base_longitude = EXCLUDED.base_longitude,
-    remote_allowed = EXCLUDED.remote_allowed,
-    onsite_allowed = EXCLUDED.onsite_allowed,
-    onsite_max_distance_km = EXCLUDED.onsite_max_distance_km,
-    hybrid_allowed = EXCLUDED.hybrid_allowed,
-    hybrid_max_distance_km = EXCLUDED.hybrid_max_distance_km,
-    willing_to_relocate = EXCLUDED.willing_to_relocate,
-    relocation_cities = EXCLUDED.relocation_cities,
-    relocation_countries = EXCLUDED.relocation_countries,
-    min_match_score = EXCLUDED.min_match_score,
-    updated_at = now();
+ON CONFLICT (email) DO NOTHING;
 """
 
 # Keep one public schema command for callers and tests. The seed is deliberately
-# part of initialization so any importer run repairs the canonical seed without
-# duplicating it or touching existing jobs/matches.
+# part of initialization so a fresh database gets the canonical profile, while
+# existing users' preferences remain authoritative on later importer runs.
 SCHEMA_SQL = SCHEMA_DDL_SQL + KONSTANTIN_SEED_SQL
 
 
