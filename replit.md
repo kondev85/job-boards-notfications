@@ -249,11 +249,56 @@ It never requests Greenhouse
 export use the same inclusive cutoff, so the reports contain only roles in that
 window.
 
-Daily board failures are tolerated only when they are strictly below 1% of the
-run's original board snapshot. In that case downstream matching, recommendations,
-and reports continue and the run finishes as `completed_with_errors`. At 1% or
-more, the run remains `running` so the next identical command retries only the
-failed boards.
+Daily board failures are tolerated when at least 98% of the run's original board
+snapshot succeeds. In that case downstream matching, recommendations, and reports
+continue and the run finishes as `completed_with_errors`. Below 98%, the run
+remains `running` so the next identical command retries only the failed boards.
+
+Every daily run writes an operator-friendly failed-board snapshot to
+`reports/daily_import_failures.csv` and `.json`, plus a run-specific copy such as
+`reports/daily_import_failures_run_3.csv`. These generated files are intentionally
+ignored by git; the durable source of truth is the PostgreSQL
+`daily_import_run_boards` table.
+
+To list the failures from the latest run:
+
+```bash
+uv run scripts/manage_daily_boards.py --list-failures
+```
+
+To inspect a specific run:
+
+```bash
+uv run scripts/manage_daily_boards.py --list-failures --run-id 3
+```
+
+After manually confirming that a board is permanently dead, deactivate it in the
+PostgreSQL registry so future daily snapshots exclude it:
+
+```bash
+uv run scripts/manage_daily_boards.py \
+  --deactivate greenhouse:old-company \
+  --deactivate lever:another-old-company
+```
+
+For a reviewed run where the same definitive 404 has happened repeatedly, you
+can deactivate all matching boards in one explicit command:
+
+```bash
+uv run scripts/manage_daily_boards.py \
+  --deactivate-failures \
+  --run-id 3 \
+  --error-type NotFound \
+  --min-attempts 2
+```
+
+Do not use the bulk command for `HTTPError`, timeout, or rate-limit failures;
+those normally indicate a temporary provider or network problem rather than a
+dead board.
+
+`boards.json` remains a local discovery cache and should stay ignored. The
+PostgreSQL `job_boards.active` flag is the correct durable control for whether a
+board participates in daily imports, matching, and recommendations.
 
 To scan and report one ATS only, pass `--ats`:
 

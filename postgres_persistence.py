@@ -58,7 +58,8 @@ import job_boards
 ATS_NAMES = tuple(job_boards.SOURCES)
 DAILY_IMPORT_LEASE_SECONDS = 15 * 60
 DAILY_BOARD_WORKERS = 4
-DAILY_DETAIL_CONCURRENCY = 4
+DAILY_DETAIL_CONCURRENCY = 3
+DAILY_MIN_SUCCESS_PERCENT = 98
 DAILY_ATS_CONCURRENCY = {
     "workday": 1,
     "smartrecruiters": 1,
@@ -1055,9 +1056,10 @@ def _daily_import_counts(
 
 
 def _daily_failures_allow_downstream(failed_boards: int, board_count: int) -> bool:
-    """Allow downstream work only when failures are strictly below one percent."""
+    """Allow downstream work when the board snapshot is at least 98% successful."""
     return failed_boards == 0 or (
-        board_count > 0 and failed_boards * 100 < board_count
+        board_count > 0
+        and (board_count - failed_boards) * 100 >= board_count * DAILY_MIN_SUCCESS_PERCENT
     )
 
 
@@ -1367,7 +1369,7 @@ def _run_daily_boards_parallel(
     }
     print(
         f"Daily import parallelism: {DAILY_BOARD_WORKERS} total board workers; "
-        "Workday=1, SmartRecruiters=1; detail concurrency=4",
+        f"Workday=1, SmartRecruiters=1; detail concurrency={DAILY_DETAIL_CONCURRENCY}",
         flush=True,
     )
 
@@ -3767,6 +3769,26 @@ def _run(args: argparse.Namespace) -> int:
                 f"{daily_counts['empty']} empty + {daily_failed_boards} failed + "
                 f"{daily_counts['pending']} pending"
             )
+            try:
+                from scripts.export_daily_import_failures import (
+                    export_daily_import_failures,
+                )
+
+                report_paths = export_daily_import_failures(
+                    dsn,
+                    daily_import_run_id,
+                )
+                print(
+                    "Daily failed-board report: "
+                    f"{report_paths['csv'].relative_to(Path.cwd())} and "
+                    f"{report_paths['json'].relative_to(Path.cwd())}"
+                )
+            except Exception as exc:
+                print(
+                    f"Daily failed-board report could not be written: "
+                    f"{type(exc).__name__}: {exc}",
+                    file=sys.stderr,
+                )
             failures_allowed = _daily_failures_allow_downstream(
                 daily_failed_boards, daily_board_count
             )
@@ -3779,7 +3801,8 @@ def _run(args: argparse.Namespace) -> int:
                 print(
                     f"Daily import run {daily_import_run_id} remains incomplete; "
                     f"failed boards are {failure_rate:.2f}% of the snapshot "
-                    "(the continuation threshold is strictly below 1%). "
+                    f"(the continuation threshold is at least "
+                    f"{DAILY_MIN_SUCCESS_PERCENT}% successful). "
                     "Rerun the same command to retry only failed/pending boards. "
                     "Matching, recommendations, and reports were not started.",
                     file=sys.stderr,
@@ -3789,7 +3812,7 @@ def _run(args: argparse.Namespace) -> int:
                 print(
                     f"Daily import run {daily_import_run_id}: continuing with "
                     f"{daily_failed_boards}/{daily_board_count} failed boards "
-                    "(strictly below 1%)"
+                    f"(at least {DAILY_MIN_SUCCESS_PERCENT}% of boards succeeded)"
                 )
         if match_requested:
             match_stats = run_matching(
@@ -3882,6 +3905,11 @@ def _run(args: argparse.Namespace) -> int:
                 "completed_with_errors" if daily_failed_boards else "completed"
             )
             print(f"Daily import run {daily_import_run_id}: {final_status}")
+            # Board failures below the configured threshold are part of the
+            # completed_with_errors outcome, not a process failure. The
+            # scheduled runner uses this exit code to decide whether it may
+            # continue with per-user matching and recommendations.
+            return 1 if downstream_failed else 0
 
     if specs:
         print(
