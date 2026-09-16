@@ -8,3 +8,4 @@
 - [Gemini recommendation sizing](gemini-recommendation-sizing.md) — use deterministic gating before Gemini; cap deep reviews and keep finalist comparisons to five jobs.
 - [Preview port routing](replit-preview-port-routing.md) — expose the app server, not Vite’s standalone WebSocket port, or preview requests return HTTP 426.
 - [Workday adapter boundaries](workday-adapter-boundaries.md) — namespace requisitions by board; use verified CDX candidates and opt-in fallback probing.
+- [ATS constraint synchronization](ats-constraint-synchronization.md) — keep the TypeScript startup migration and Python schema allowlists identical when adding an ATS.
