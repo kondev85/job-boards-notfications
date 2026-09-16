@@ -11,9 +11,11 @@ CREATE TABLE IF NOT EXISTS user_job_state (
   job_id BIGINT NOT NULL REFERENCES jobs(job_id) ON DELETE CASCADE,
   status TEXT NOT NULL DEFAULT 'new'
     CHECK (status IN ('new', 'saved', 'applied', 'rejected')),
+  viewed_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (user_id, job_id)
 );
+ALTER TABLE user_job_state ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMPTZ;
 CREATE TABLE IF NOT EXISTS user_job_status_history (
   history_id BIGSERIAL PRIMARY KEY,
   user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,

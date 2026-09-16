@@ -346,7 +346,7 @@ app.get("/api/jobs/matched", async (req: AuthedRequest, res) => {
   const sort = ["date", "published_at"].includes(q.sort) ? "j.published_at DESC NULLS LAST" : q.sort === "title" ? "j.title ASC" : "jm.score DESC NULLS LAST";
   const count = await pool.query(`SELECT count(*) FROM job_matches jm JOIN jobs j USING(job_id) LEFT JOIN user_job_state s ON s.user_id=jm.user_id AND s.job_id=j.job_id WHERE ${where.join(" AND ")}`, params);
   params.push(limit, (page - 1) * limit);
-  const rows = await pool.query(`SELECT jm.match_id,j.job_id,j.ats,j.external_id,j.company,j.title,j.location_raw,j.workplace_type,j.published_at,j.job_url,jm.score,COALESCE(s.status,'new') status FROM job_matches jm JOIN jobs j USING(job_id) LEFT JOIN user_job_state s ON s.user_id=jm.user_id AND s.job_id=j.job_id WHERE ${where.join(" AND ")} ORDER BY ${sort} LIMIT $${params.length-1} OFFSET $${params.length}`, params);
+  const rows = await pool.query(`SELECT jm.match_id,j.job_id,j.ats,j.external_id,j.company,j.title,j.location_raw,j.workplace_type,j.published_at,j.job_url,jm.score,COALESCE(s.status,'new') status,s.viewed_at,(s.viewed_at IS NOT NULL) AS viewed FROM job_matches jm JOIN jobs j USING(job_id) LEFT JOIN user_job_state s ON s.user_id=jm.user_id AND s.job_id=j.job_id WHERE ${where.join(" AND ")} ORDER BY ${sort} LIMIT $${params.length-1} OFFSET $${params.length}`, params);
   res.json({ rows: rows.rows, total: Number(count.rows[0].count), page, limit });
 });
 app.get("/api/recommendations/latest", async (req: AuthedRequest, res) => {
@@ -373,6 +373,22 @@ app.patch("/api/jobs/:jobId/status", async (req: AuthedRequest, res) => {
     await client.query("COMMIT");
     res.json({ status });
   } catch (e) { await client.query("ROLLBACK"); throw e; } finally { client.release(); }
+});
+app.post("/api/jobs/:jobId/viewed", async (req: AuthedRequest, res) => {
+  const viewedAt = new Date();
+  const result = await pool.query(
+    `INSERT INTO user_job_state(user_id,job_id,viewed_at)
+     SELECT $1,jm.job_id,$3
+     FROM job_matches jm
+     WHERE jm.user_id=$1 AND jm.job_id=$2
+     ON CONFLICT(user_id,job_id) DO UPDATE
+       SET viewed_at=COALESCE(user_job_state.viewed_at,EXCLUDED.viewed_at),
+           updated_at=now()
+     RETURNING viewed_at`,
+    [uid(req), req.params.jobId, viewedAt],
+  );
+  if (!result.rowCount) return res.status(404).json({ error: "Matched job not found" });
+  res.json({ viewed: true, viewedAt: result.rows[0].viewed_at });
 });
 app.post("/api/search-runs", async (req: AuthedRequest, res) => {
   const { cutoff, scope = "all", ats = null, boardIds = [] } = req.body || {};
