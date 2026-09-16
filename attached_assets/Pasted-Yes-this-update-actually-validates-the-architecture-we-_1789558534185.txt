@@ -1,0 +1,108 @@
+Yes — this update actually validates the architecture we were discussing.
+
+The important distinction is that 2 Workday board workers are not necessarily the problem by themselves. The problem is the combined request pressure:
+
+2 board workers × 4 detail requests = up to 8 concurrent Workday requests
+
+And you've now observed 429s while that configuration is running. That is strong evidence that Workday is already pushing back at that level.
+
+What I would do now
+
+I would keep the dynamic promotion to 2 Workday workers, but reduce the detail concurrency.
+
+For example:
+
+4 total board workers
+
+Normal:
+Workday       1
+Other ATS     3
+
+After other ATS queues are drained:
+Workday       2
+
+Workday:
+2 board workers
+× 2–3 detail requests
+= 4–6 concurrent detail requests
+
+I'd probably start with 3 detail requests per Workday board, giving a maximum of 6 concurrent Workday detail requests.
+
+That lets you keep the benefit of two Workday boards running simultaneously without immediately jumping to 12 requests if you later promote to 3 workers.
+
+Even better: don't think only in "workers"
+
+The long-term solution I'd prefer is a Workday-wide request limiter.
+
+Instead of each board independently thinking:
+
+"I can make 4 requests."
+
+you have one global Workday rule:
+
+              WORKDAY
+                 │
+        ┌────────┴────────┐
+     Board A            Board B
+        │                  │
+    requests           requests
+        └────────┬─────────┘
+                 ↓
+       GLOBAL WORKDAY LIMIT
+          max X requests
+
+That becomes much safer because it doesn't matter whether you have:
+
+1 Workday board worker
+2 workers
+3 workers
+eventually 5 workers
+
+The total Workday request rate remains controlled.
+
+And there's an important difference between:
+
+Concurrency limit
+
+maximum number of requests happening simultaneously.
+
+and
+
+Rate limit
+
+maximum number of requests being started per second/minute.
+
+A 429 may be caused by either—or by Workday's own throttling rules. So I'd avoid assuming that simply reducing concurrency completely solves it.
+
+Your current situation
+
+The numbers actually look quite good:
+
+Other ATS: 0 pending
+Workday: 346 pending
+Workday has already been promoted to 2 workers
+Only 2 Workday 429s so far
+
+I wouldn't panic over two 429s. What matters is whether they're:
+
+2 errors out of thousands of requests
+
+or whether they start becoming:
+
+429 → retry → 429 → retry → 429...
+
+The latter would indicate the concurrency is too aggressive.
+
+So my recommendation would be:
+
+Don't promote to 3 yet. Don't redesign everything yet.
+
+Keep:
+
+2 Workday board workers
+
+and change:
+
+4 detail requests per board → 3
+
+Then monitor the next run.
