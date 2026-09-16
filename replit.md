@@ -1,7 +1,7 @@
 # job-boards (imported project)
 
 A dependency-free Python CLI that scrapes public job postings from Ashby, Greenhouse,
-Lever, SmartRecruiters, and Workday job boards. See `README.md` for the full product description and
+Lever, SmartRecruiters, Workday, Recruitee, Teamtailor, and Workable job boards. See `README.md` for the full product description and
 `openwiki/quickstart.md` for the engineering map.
 
 ## Running on Replit
@@ -19,7 +19,7 @@ regression script provisions its `psycopg` dependency automatically when run wit
 export JOB_SCRAPER_CONTACT="you@example.com"
 
 
-# Offline self-check (80 scraper tests, no network)
+# Offline self-check (86 scraper tests, no network)
 uv run test_job_boards.py
 
 # Small test scrape (5 Greenhouse boards, title match "engineer")
@@ -46,13 +46,15 @@ uv run job_boards.py --refresh-boards --all
 Output goes to `job-boards.csv`, `job-boards.json`, and an accumulating
 `job-boards.db` SQLite file (all gitignored by design — see `.gitignore` comments).
 
-Verified in this environment: `uv run test_job_boards.py` passes (80/80), and the
+Verified in this environment: `uv run test_job_boards.py` passes (86/86), and the
 PostgreSQL regression suite covers adapter mappings plus a temporary local database.
 A live test scrape (`--ats greenhouse --title "engineer" --limit 5`) successfully hit
 the network and returned 442 matching postings.
 
-SmartRecruiters support is implemented as another public-board adapter; existing ATS
-behavior remains covered by the regression suites.
+SmartRecruiters, Recruitee, Teamtailor, and Workable support is implemented as public-board
+adapters; existing ATS behavior remains covered by the regression suites. Recruitee and
+Teamtailor return descriptions in their public listing feeds. Workable's public list is
+enriched through its public per-job detail endpoint.
 
 ## PostgreSQL persistence (v1)
 
@@ -238,7 +240,7 @@ With `--published-after`, the importer does not close or delete older jobs.
 Repeating the command makes one sequential API request per selected board and
 upserts jobs by `(ats, external_id)`.
 
-### Daily Ashby + Greenhouse + Lever + SmartRecruiters scan
+### Daily multi-ATS scan
 
 The authenticated web app's **Launch search** action remains the manual,
 user-scoped search. For production automation, use a Replit Scheduled
@@ -259,7 +261,7 @@ uv run postgres_persistence.py \
   --published-after 2026-08-26
 ```
 
-`--daily` selects every active PostgreSQL board for Ashby, Greenhouse, Lever, and SmartRecruiters,
+`--daily` selects every active PostgreSQL board for all configured ATSes,
 defaults to the last seven days when no cutoff is supplied, runs the deterministic
 matcher, and writes the combined report plus one report per ATS:
 `reports/matched_roles.csv`, `reports/matched_roles_ashby.csv`,

@@ -63,6 +63,9 @@ DAILY_MIN_SUCCESS_PERCENT = 98
 DAILY_ATS_CONCURRENCY = {
     "workday": 1,
     "smartrecruiters": 1,
+    "recruitee": 2,
+    "teamtailor": 2,
+    "workable": 1,
 }
 
 
@@ -180,7 +183,10 @@ CREATE TABLE IF NOT EXISTS companies (
 CREATE TABLE IF NOT EXISTS job_boards (
     board_id    BIGSERIAL PRIMARY KEY,
     company_id  BIGINT NOT NULL REFERENCES companies(company_id),
-    ats         TEXT NOT NULL CHECK (ats IN ('ashby', 'greenhouse', 'lever', 'smartrecruiters', 'workday')),
+    ats         TEXT NOT NULL CHECK (ats IN (
+        'ashby', 'greenhouse', 'lever', 'smartrecruiters', 'workday',
+        'recruitee', 'teamtailor', 'workable'
+    )),
     slug        TEXT NOT NULL,
     active      BOOLEAN NOT NULL DEFAULT TRUE,
     source_url  TEXT NOT NULL,
@@ -197,7 +203,10 @@ CREATE TABLE IF NOT EXISTS jobs (
     job_id             BIGSERIAL PRIMARY KEY,
     board_id           BIGINT NOT NULL REFERENCES job_boards(board_id),
     company            TEXT,
-    ats                TEXT NOT NULL CHECK (ats IN ('ashby', 'greenhouse', 'lever', 'smartrecruiters', 'workday')),
+    ats                TEXT NOT NULL CHECK (ats IN (
+        'ashby', 'greenhouse', 'lever', 'smartrecruiters', 'workday',
+        'recruitee', 'teamtailor', 'workable'
+    )),
     external_id        TEXT NOT NULL,
     title              TEXT NOT NULL,
     department         TEXT,
@@ -228,10 +237,16 @@ ALTER TABLE job_boards
     ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE job_boards DROP CONSTRAINT IF EXISTS job_boards_ats_check;
 ALTER TABLE job_boards ADD CONSTRAINT job_boards_ats_check
-    CHECK (ats IN ('ashby', 'greenhouse', 'lever', 'smartrecruiters', 'workday'));
+    CHECK (ats IN (
+        'ashby', 'greenhouse', 'lever', 'smartrecruiters', 'workday',
+        'recruitee', 'teamtailor', 'workable'
+    ));
 ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_ats_check;
 ALTER TABLE jobs ADD CONSTRAINT jobs_ats_check
-    CHECK (ats IN ('ashby', 'greenhouse', 'lever', 'smartrecruiters', 'workday'));
+    CHECK (ats IN (
+        'ashby', 'greenhouse', 'lever', 'smartrecruiters', 'workday',
+        'recruitee', 'teamtailor', 'workable'
+    ));
 
 CREATE TABLE IF NOT EXISTS users (
     user_id                 BIGSERIAL PRIMARY KEY,
@@ -628,6 +643,8 @@ def _timestamp(value: Any) -> datetime | None:
     text = str(value).strip()
     if not text:
         return None
+    if text.endswith(" UTC"):
+        text = text[:-4] + "+00:00"
     try:
         parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:
@@ -643,6 +660,9 @@ def _source_updated_at(ats: str, raw_job: dict[str, Any]) -> datetime | None:
         "lever": ("updatedAt", "updated_at", "modifiedAt", "modified_at"),
         "smartrecruiters": ("updatedDate", "updatedAt", "updated_at", "modifiedAt"),
         "workday": ("updatedAt", "updated_at", "modifiedAt", "modified_at"),
+        "recruitee": ("updated_at", "updatedAt", "modified_at", "modifiedAt"),
+        "teamtailor": ("date_modified", "dateModified", "updated_at", "updatedAt"),
+        "workable": ("updated_at", "updatedAt", "modified_at", "modifiedAt"),
     }
     for key in keys_by_ats[ats]:
         if raw_job.get(key) not in (None, ""):
@@ -1515,8 +1535,19 @@ def _fetch_normalized(
         normalized = source["normalize"](raw_job)
         if normalized is None:
             continue
-        if ats in {"smartrecruiters", "workday"}:
+        if ats in {
+            "smartrecruiters",
+            "workday",
+            "recruitee",
+            "teamtailor",
+            "workable",
+        }:
             normalized["id"] = f"{slug}:{normalized['id']}"
+        if ats == "workable" and not normalized.get("jobUrl"):
+            normalized["jobUrl"] = job_boards.workable_job_url(
+                slug,
+                str(raw_job.get("shortcode") or normalized["id"]),
+            )
         normalized = job_boards._clean(normalized)
         published_at = _timestamp(normalized.get("publishedAt"))
         if published_after is not None and (
@@ -4055,7 +4086,7 @@ def main() -> None:
                 "--daily never requests Greenhouse descriptions; omit --greenhouse-content"
             )
         if args.ats is None:
-            args.ats = "ashby,greenhouse,lever,smartrecruiters,workday"
+            args.ats = ",".join(ATS_NAMES)
         _ats_list(args.ats)
         args.daily_all_ats = daily_all_ats
         args.match = True

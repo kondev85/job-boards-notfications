@@ -24,6 +24,9 @@ from job_boards import (
     normalize_greenhouse,
     normalize_lever,
     normalize_smartrecruiters,
+    normalize_recruitee,
+    normalize_teamtailor,
+    normalize_workable,
     normalize_workday,
     plain_text,
     plausible,
@@ -402,6 +405,164 @@ def test_normalize_smartrecruiters():
     assert row["employmentType"] == "Contract"
     assert "Build APIs" in row["_description"]
     assert "Boilerplate" not in row["_description"]
+
+
+def test_normalize_recruitee_preserves_structured_evidence():
+    row = normalize_recruitee({
+        "id": 2725920,
+        "title": "Program Manager",
+        "status": "published",
+        "department": "Product",
+        "employment_type_code": "fulltime_permanent",
+        "hybrid": True,
+        "locations": [{
+            "city": "Nijverdal",
+            "state": "Overijssel",
+            "country": "Netherlands",
+            "country_code": "NL",
+        }],
+        "published_at": "2026-08-28 11:09:19 UTC",
+        "updated_at": "2026-09-10 10:22:54 UTC",
+        "careers_url": "https://acme.recruitee.com/o/program-manager",
+        "translations": {
+            "en": {
+                "description": "<p>Lead delivery</p>",
+                "requirements": "<ul><li>Stakeholder management</li></ul>",
+            }
+        },
+    })
+    assert row["id"] == "2725920"
+    assert row["location"] == "Nijverdal, Overijssel, Netherlands"
+    assert row["workplaceType"] == "hybrid"
+    assert row["publishedAt"] == "2026-08-28T11:09:19+00:00"
+    assert row["address"]["locations"][0]["country_code"] == "NL"
+    assert "Stakeholder management" in row["_description"]
+    assert normalize_recruitee({
+        "id": "draft", "title": "Draft", "status": "draft"
+    }) is None
+
+
+def test_normalize_teamtailor_reads_json_feed_jobposting():
+    row = normalize_teamtailor({
+        "id": "6317ad42-9342-4bb4-8952-d89057311aa9",
+        "title": "Executive Assistant",
+        "date_published": "2026-09-04T11:33:27+02:00",
+        "url": "https://acme.teamtailor.com/jobs/8322261-executive-assistant",
+        "content_html": "<p>Coordinate <strong>projects</strong></p>",
+        "_jobposting": {
+            "datePosted": "2026-09-04T11:33:27+02:00",
+            "jobLocation": [{
+                "address": {
+                    "addressLocality": "Malmo",
+                    "addressCountry": "SE",
+                }
+            }],
+            "employmentType": "FULL_TIME",
+        },
+    })
+    assert row["id"].startswith("6317ad42-")
+    assert row["location"] == "Malmo, SE"
+    assert row["workplaceType"] == "onsite"
+    assert row["employmentType"] == "FULL_TIME"
+    assert row["publishedAt"] == "2026-09-04T09:33:27+00:00"
+    assert row["jobUrl"].endswith("/8322261-executive-assistant")
+    assert "Coordinate" in row["_description"]
+
+
+def test_normalize_workable_handles_public_list_and_detail_fields():
+    row = normalize_workable({
+        "shortcode": "B19065B177",
+        "title": "Senior Account Manager",
+        "state": "published",
+        "published": "2026-09-04T00:00:00.000Z",
+        "remote": False,
+        "workplace": "hybrid",
+        "department": ["Client Services"],
+        "location": {
+            "city": "Los Angeles",
+            "region": "California",
+            "country": "United States",
+        },
+        "description": "<p>Manage accounts</p>",
+        "requirements": "<ul><li>Agency experience</li></ul>",
+    })
+    assert row["id"] == "B19065B177"
+    assert row["department"] == "Client Services"
+    assert row["location"] == "Los Angeles, California, United States"
+    assert row["workplaceType"] == "hybrid"
+    assert row["publishedAt"] == "2026-09-04T00:00:00+00:00"
+    assert "Agency experience" in row["_description"]
+
+
+def test_teamtailor_adapter_follows_json_feed_pagination():
+    import job_boards
+
+    original_fetch = job_boards.fetch
+    calls = []
+
+    def fake_fetch(url, **kwargs):
+        calls.append(url)
+        if "page=2" in url:
+            return json.dumps({
+                "version": "https://jsonfeed.org/version/1.1",
+                "items": [{"id": "second", "title": "Second"}],
+            }).encode()
+        return json.dumps({
+            "version": "https://jsonfeed.org/version/1.1",
+            "items": [{"id": "first", "title": "First"}],
+            "next_url": "https://acme.teamtailor.com/jobs.json?page=2&per_page=100",
+        }).encode()
+
+    job_boards.fetch = fake_fetch
+    try:
+        rows = job_boards.fetch_teamtailor_jobs("acme")
+    finally:
+        job_boards.fetch = original_fetch
+    assert len(rows) == 2
+    assert any("page=2" in url for url in calls)
+
+
+def test_workable_adapter_enriches_cutoff_eligible_jobs():
+    import job_boards
+
+    original_post = job_boards._workable_post_json
+    original_detail = job_boards._workable_detail
+    calls = []
+
+    def fake_post(url, payload, timeout=30):
+        return {
+            "total": 2,
+            "results": [
+                {
+                    "shortcode": "recent",
+                    "title": "Recent",
+                    "state": "published",
+                    "published": "2026-09-01T00:00:00Z",
+                },
+                {
+                    "shortcode": "old",
+                    "title": "Old",
+                    "state": "published",
+                    "published": "2026-07-01T00:00:00Z",
+                },
+            ],
+        }
+
+    def fake_detail(slug, shortcode):
+        calls.append((slug, shortcode))
+        return {"description": "<p>Recent description</p>"}
+
+    job_boards._workable_post_json = fake_post
+    job_boards._workable_detail = fake_detail
+    try:
+        rows = job_boards.fetch_workable_jobs(
+            "acme", datetime(2026, 8, 1, tzinfo=timezone.utc), detail_concurrency=1
+        )
+    finally:
+        job_boards._workable_post_json = original_post
+        job_boards._workable_detail = original_detail
+    assert [row["shortcode"] for row in rows] == ["recent"]
+    assert calls == [("acme", "recent")]
 
 
 def test_smartrecruiters_adapter_paginates_and_enriches_details():

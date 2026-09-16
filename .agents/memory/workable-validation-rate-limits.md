@@ -1,0 +1,14 @@
+---
+name: Workable validation rate limits
+description: Workable's public account jobs endpoint can impose a provider-wide rate limit during broad registry validation.
+---
+
+Workable's public `POST /api/v3/accounts/{account}/jobs` endpoint can return a provider-wide
+HTTP 429 with a very long `Retry-After` after a broad multi-board sweep. A zero-result
+validation under that condition is inconclusive, not evidence that the boards are invalid.
+
+**Why:** A high-concurrency sweep triggered the same long rate limit for known-good accounts,
+including an account previously confirmed to have current published jobs.
+
+**How to apply:** Validate Workable registries conservatively, record rate-limit failures
+separately from invalid feeds, and only add boards with successful feed evidence.

@@ -1,6 +1,7 @@
 # job-boards
 
-Pull every public job posting from **Ashby, Greenhouse, Lever, SmartRecruiters, and Workday** job boards.
+Pull every public job posting from **Ashby, Greenhouse, Lever, SmartRecruiters, Workday,
+Recruitee, Teamtailor, and Workable** job boards.
 No API key, no account, no dependencies.
 
 The original four platforms publish unauthenticated posting APIs that are per-company,
@@ -533,12 +534,18 @@ search endpoint. So this is two phases, run per platform.
 | Greenhouse | `boards-api.greenhouse.io/v1/boards/{slug}/jobs` | `boards.greenhouse.io`, `job-boards.greenhouse.io` |
 | Lever | `api.lever.co/v0/postings/{slug}?mode=json` | `jobs.lever.co` |
 | SmartRecruiters | `api.smartrecruiters.com/v1/companies/{slug}/postings` | `careers.smartrecruiters.com`, `jobs.smartrecruiters.com` |
+| Workday | public CXS endpoint | `*.myworkdayjobs.com` |
+| Recruitee | `https://{board}.recruitee.com/api/offers/` | `*.recruitee.com` or supplied custom host |
+| Teamtailor | `https://{board}.teamtailor.com/jobs.json` | `*.teamtailor.com` |
+| Workable | public `POST /api/v3/accounts/{account}/jobs` plus detail endpoint | `apply.workable.com` |
 
 **Phase 1 — discover slugs.** Query the **Wayback Machine's** CDX index for everything
 archived under each platform's domains, take the first path segment of each URL as a
 candidate slug, drop the ones that can't be slugs, then validate the rest against that
 platform's posting API. Cached to `boards.json` and skipped on later runs unless
-`--refresh-boards`.
+`--refresh-boards`. Recruitee, Teamtailor, and Workable use the supplied board registry
+directly; their public feeds are validated with provider-specific GET/POST shape checks
+instead of archive discovery.
 
 Measured funnels:
 
@@ -578,6 +585,13 @@ healthy run sees zero 404s; any that do appear get pruned from `boards.json`.
 | `publishedAt` | `publishedAt` ISO | `first_published` ISO | **`createdAt` epoch-ms** | `releasedDate` ISO |
 | `jobUrl` | `jobUrl` | `absolute_url` | `hostedUrl` | `postingUrl` |
 | description | always present | opt-in, 26x bytes | always present | detail endpoint sections |
+The newer adapters preserve provider-specific evidence as follows:
+
+| provider | locations/workplace | publication timestamp | description source |
+|---|---|---|---|
+| Recruitee | `locations[]`, `location`, and remote/hybrid flags | `published_at` | public offer feed HTML |
+| Teamtailor | Schema.org `jobLocation[]` and `jobLocationType` | `date_published` | JSON Feed HTML |
+| Workable | `locations`, `location`, and `workplace` | `published` | public per-job detail endpoint |
 
 The two bolded cells are the ones that fail quietly. Reading `title` on Lever yields an
 empty column rather than an error, and treating its `createdAt` as ISO makes every Lever

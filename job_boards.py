@@ -3,7 +3,8 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""Pull public job postings from Ashby, Greenhouse, Lever, SmartRecruiters, and Workday boards.
+"""Pull public job postings from Ashby, Greenhouse, Lever, SmartRecruiters, Workday,
+Recruitee, Teamtailor, and Workable boards.
 
 No API key. Each ATS publishes an unauthenticated per-company posting API with no
 global search, so this runs in two phases: discover board slugs from the Internet
@@ -120,6 +121,7 @@ _POOLED_HOSTS = {
     "boards-api.greenhouse.io",
     "api.lever.co",
     "api.smartrecruiters.com",
+    "apply.workable.com",
 }
 # One connection per thread per host. Sharing across threads would need a lock and
 # serialise the pool; a thread-local dict keeps the 8 workers independent, so a full
@@ -203,7 +205,12 @@ def _single_request(
 def _is_pooled_host(netloc: str) -> bool:
     """Use connection pooling for posting APIs and Workday career hosts."""
     hostname = netloc.split(":", 1)[0].lower()
-    return netloc in _POOLED_HOSTS or hostname.endswith(".myworkdayjobs.com")
+    return (
+        netloc in _POOLED_HOSTS
+        or hostname.endswith(".myworkdayjobs.com")
+        or hostname.endswith(".recruitee.com")
+        or hostname.endswith(".teamtailor.com")
+    )
 
 
 # ponytail: seconds-form Retry-After only. The HTTP-date form is legal but none of
@@ -286,6 +293,413 @@ def plain_text(value: str) -> str:
 #
 # `_description` is stripped off before the row is emitted; only --grep reads it.
 # --------------------------------------------------------------------------- #
+
+
+def _provider_datetime(value: object) -> str:
+    """Normalize provider ISO and trailing-UTC timestamps to ISO UTC."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if text.endswith(" UTC"):
+        text = text[:-4] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).isoformat(timespec="seconds")
+
+
+def _location_label(value: object) -> str:
+    if isinstance(value, dict):
+        return str(
+            value.get("name")
+            or ", ".join(
+                str(value.get(key))
+                for key in ("city", "state", "region", "country")
+                if value.get(key)
+            )
+            or ", ".join(
+                str(value.get(key))
+                for key in ("addressLocality", "addressRegion", "addressCountry")
+                if value.get(key)
+            )
+            or ""
+        ).strip()
+    return str(value or "").strip()
+
+
+def _location_collection(value: object) -> list[dict]:
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    if isinstance(value, dict):
+        return [value]
+    return []
+
+
+def normalize_recruitee(job: dict) -> dict | None:
+    """Normalize a public Recruitee Careers Site offer."""
+    posting_id = str(job.get("id") or job.get("guid") or "").strip()
+    title = str(job.get("title") or "").strip()
+    status = str(job.get("status") or "published").strip().lower()
+    if not posting_id or not title or status != "published":
+        return None
+
+    locations = _location_collection(job.get("locations"))
+    labels = [_location_label(location) for location in locations]
+    labels = list(dict.fromkeys(label for label in labels if label))
+    if not labels:
+        fallback = _location_label(job.get("location"))
+        if fallback:
+            labels = [fallback]
+
+    workplace = ""
+    if job.get("remote"):
+        workplace = "remote"
+    elif job.get("hybrid"):
+        workplace = "hybrid"
+    elif job.get("on_site"):
+        workplace = "onsite"
+
+    translations = job.get("translations")
+    translated = translations.get("en") if isinstance(translations, dict) else None
+    translated = translated if isinstance(translated, dict) else {}
+    description_parts = [
+        translated.get("description") or job.get("description") or "",
+        translated.get("requirements") or job.get("requirements") or "",
+        translated.get("highlight") or job.get("highlight") or "",
+    ]
+    return {
+        "id": posting_id,
+        "title": title,
+        "department": job.get("department") or "",
+        "team": job.get("team") or "",
+        "employmentType": (
+            job.get("employment_type")
+            or job.get("employment_type_code")
+            or ""
+        ),
+        "location": "; ".join(labels),
+        "isRemote": workplace == "remote",
+        "workplaceType": workplace,
+        "address": {
+            key: value
+            for key, value in (
+                ("locations", locations or None),
+                ("country", job.get("country")),
+                ("country_code", job.get("country_code")),
+            )
+            if value is not None
+        } or None,
+        "publishedAt": _provider_datetime(job.get("published_at")),
+        "jobUrl": job.get("careers_url") or job.get("careers_apply_url") or "",
+        "_description": "\n\n".join(
+            str(part) for part in description_parts if part
+        ),
+        "_sourceUpdatedAt": job.get("updated_at") or "",
+    }
+
+
+def recruitee_board_url(slug: str) -> str:
+    """Return the public Recruitee offers endpoint.
+
+    The supplied registry contains mostly ``company.recruitee.com`` boards, but
+    it also contains a small number of custom domains. A dotted identifier is
+    therefore treated as an already-qualified host.
+    """
+    host = str(slug).strip()
+    if "." not in host:
+        host = f"{host}.recruitee.com"
+    return f"https://{host}/api/offers/"
+
+
+def fetch_recruitee_jobs(
+    slug: str,
+    published_after: datetime | None = None,
+) -> list[dict]:
+    payload = json.loads(fetch(recruitee_board_url(slug), timeout=30, retries=3))
+    jobs = payload.get("offers") if isinstance(payload, dict) else None
+    if not isinstance(jobs, list):
+        raise ValueError(f"recruitee/{slug}: response has no offers array")
+    return jobs
+
+
+def recruitee_board_exists(slug: str) -> bool:
+    try:
+        payload = json.loads(
+            fetch(recruitee_board_url(slug), timeout=25, retries=2)
+        )
+        return isinstance(payload, dict) and isinstance(payload.get("offers"), list)
+    except Exception:
+        return False
+
+
+def normalize_teamtailor(job: dict) -> dict | None:
+    """Normalize a Teamtailor JSON Feed item and its embedded JobPosting data."""
+    posting_id = str(job.get("id") or "").strip()
+    title = str(job.get("title") or "").strip()
+    if not posting_id or not title:
+        return None
+
+    jobposting = job.get("_jobposting")
+    jobposting = jobposting if isinstance(jobposting, dict) else {}
+    locations = _location_collection(jobposting.get("jobLocation"))
+    labels = []
+    for location in locations:
+        address = location.get("address") if isinstance(location, dict) else None
+        label = _location_label(address if isinstance(address, dict) else location)
+        if label and label not in labels:
+            labels.append(label)
+
+    location_type = str(jobposting.get("jobLocationType") or "").strip()
+    workplace_key = location_type.casefold().replace("-", "").replace("_", "")
+    if workplace_key in {"telecommute", "remote"}:
+        workplace = "remote"
+    elif locations:
+        workplace = "onsite"
+    else:
+        workplace = ""
+
+    department = jobposting.get("occupationalCategory") or job.get("department") or ""
+    employment = jobposting.get("employmentType") or job.get("employmentType") or ""
+    return {
+        "id": posting_id,
+        "title": title,
+        "department": department,
+        "team": job.get("team") or "",
+        "employmentType": employment,
+        "location": "; ".join(labels),
+        "isRemote": workplace == "remote",
+        "workplaceType": workplace,
+        "address": {"jobLocation": locations} if locations else None,
+        "publishedAt": _provider_datetime(
+            job.get("date_published") or jobposting.get("datePosted")
+        ),
+        "jobUrl": job.get("url") or "",
+        "_description": job.get("content_html") or job.get("description") or "",
+        "_sourceUpdatedAt": job.get("date_modified") or jobposting.get("dateModified") or "",
+    }
+
+
+def teamtailor_board_url(slug: str) -> str:
+    return (
+        f"https://{urllib.parse.quote(str(slug).strip(), safe='')}.teamtailor.com"
+        "/jobs.json?per_page=100"
+    )
+
+
+def fetch_teamtailor_jobs(
+    slug: str,
+    published_after: datetime | None = None,
+) -> list[dict]:
+    """Fetch every page of a Teamtailor JSON Feed."""
+    next_url = teamtailor_board_url(slug)
+    visited: set[str] = set()
+    jobs: list[dict] = []
+    for _ in range(1000):
+        if not next_url or next_url in visited:
+            break
+        visited.add(next_url)
+        payload = json.loads(fetch(next_url, timeout=30, retries=3))
+        if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+            raise ValueError(f"teamtailor/{slug}: response has no items array")
+        jobs.extend(item for item in payload["items"] if isinstance(item, dict))
+        next_url = payload.get("next_url") or ""
+        if next_url and not str(next_url).startswith("http"):
+            next_url = urllib.parse.urljoin(teamtailor_board_url(slug), str(next_url))
+    else:
+        raise ValueError(f"teamtailor/{slug}: pagination exceeded 1000 pages")
+    return jobs
+
+
+def teamtailor_board_exists(slug: str) -> bool:
+    try:
+        payload = json.loads(
+            fetch(teamtailor_board_url(slug), timeout=25, retries=2)
+        )
+        return isinstance(payload, dict) and isinstance(payload.get("items"), list)
+    except Exception:
+        return False
+
+
+def workable_board_url(slug: str) -> str:
+    account = urllib.parse.quote(str(slug).strip(), safe="")
+    return f"https://apply.workable.com/api/v3/accounts/{account}/jobs"
+
+
+def workable_career_url(slug: str) -> str:
+    return f"https://apply.workable.com/{urllib.parse.quote(str(slug).strip(), safe='')}/"
+
+
+def workable_job_url(slug: str, shortcode: str) -> str:
+    return (
+        f"{workable_career_url(slug)}j/"
+        f"{urllib.parse.quote(str(shortcode).strip(), safe='')}/"
+    )
+
+
+def _workable_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
+    """POST to Workable's public career-site list endpoint with retries."""
+    body = json.dumps(payload).encode("utf-8")
+    headers = {
+        "User-Agent": UA,
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+    for attempt in range(4):
+        try:
+            if _is_pooled_host(urllib.parse.urlsplit(url).netloc):
+                status, response_headers, response_body = _pooled_request(
+                    url, "POST", timeout, headers, body
+                )
+                if status == 404:
+                    raise NotFound(url)
+                if status >= 400:
+                    if status not in (429, 500, 502, 503, 504) or attempt == 3:
+                        raise urllib.error.HTTPError(
+                            url, status, "Workable request failed",
+                            response_headers, None,
+                        )
+                    time.sleep(_retry_delay(response_headers.get("retry-after"), attempt))
+                    continue
+                result = json.loads(response_body)
+            else:
+                request = urllib.request.Request(
+                    url, data=body, headers=headers, method="POST"
+                )
+                with urllib.request.urlopen(request, timeout=timeout) as response:
+                    result = json.loads(response.read())
+            if not isinstance(result, dict):
+                raise ValueError("Workable response is not an object")
+            return result
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                raise NotFound(url) from exc
+            if exc.code not in (429, 500, 502, 503, 504) or attempt == 3:
+                raise
+            time.sleep(_retry_delay(exc.headers.get("Retry-After"), attempt))
+        except (urllib.error.URLError, TimeoutError, http.client.HTTPException, OSError):
+            if attempt == 3:
+                raise
+            time.sleep(2**attempt)
+    raise RuntimeError("unreachable")
+
+
+def _workable_detail(slug: str, shortcode: str) -> dict:
+    url = (
+        f"https://apply.workable.com/api/v2/accounts/"
+        f"{urllib.parse.quote(str(slug).strip(), safe='')}/jobs/"
+        f"{urllib.parse.quote(str(shortcode).strip(), safe='')}"
+    )
+    return json.loads(fetch(url, timeout=30, retries=3))
+
+
+def normalize_workable(job: dict) -> dict | None:
+    """Normalize a Workable public career-site job."""
+    posting_id = str(job.get("shortcode") or job.get("id") or "").strip()
+    title = str(job.get("title") or "").strip()
+    if not posting_id or not title:
+        return None
+    if job.get("state") and str(job.get("state")).lower() != "published":
+        return None
+
+    locations = _location_collection(job.get("locations"))
+    if not locations and isinstance(job.get("location"), dict):
+        locations = [job["location"]]
+    labels = [_location_label(location) for location in locations]
+    labels = list(dict.fromkeys(label for label in labels if label))
+    workplace_key = str(job.get("workplace") or "").casefold().replace("-", "_")
+    if job.get("remote") or workplace_key == "remote":
+        workplace = "remote"
+    elif workplace_key in {"hybrid", "on_site", "onsite"}:
+        workplace = "hybrid" if workplace_key == "hybrid" else "onsite"
+    else:
+        workplace = ""
+    department = job.get("department") or ""
+    if isinstance(department, list):
+        department = ", ".join(str(item) for item in department if item)
+    return {
+        "id": posting_id,
+        "title": title,
+        "department": department,
+        "team": job.get("function") or "",
+        "employmentType": job.get("employment_type") or "",
+        "location": "; ".join(labels),
+        "isRemote": workplace == "remote",
+        "workplaceType": workplace,
+        "address": {"locations": locations} if locations else None,
+        "publishedAt": _provider_datetime(job.get("published")),
+        "jobUrl": job.get("url") or "",
+        "_description": "\n\n".join(
+            str(job.get(key) or "")
+            for key in ("description", "requirements", "benefits")
+            if job.get(key)
+        ),
+        "_sourceUpdatedAt": job.get("updated_at") or job.get("updatedAt") or "",
+    }
+
+
+_WORKABLE_DETAIL_CONCURRENCY = 3
+
+
+def fetch_workable_jobs(
+    slug: str,
+    published_after: datetime | None = None,
+    detail_concurrency: int | None = None,
+) -> list[dict]:
+    """Fetch Workable's complete public list and enrich cutoff-eligible jobs."""
+    payload = _workable_post_json(workable_board_url(slug), {})
+    jobs = payload.get("results")
+    if not isinstance(jobs, list):
+        raise ValueError(f"workable/{slug}: response has no results array")
+    total = payload.get("total")
+    if total is not None and int(total) != len(jobs):
+        raise ValueError(
+            f"workable/{slug}: response total {total} differs from results {len(jobs)}"
+        )
+
+    eligible: list[dict] = []
+    for item in jobs:
+        if not isinstance(item, dict):
+            continue
+        if published_after is not None:
+            published = _provider_datetime(item.get("published"))
+            if not published:
+                continue
+            if datetime.fromisoformat(published) < published_after:
+                continue
+        eligible.append(item)
+
+    def enrich(item: dict) -> dict:
+        shortcode = str(item.get("shortcode") or "").strip()
+        if not shortcode:
+            return item
+        try:
+            detail = _workable_detail(slug, shortcode)
+        except Exception as exc:
+            print(
+                f"  workable/{slug}/{shortcode}: detail request failed "
+                f"({type(exc).__name__}: {exc})",
+                file=sys.stderr,
+            )
+            return item
+        merged = dict(item)
+        merged.update(detail)
+        return merged
+
+    with ThreadPoolExecutor(
+        max_workers=detail_concurrency or _WORKABLE_DETAIL_CONCURRENCY
+    ) as pool:
+        return list(pool.map(enrich, eligible))
+
+
+def _workable_board_exists(slug: str) -> bool:
+    try:
+        payload = _workable_post_json(workable_board_url(slug), {}, timeout=25)
+        return isinstance(payload, dict) and isinstance(payload.get("results"), list)
+    except Exception:
+        return False
 
 
 def normalize_ashby(job: dict) -> dict | None:
@@ -1046,6 +1460,39 @@ SOURCES = {
         "fetch_jobs": fetch_workday_jobs,
         "board_exists": workday_board_exists,
     },
+    "recruitee": {
+        "domains": ["recruitee.com"],
+        "registry_only": True,
+        "api": None,
+        "jobs": lambda payload: payload.get("offers"),
+        "normalize": normalize_recruitee,
+        "content_param": None,
+        "junk_prefixes": (),
+        "fetch_jobs": fetch_recruitee_jobs,
+        "board_exists": recruitee_board_exists,
+    },
+    "teamtailor": {
+        "domains": ["teamtailor.com"],
+        "registry_only": True,
+        "api": None,
+        "jobs": lambda payload: payload.get("items"),
+        "normalize": normalize_teamtailor,
+        "content_param": None,
+        "junk_prefixes": (),
+        "fetch_jobs": fetch_teamtailor_jobs,
+        "board_exists": teamtailor_board_exists,
+    },
+    "workable": {
+        "domains": ["apply.workable.com"],
+        "registry_only": True,
+        "api": None,
+        "jobs": lambda payload: payload.get("results"),
+        "normalize": normalize_workable,
+        "content_param": None,
+        "junk_prefixes": (),
+        "fetch_jobs": fetch_workable_jobs,
+        "board_exists": lambda slug: _workable_board_exists(slug),
+    },
 }
 
 
@@ -1072,6 +1519,12 @@ def board_url(ats: str, slug: str, want_content: bool = False) -> str:
         return workday_board_url(slug)
     if ats == "smartrecruiters":
         return smartrecruiters_board_url(slug)
+    if ats == "recruitee":
+        return recruitee_board_url(slug)
+    if ats == "teamtailor":
+        return teamtailor_board_url(slug)
+    if ats == "workable":
+        return workable_board_url(slug)
     url = SOURCES[ats]["api"].format(slug=urllib.parse.quote(slug))
     param = SOURCES[ats]["content_param"]
     if want_content and param:
@@ -1836,6 +2289,20 @@ def load_boards(
             return got
     boards = _read_boards(BOARDS_CACHE)
     for ats in ats_list:
+        if SOURCES[ats].get("registry_only"):
+            retained = boards.get(ats, [])
+            if retained:
+                print(
+                    f"{ats}: retaining {len(retained)} registry-validated boards; "
+                    "archive discovery is disabled for this provider",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    f"{ats}: no registry-validated boards are cached",
+                    file=sys.stderr,
+                )
+            continue
         try:
             boards[ats] = discover_boards(
                 ats,
@@ -1978,8 +2445,16 @@ def scan_board(
         norm = source["normalize"](job)
         if norm is None:
             continue
-        if ats in {"smartrecruiters", "workday"}:
+        if ats in {
+            "smartrecruiters",
+            "workday",
+            "recruitee",
+            "teamtailor",
+            "workable",
+        }:
             norm["id"] = f"{slug}:{norm['id']}"
+        if ats == "workable" and not norm.get("jobUrl"):
+            norm["jobUrl"] = workable_job_url(slug, str(job.get("shortcode") or norm["id"]))
         norm = _clean(norm)
         if cutoff is not None and not published_within(norm["publishedAt"], cutoff):
             continue
