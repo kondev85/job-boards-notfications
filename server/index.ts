@@ -334,11 +334,13 @@ app.get("/api/jobs/matched", async (req: AuthedRequest, res) => {
     return res.status(400).json({ error: "scope must be matched or all" });
   }
   const scope = requestedScope as "matched" | "all";
-  const parsedLimit = Number.parseInt(q.limit || "25", 10);
+  const requestedLimit = q.limit || "20";
+  const parsedLimit = Number.parseInt(requestedLimit, 10);
   const parsedPage = Number.parseInt(q.page || "1", 10);
   const limit = Number.isFinite(parsedLimit) && parsedLimit > 0
     ? Math.min(parsedLimit, 100)
-    : 25;
+    : 20;
+  const showAll = requestedLimit === "all";
   const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
   const matchJoin = scope === "matched"
     ? "JOIN job_matches jm ON jm.job_id=j.job_id AND jm.user_id=$1 AND jm.match_status='matched'"
@@ -359,9 +361,11 @@ app.get("/api/jobs/matched", async (req: AuthedRequest, res) => {
   if (date) add("j.published_at>=?", date);
   const sort = ["date", "published_at"].includes(q.sort) ? "j.published_at DESC NULLS LAST" : q.sort === "title" ? "j.title ASC" : "jm.score DESC NULLS LAST";
   const count = await pool.query(`SELECT count(*) FROM jobs j ${matchJoin} LEFT JOIN user_job_state s ON s.user_id=$1 AND s.job_id=j.job_id WHERE ${where.join(" AND ")}`, params);
-  params.push(limit, (page - 1) * limit);
+  const total = Number(count.rows[0].count);
+  const effectiveLimit = showAll ? total : limit;
+  params.push(effectiveLimit, (page - 1) * effectiveLimit);
   const rows = await pool.query(`SELECT jm.match_id,j.job_id,j.ats,j.external_id,j.company,j.title,j.location_raw,j.workplace_type,j.published_at,j.job_url,jm.score,(jm.job_id IS NOT NULL) AS matched,COALESCE(s.status,'new') status,s.viewed_at,(s.viewed_at IS NOT NULL) AS viewed FROM jobs j ${matchJoin} LEFT JOIN user_job_state s ON s.user_id=$1 AND s.job_id=j.job_id WHERE ${where.join(" AND ")} ORDER BY ${sort} LIMIT $${params.length-1} OFFSET $${params.length}`, params);
-  res.json({ rows: rows.rows, total: Number(count.rows[0].count), page, limit, scope });
+  res.json({ rows: rows.rows, total, page, limit: effectiveLimit, scope });
 });
 app.get("/api/recommendations/latest", async (req: AuthedRequest, res) => {
   const r = await pool.query("SELECT r.*,j.title,j.company,j.job_url,j.ats,j.external_id,j.location_raw,j.workplace_type,j.published_at,j.description_text FROM job_profile_reviews r JOIN jobs j USING(job_id) JOIN job_boards b ON b.board_id=j.board_id AND b.active IS TRUE WHERE r.user_id=$1 AND r.final_fit_score >= $2 AND r.recommendation_run_id=(SELECT run_id FROM profile_recommendation_runs WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1) ORDER BY r.final_rank NULLS LAST", [uid(req), pinnedRecommendationFloor]); res.json(r.rows);
