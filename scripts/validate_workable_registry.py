@@ -35,6 +35,7 @@ import postgres_persistence
 
 
 DEFAULT_STATE = ROOT / "reports" / "workable-validation-progress.json"
+DEFAULT_PUBLISHED_AFTER = "2026-08-01"
 
 
 def _atomic_write(path: Path, payload: object) -> None:
@@ -46,6 +47,15 @@ def _atomic_write(path: Path, payload: object) -> None:
 
 def _source_hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _parse_published_after(value: str) -> datetime:
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"expected YYYY-MM-DD, got {value!r}"
+        ) from exc
 
 
 def _read_candidates(path: Path) -> list[str]:
@@ -64,7 +74,12 @@ def _read_candidates(path: Path) -> list[str]:
     return candidates
 
 
-def _load_state(path: Path, source: Path, candidates: list[str]) -> dict:
+def _load_state(
+    path: Path,
+    source: Path,
+    candidates: list[str],
+    validation_rule: str,
+) -> dict:
     source_hash = _source_hash(source)
     try:
         state = json.loads(path.read_text())
@@ -75,7 +90,8 @@ def _load_state(path: Path, source: Path, candidates: list[str]) -> dict:
     if not isinstance(entries, dict):
         entries = {}
 
-    old_entries = entries
+    reset_entries = state.get("validation_rule") != validation_rule
+    old_entries = {} if reset_entries else entries
     entries = {}
     for slug in candidates:
         key = slug.casefold()
@@ -91,6 +107,7 @@ def _load_state(path: Path, source: Path, candidates: list[str]) -> dict:
         "version": 1,
         "source": str(source),
         "source_sha256": source_hash,
+        "validation_rule": validation_rule,
         "entries": entries,
     }
 
@@ -107,13 +124,15 @@ def _cache_verified(cache_path: Path, slug: str) -> bool:
     return True
 
 
-def _mark_cached_entries(state: dict, cache_path: Path) -> None:
-    cached = job_boards._read_boards(cache_path).get("workable", [])
-    cached_keys = {slug.casefold() for slug in cached}
-    for key, entry in state["entries"].items():
-        if key in cached_keys:
-            entry["status"] = "verified"
-            entry["reason"] = "already present in boards.json"
+def _cache_invalid(cache_path: Path, slug: str) -> bool:
+    boards = job_boards._read_boards(cache_path)
+    known = boards.setdefault("workable", [])
+    retained = [item for item in known if item.casefold() != slug.casefold()]
+    if len(retained) == len(known):
+        return False
+    boards["workable"] = retained
+    job_boards._write_json_atomic(cache_path, boards)
+    return True
 
 
 def _summary(entries: dict[str, dict]) -> dict[str, int]:
@@ -134,6 +153,17 @@ def _sync_postgres(conn: psycopg.Connection, slugs: list[str]) -> int:
                 [("workable", slug) for slug in slugs],
                 datetime.now(timezone.utc),
             )
+
+
+def _deactivate_postgres(conn: psycopg.Connection, slug: str) -> int:
+    with conn.transaction():
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE job_boards SET active = FALSE "
+                "WHERE ats = %s AND slug = %s AND active IS TRUE",
+                ("workable", slug),
+            )
+            return cur.rowcount
 
 
 def main() -> int:
@@ -206,6 +236,15 @@ def main() -> int:
         action="store_true",
         help="synchronize verified checkpoint entries without probing new slugs",
     )
+    parser.add_argument(
+        "--published-after",
+        type=_parse_published_after,
+        default=_parse_published_after(DEFAULT_PUBLISHED_AFTER),
+        help=(
+            "only verify boards with a posting on or after this date "
+            f"(default: {DEFAULT_PUBLISHED_AFTER})"
+        ),
+    )
     args = parser.parse_args()
 
     if not args.registry.exists():
@@ -226,8 +265,8 @@ def main() -> int:
         parser.error("--sync-only requires --sync-postgres")
 
     candidates = _read_candidates(args.registry)
-    state = _load_state(args.state, args.registry, candidates)
-    _mark_cached_entries(state, args.cache)
+    validation_rule = f"recent-posting:{args.published_after.date().isoformat()}"
+    state = _load_state(args.state, args.registry, candidates, validation_rule)
     state["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     _atomic_write(args.state, state)
 
@@ -280,7 +319,10 @@ def main() -> int:
         if wait > 0:
             time.sleep(wait)
         slug = entry["slug"]
-        result = job_boards.probe_workable_board(slug)
+        result = job_boards.probe_workable_board(
+            slug,
+            published_after=args.published_after,
+        )
         next_request_at = time.monotonic() + args.interval
 
         if (
@@ -299,7 +341,10 @@ def main() -> int:
                     f"({wait_source}) before one retry"
                 )
                 time.sleep(retry_wait)
-                result = job_boards.probe_workable_board(slug)
+                result = job_boards.probe_workable_board(
+                    slug,
+                    published_after=args.published_after,
+                )
                 next_request_at = time.monotonic() + args.interval
 
         classification = str(result["classification"])
@@ -358,6 +403,10 @@ def main() -> int:
                 f"[{index}/{len(batch)}] {slug}: {classification} "
                 f"({result.get('reason', 'unknown')})"
             )
+            if classification == "invalid":
+                _cache_invalid(args.cache, slug)
+                if conn is not None:
+                    _deactivate_postgres(conn, slug)
 
         if result.get("stop"):
             rate_limited = True

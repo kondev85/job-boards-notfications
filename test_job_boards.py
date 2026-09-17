@@ -609,9 +609,26 @@ def test_workable_probe_requires_results_array_for_verification():
             {},
             b'{"total": 0, "results": []}',
         )
-        verified = job_boards.probe_workable_board("empty-but-valid")
+        invalid = job_boards.probe_workable_board(
+            "empty-but-valid",
+            published_after=datetime(2026, 8, 1, tzinfo=timezone.utc),
+        )
+        assert invalid["classification"] == "invalid"
+        assert "no jobs published on or after 2026-08-01" in invalid["reason"]
+
+        job_boards._pooled_request = lambda *args, **kwargs: (
+            200,
+            {},
+            b'{"total": 2, "results": ['
+            b'{"published": "2026-07-31T23:59:59Z"},'
+            b'{"published": "2026-08-01T00:00:00Z"}]}',
+        )
+        verified = job_boards.probe_workable_board(
+            "recent-board",
+            published_after=datetime(2026, 8, 1, tzinfo=timezone.utc),
+        )
         assert verified["classification"] == "verified"
-        assert verified["reason"] == "results array (0 jobs)"
+        assert verified["reason"] == "1 job(s) published on or after 2026-08-01"
     finally:
         job_boards._pooled_request = original_pooled
 

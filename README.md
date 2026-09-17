@@ -551,8 +551,9 @@ instead of archive discovery.
 
 Workable's public account endpoint is rate-limited, so its supplied registry must be
 validated in small, resumable batches. The validator stores progress in
-`reports/workable-validation-progress.json`, appends only successful probes to
-`boards.json`, and never treats a throttle or server error as a dead board:
+`reports/workable-validation-progress.json`, appends only boards with at least one
+posting published on or after 2026-08-01 to `boards.json`, and never treats a
+throttle or server error as a dead board:
 
 ```bash
 uv run scripts/validate_workable_registry.py \
@@ -571,6 +572,8 @@ Workable reports provider/server throttling.
 
 HTTP 404 responses are recorded as invalid. HTTP 429, 5xx, timeout, and network
 failures remain retryable; a provider throttle stops the current batch safely.
+The default verification rule is `published >= 2026-08-01`; override it with
+`--published-after YYYY-MM-DD` when a different freshness window is required.
 `--sync-postgres --sync-only` promotes already verified checkpoint entries without
 making any new Workable requests.
 

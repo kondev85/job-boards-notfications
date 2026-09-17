@@ -638,13 +638,18 @@ def _workable_rate_limit_metadata(headers: dict[str, str]) -> dict[str, object]:
     return metadata
 
 
-def probe_workable_board(slug: str, timeout: int = 25) -> dict[str, object]:
+def probe_workable_board(
+    slug: str,
+    timeout: int = 25,
+    published_after: datetime | None = None,
+) -> dict[str, object]:
     """Make one Workable registry probe without hiding its outcome.
 
     The normal posting fetcher retries because it is appropriate for a single
     board import. Registry validation needs the opposite behavior: preserve
     404 versus 429/5xx and let the caller checkpoint before deciding whether
-    to continue.
+    to continue. When ``published_after`` is supplied, verification also
+    requires at least one posting published on or after that cutoff.
     """
     url = workable_board_url(slug)
     body = b"{}"
@@ -688,10 +693,38 @@ def probe_workable_board(slug: str, timeout: int = 25) -> dict[str, object]:
                 **rate_limit_metadata,
             }
         if isinstance(result, dict) and isinstance(result.get("results"), list):
+            jobs = result["results"]
+            if published_after is not None:
+                recent_jobs = [
+                    item
+                    for item in jobs
+                    if isinstance(item, dict)
+                    and published_within(
+                        _provider_datetime(item.get("published")),
+                        published_after,
+                    )
+                ]
+                if not recent_jobs:
+                    return {
+                        "classification": "invalid",
+                        "http_status": status,
+                        "reason": (
+                            "no jobs published on or after "
+                            f"{published_after.date().isoformat()}"
+                        ),
+                        "stop": False,
+                        **rate_limit_metadata,
+                    }
+                reason = (
+                    f"{len(recent_jobs)} job(s) published on or after "
+                    f"{published_after.date().isoformat()}"
+                )
+            else:
+                reason = f"results array ({len(jobs)} jobs)"
             return {
                 "classification": "verified",
                 "http_status": status,
-                "reason": f"results array ({len(result['results'])} jobs)",
+                "reason": reason,
                 "stop": False,
                 **rate_limit_metadata,
             }
