@@ -12,3 +12,4 @@
 - [Workable validation rate limits](workable-validation-rate-limits.md) — broad public-feed sweeps can trigger provider-wide 429s; treat them as inconclusive.
 - [Board registry maintenance schema](board-registry-maintenance-schema.md) — job_boards has no updated_at column; status maintenance should only change active.
 - [Workable empty-board pruning](workable-empty-board-pruning.md) — prune only after a successful widget response confirms zero total jobs; preserve boards with older-only postings.
+- [Workable location state](workable-location-state.md) — widget `state` is often a region, not a publication status; do not reject visible postings based on it.

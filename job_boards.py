@@ -857,8 +857,6 @@ def normalize_workable(job: dict) -> dict | None:
     title = str(job.get("title") or "").strip()
     if not posting_id or not title:
         return None
-    if job.get("state") and str(job.get("state")).lower() != "published":
-        return None
 
     locations = _location_collection(job.get("locations"))
     if not locations and isinstance(job.get("location"), dict):

@@ -15,6 +15,7 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
+import job_boards
 from job_boards import (
     FIELDS,
     board_url,
@@ -554,6 +555,39 @@ def test_workable_adapter_uses_widget_jobs_after_cutoff():
     assert [row["shortcode"] for row in rows] == ["recent"]
     assert rows[0]["description"] == "<p>Recent description</p>"
     assert rows.source_job_count == 2
+
+
+def test_workable_adapter_does_not_treat_location_state_as_job_status():
+    original_get = job_boards._workable_get_json
+    job_boards._workable_get_json = lambda *args, **kwargs: {
+        "jobs": [
+            {
+                "title": "Full-stack Software Engineer",
+                "shortcode": "E5C81460E4",
+                "published_on": "2026-09-08",
+                "state": "Masovian Voivodeship",
+                "locations": [
+                    {
+                        "country": "Poland",
+                        "city": "Warsaw",
+                        "region": "Masovian Voivodeship",
+                    }
+                ],
+            }
+        ]
+    }
+    try:
+        rows = job_boards.fetch_workable_jobs(
+            "airhelp",
+            datetime(2026, 8, 16, tzinfo=timezone.utc),
+        )
+    finally:
+        job_boards._workable_get_json = original_get
+
+    assert len(rows) == 1
+    assert job_boards.normalize_workable(rows[0])["title"] == (
+        "Full-stack Software Engineer"
+    )
 
 
 def test_workable_probe_preserves_404_and_429_outcomes():
