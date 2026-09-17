@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from email.utils import parsedate_to_datetime
 import gzip
 import http.client
 import json
@@ -584,6 +585,99 @@ def _workable_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
                 raise
             time.sleep(2**attempt)
     raise RuntimeError("unreachable")
+
+
+def _workable_rate_limit_wait(headers: dict[str, str]) -> float | None:
+    """Return the longest server-provided wait from Workable response headers."""
+    waits: list[float] = []
+    retry_after = headers.get("retry-after")
+    if retry_after:
+        try:
+            waits.append(max(0.0, float(retry_after)))
+        except ValueError:
+            try:
+                retry_at = parsedate_to_datetime(retry_after).timestamp()
+            except (TypeError, ValueError, OverflowError):
+                retry_at = 0.0
+            if retry_at:
+                waits.append(max(0.0, retry_at - time.time()))
+
+    reset = headers.get("x-rate-limit-reset")
+    if reset:
+        try:
+            waits.append(max(0.0, float(reset) - time.time()))
+        except ValueError:
+            pass
+    return max(waits) if waits else None
+
+
+def probe_workable_board(slug: str, timeout: int = 25) -> dict[str, object]:
+    """Make one Workable registry probe without hiding its outcome.
+
+    The normal posting fetcher retries because it is appropriate for a single
+    board import. Registry validation needs the opposite behavior: preserve
+    404 versus 429/5xx and let the caller checkpoint before deciding whether
+    to continue.
+    """
+    url = workable_board_url(slug)
+    body = b"{}"
+    headers = {
+        "User-Agent": UA,
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+    try:
+        status, response_headers, response_body = _pooled_request(
+            url, "POST", timeout, headers, body
+        )
+    except Exception as exc:
+        return {
+            "classification": "inconclusive",
+            "http_status": None,
+            "reason": f"{type(exc).__name__}: {exc}",
+            "stop": False,
+        }
+
+    if status == 404:
+        return {
+            "classification": "invalid",
+            "http_status": status,
+            "reason": "HTTP 404",
+            "stop": False,
+        }
+
+    if status == 200:
+        try:
+            result = json.loads(response_body)
+        except (TypeError, json.JSONDecodeError) as exc:
+            return {
+                "classification": "inconclusive",
+                "http_status": status,
+                "reason": f"invalid JSON response: {exc}",
+                "stop": False,
+            }
+        if isinstance(result, dict) and isinstance(result.get("results"), list):
+            return {
+                "classification": "verified",
+                "http_status": status,
+                "reason": f"results array ({len(result['results'])} jobs)",
+                "stop": False,
+            }
+        return {
+            "classification": "inconclusive",
+            "http_status": status,
+            "reason": "200 response has no results array",
+            "stop": False,
+        }
+
+    wait = _workable_rate_limit_wait(response_headers)
+    return {
+        "classification": "inconclusive",
+        "http_status": status,
+        "reason": f"HTTP {status}",
+        "retry_after_seconds": wait,
+        "stop": status == 429 or status >= 500,
+    }
 
 
 def _workable_detail(slug: str, shortcode: str) -> dict:
