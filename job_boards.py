@@ -614,6 +614,18 @@ def _workable_rate_limit_wait(headers: dict[str, str]) -> float | None:
 def _workable_rate_limit_metadata(headers: dict[str, str]) -> dict[str, object]:
     """Extract Workable's documented rate-limit headers for the caller."""
     metadata: dict[str, object] = {}
+    observed_headers = {
+        name: headers[name]
+        for name in (
+            "retry-after",
+            "x-rate-limit-limit",
+            "x-rate-limit-remaining",
+            "x-rate-limit-reset",
+        )
+        if headers.get(name) is not None
+    }
+    if observed_headers:
+        metadata["rate_limit_headers"] = observed_headers
     for header, key in (
         ("x-rate-limit-limit", "rate_limit_limit"),
         ("x-rate-limit-remaining", "rate_limit_remaining"),
