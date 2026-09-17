@@ -409,42 +409,48 @@ app.get("/api/recommendations/latest", async (req: AuthedRequest, res) => {
   const r = await pool.query("SELECT r.*,j.title,j.company,j.job_url,j.ats,j.external_id,j.location_raw,j.workplace_type,j.published_at,j.description_text FROM job_profile_reviews r JOIN jobs j USING(job_id) JOIN job_boards b ON b.board_id=j.board_id AND b.active IS TRUE WHERE r.user_id=$1 AND r.final_fit_score >= $2 AND r.recommendation_run_id=(SELECT run_id FROM profile_recommendation_runs WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1) ORDER BY r.final_rank NULLS LAST", [uid(req), pinnedRecommendationFloor]); res.json(r.rows);
 });
 app.patch("/api/jobs/:jobId/status", async (req: AuthedRequest, res) => {
-  const status = req.body?.status; if (!["new","saved","applied","rejected"].includes(status)) return res.status(400).json({ error: "Invalid status" });
+  const status = req.body?.status; if (!["new","viewed","saved","applied","rejected"].includes(status)) return res.status(400).json({ error: "Invalid status" });
   const client = await pool.connect(); try {
     await client.query("BEGIN");
     const changed = await client.query(
-      `INSERT INTO user_job_state(user_id,job_id,status)
-       SELECT $1,jm.job_id,$3 FROM job_matches jm
-       WHERE jm.user_id=$1 AND jm.job_id=$2
+      `INSERT INTO user_job_state(user_id,job_id,status,viewed_at)
+       SELECT $1,j.job_id,$3,CASE WHEN $3='viewed' THEN now() ELSE NULL END
+       FROM jobs j
+       WHERE j.job_id=$2 AND j.closed_at IS NULL
+         AND EXISTS (SELECT 1 FROM job_boards b WHERE b.board_id=j.board_id AND b.active IS TRUE)
        ON CONFLICT(user_id,job_id) DO UPDATE
-       SET status=EXCLUDED.status,updated_at=now()
-       RETURNING status`,
+        SET status=EXCLUDED.status,
+            viewed_at=CASE WHEN EXCLUDED.status='viewed' THEN COALESCE(user_job_state.viewed_at,EXCLUDED.viewed_at) ELSE user_job_state.viewed_at END,
+            updated_at=now()
+       RETURNING status,viewed_at`,
       [uid(req), req.params.jobId, status],
     );
     if (!changed.rowCount) {
       await client.query("ROLLBACK");
-      return res.status(404).json({ error: "Matched job not found" });
+      return res.status(404).json({ error: "Open job not found" });
     }
     await client.query("INSERT INTO user_job_status_history(user_id,job_id,status) VALUES($1,$2,$3)", [uid(req), req.params.jobId, status]);
     await client.query("COMMIT");
-    res.json({ status });
+    res.json({ status: changed.rows[0].status, viewedAt: changed.rows[0].viewed_at });
   } catch (e) { await client.query("ROLLBACK"); throw e; } finally { client.release(); }
 });
 app.post("/api/jobs/:jobId/viewed", async (req: AuthedRequest, res) => {
   const viewedAt = new Date();
   const result = await pool.query(
     `INSERT INTO user_job_state(user_id,job_id,viewed_at)
-     SELECT $1,jm.job_id,$3
-     FROM job_matches jm
-     WHERE jm.user_id=$1 AND jm.job_id=$2
+     SELECT $1,j.job_id,$3
+     FROM jobs j
+     WHERE j.job_id=$2 AND j.closed_at IS NULL
+       AND EXISTS (SELECT 1 FROM job_boards b WHERE b.board_id=j.board_id AND b.active IS TRUE)
      ON CONFLICT(user_id,job_id) DO UPDATE
        SET viewed_at=COALESCE(user_job_state.viewed_at,EXCLUDED.viewed_at),
+           status=CASE WHEN user_job_state.status='new' THEN 'viewed' ELSE user_job_state.status END,
            updated_at=now()
-     RETURNING viewed_at`,
+     RETURNING viewed_at,status`,
     [uid(req), req.params.jobId, viewedAt],
   );
-  if (!result.rowCount) return res.status(404).json({ error: "Matched job not found" });
-  res.json({ viewed: true, viewedAt: result.rows[0].viewed_at });
+  if (!result.rowCount) return res.status(404).json({ error: "Open job not found" });
+  res.json({ viewed: true, viewedAt: result.rows[0].viewed_at, status: result.rows[0].status });
 });
 app.post("/api/search-runs", async (req: AuthedRequest, res) => {
   const { cutoff, scope = "all", ats = null, boardIds = [] } = req.body || {};
@@ -470,7 +476,7 @@ app.get("/api/search-runs", async (req: AuthedRequest, res) => { const r = await
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 app.post("/api/import", upload.single("file"), async (req: AuthedRequest, res) => {
   if (!req.file) return res.status(400).json({ error: "CSV file is required" }); const records = parse(req.file.buffer, { columns: true, skip_empty_lines: true, bom: true }) as Record<string,string>[]; let updated = 0;
-  for (const row of records) { const status = String(row.status || row.match_status || "").trim().toLowerCase(); if (!["new","saved","applied","rejected"].includes(status)) continue; const r = await pool.query("SELECT job_id FROM jobs WHERE ((ats=$1 AND external_id=$2) OR ($3<>'' AND job_url=$3)) AND EXISTS (SELECT 1 FROM job_boards b WHERE b.board_id=jobs.board_id AND b.active IS TRUE) LIMIT 1", [row.ats,row.external_id,row.job_url || ""]); if (r.rows[0]) { await pool.query("INSERT INTO user_job_state(user_id,job_id,status) VALUES($1,$2,$3) ON CONFLICT(user_id,job_id) DO UPDATE SET status=EXCLUDED.status,updated_at=now()", [uid(req),r.rows[0].job_id,status]); await pool.query("INSERT INTO user_job_status_history(user_id,job_id,status) VALUES($1,$2,$3)", [uid(req),r.rows[0].job_id,status]); updated++; } }
+  for (const row of records) { const status = String(row.status || row.match_status || "").trim().toLowerCase(); if (!["new","viewed","saved","applied","rejected"].includes(status)) continue; const r = await pool.query("SELECT job_id FROM jobs WHERE ((ats=$1 AND external_id=$2) OR ($3<>'' AND job_url=$3)) AND EXISTS (SELECT 1 FROM job_boards b WHERE b.board_id=jobs.board_id AND b.active IS TRUE) LIMIT 1", [row.ats,row.external_id,row.job_url || ""]); if (r.rows[0]) { await pool.query("INSERT INTO user_job_state(user_id,job_id,status,viewed_at) VALUES($1,$2,$3,CASE WHEN $3='viewed' THEN now() ELSE NULL END) ON CONFLICT(user_id,job_id) DO UPDATE SET status=EXCLUDED.status,viewed_at=CASE WHEN EXCLUDED.status='viewed' THEN COALESCE(user_job_state.viewed_at,EXCLUDED.viewed_at) ELSE user_job_state.viewed_at END,updated_at=now()", [uid(req),r.rows[0].job_id,status]); await pool.query("INSERT INTO user_job_status_history(user_id,job_id,status) VALUES($1,$2,$3)", [uid(req),r.rows[0].job_id,status]); updated++; } }
   res.json({ imported: updated, rows: records.length });
 });
 app.get("/api/export.csv", async (req: AuthedRequest, res) => { const r = await pool.query("SELECT j.ats,j.external_id,j.company,j.title,j.location_raw,j.job_url,jm.score,COALESCE(s.status,'new') status FROM job_matches jm JOIN jobs j USING(job_id) JOIN job_boards b ON b.board_id=j.board_id AND b.active IS TRUE LEFT JOIN user_job_state s ON s.user_id=jm.user_id AND s.job_id=j.job_id WHERE jm.user_id=$1 ORDER BY jm.score DESC", [uid(req)]); const header = "ats,external_id,company,title,location,job_url,score,status\n"; const csv = header + r.rows.map(x => Object.values(x).map(v => `"${String(v ?? "").replaceAll('"','""')}"`).join(",")).join("\n"); res.type("text/csv").attachment("matched-jobs.csv").send(csv); });

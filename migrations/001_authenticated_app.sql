@@ -16,19 +16,25 @@ CREATE TABLE IF NOT EXISTS user_job_state (
   user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
   job_id BIGINT NOT NULL REFERENCES jobs(job_id) ON DELETE CASCADE,
   status TEXT NOT NULL DEFAULT 'new'
-    CHECK (status IN ('new', 'saved', 'applied', 'rejected')),
+    CHECK (status IN ('new', 'viewed', 'saved', 'applied', 'rejected')),
   viewed_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (user_id, job_id)
 );
 ALTER TABLE user_job_state ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMPTZ;
+ALTER TABLE user_job_state DROP CONSTRAINT IF EXISTS user_job_state_status_check;
+ALTER TABLE user_job_state ADD CONSTRAINT user_job_state_status_check
+  CHECK (status IN ('new', 'viewed', 'saved', 'applied', 'rejected'));
 CREATE TABLE IF NOT EXISTS user_job_status_history (
   history_id BIGSERIAL PRIMARY KEY,
   user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
   job_id BIGINT NOT NULL REFERENCES jobs(job_id) ON DELETE CASCADE,
-  status TEXT NOT NULL CHECK (status IN ('new', 'saved', 'applied', 'rejected')),
+  status TEXT NOT NULL CHECK (status IN ('new', 'viewed', 'saved', 'applied', 'rejected')),
   changed_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE user_job_status_history DROP CONSTRAINT IF EXISTS user_job_status_history_status_check;
+ALTER TABLE user_job_status_history ADD CONSTRAINT user_job_status_history_status_check
+  CHECK (status IN ('new', 'viewed', 'saved', 'applied', 'rejected'));
 CREATE TABLE IF NOT EXISTS search_runs (
   run_id BIGSERIAL PRIMARY KEY,
   owner_user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
