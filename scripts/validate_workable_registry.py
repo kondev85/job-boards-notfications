@@ -11,7 +11,7 @@ as invalid; throttles, server errors, and network failures remain retryable.
 Example:
     uv run scripts/validate_workable_registry.py \
         attached_assets/workable_1789592949726.csv \
-        --batch-size 25 --interval 1.2
+        --batch-size 25 --interval 2
 """
 
 from __future__ import annotations
@@ -197,8 +197,8 @@ def main() -> int:
     parser.add_argument(
         "--interval",
         type=float,
-        default=1.5,
-        help="minimum seconds between probes (default: 1.5)",
+        default=2.0,
+        help="minimum seconds between Workable probes (default: 2)",
     )
     parser.add_argument(
         "--success-cooldown-every",
