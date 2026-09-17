@@ -611,6 +611,33 @@ def _workable_rate_limit_wait(headers: dict[str, str]) -> float | None:
     return max(waits) if waits else None
 
 
+def _workable_rate_limit_metadata(headers: dict[str, str]) -> dict[str, object]:
+    """Extract Workable's documented rate-limit headers for the caller."""
+    metadata: dict[str, object] = {}
+    for header, key in (
+        ("x-rate-limit-limit", "rate_limit_limit"),
+        ("x-rate-limit-remaining", "rate_limit_remaining"),
+    ):
+        value = headers.get(header)
+        if value is None:
+            continue
+        try:
+            metadata[key] = int(value)
+        except (TypeError, ValueError):
+            pass
+
+    reset = headers.get("x-rate-limit-reset")
+    if reset:
+        try:
+            metadata["rate_limit_reset_at"] = float(reset)
+        except (TypeError, ValueError):
+            pass
+    wait = _workable_rate_limit_wait(headers)
+    if wait is not None:
+        metadata["rate_limit_wait_seconds"] = wait
+    return metadata
+
+
 def probe_workable_board(slug: str, timeout: int = 25) -> dict[str, object]:
     """Make one Workable registry probe without hiding its outcome.
 
@@ -638,12 +665,15 @@ def probe_workable_board(slug: str, timeout: int = 25) -> dict[str, object]:
             "stop": False,
         }
 
+    rate_limit_metadata = _workable_rate_limit_metadata(response_headers)
+
     if status == 404:
         return {
             "classification": "invalid",
             "http_status": status,
             "reason": "HTTP 404",
             "stop": False,
+            **rate_limit_metadata,
         }
 
     if status == 200:
@@ -655,6 +685,7 @@ def probe_workable_board(slug: str, timeout: int = 25) -> dict[str, object]:
                 "http_status": status,
                 "reason": f"invalid JSON response: {exc}",
                 "stop": False,
+                **rate_limit_metadata,
             }
         if isinstance(result, dict) and isinstance(result.get("results"), list):
             return {
@@ -662,21 +693,24 @@ def probe_workable_board(slug: str, timeout: int = 25) -> dict[str, object]:
                 "http_status": status,
                 "reason": f"results array ({len(result['results'])} jobs)",
                 "stop": False,
+                **rate_limit_metadata,
             }
         return {
             "classification": "inconclusive",
             "http_status": status,
             "reason": "200 response has no results array",
             "stop": False,
+            **rate_limit_metadata,
         }
 
-    wait = _workable_rate_limit_wait(response_headers)
+    wait = rate_limit_metadata.get("rate_limit_wait_seconds")
     return {
         "classification": "inconclusive",
         "http_status": status,
         "reason": f"HTTP {status}",
         "retry_after_seconds": wait,
         "stop": status == 429 or status >= 500,
+        **rate_limit_metadata,
     }
 
 

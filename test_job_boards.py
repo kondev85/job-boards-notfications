@@ -616,6 +616,30 @@ def test_workable_probe_requires_results_array_for_verification():
         job_boards._pooled_request = original_pooled
 
 
+def test_workable_probe_exports_rate_limit_headers():
+    import time
+    import job_boards
+
+    original_pooled = job_boards._pooled_request
+    try:
+        job_boards._pooled_request = lambda *args, **kwargs: (
+            200,
+            {
+                "x-rate-limit-limit": "10",
+                "x-rate-limit-remaining": "0",
+                "x-rate-limit-reset": str(time.time() + 30),
+            },
+            b'{"results": []}',
+        )
+        result = job_boards.probe_workable_board("rate-window")
+        assert result["classification"] == "verified"
+        assert result["rate_limit_limit"] == 10
+        assert result["rate_limit_remaining"] == 0
+        assert result["rate_limit_wait_seconds"] > 0
+    finally:
+        job_boards._pooled_request = original_pooled
+
+
 def test_smartrecruiters_adapter_paginates_and_enriches_details():
     import job_boards
 

@@ -558,14 +558,16 @@ validated in small, resumable batches. The validator stores progress in
 uv run scripts/validate_workable_registry.py \
   attached_assets/workable_1789592949726.csv \
   --all \
-  --interval 1.2 \
+  --interval 1.5 \
   --sync-postgres
 ```
 
 `--all` does not disable resumability: every result is checkpointed before the next
 probe, so rerunning the same command continues from the remaining pending or
-inconclusive entries. The run also stops safely if Workable reports provider/server
-throttling.
+inconclusive entries. The validator stays below Workable's documented 10-requests-
+per-10-seconds account limit, reads the provider's rate-window headers, and pauses
+for 60 seconds after every 100 successful probes. The run also stops safely if
+Workable reports provider/server throttling.
 
 HTTP 404 responses are recorded as invalid. HTTP 429, 5xx, timeout, and network
 failures remain retryable; a provider throttle stops the current batch safely.

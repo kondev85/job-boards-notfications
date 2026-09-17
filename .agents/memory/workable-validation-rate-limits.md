@@ -13,6 +13,7 @@ including an account previously confirmed to have current published jobs.
 **How to apply:** Validate Workable registries conservatively with checkpointed batches,
 record rate-limit failures separately from invalid feeds, and only add boards with
 successful feed evidence. The accepted workflow is an append-only cache plus explicit
-PostgreSQL synchronization for verified entries. In a sustained run, a 1.2-second
-cadence can still encounter a provider-wide 429 without useful headers; stop rather
-than automatically looping short cooldowns, then resume the same command later.
+PostgreSQL synchronization for verified entries. Workable documents 10 account-token
+requests per 10 seconds; use a 1.5-second floor, honor rate-window headers, and pause
+60 seconds after 100 successes. In a sustained run, even that cadence can encounter a
+provider-wide headerless 429; retry once after 60 seconds, then stop rather than loop.

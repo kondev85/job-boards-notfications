@@ -167,15 +167,34 @@ def main() -> int:
     parser.add_argument(
         "--interval",
         type=float,
-        default=1.2,
-        help="minimum seconds between probes (default: 1.2)",
+        default=1.5,
+        help="minimum seconds between probes (default: 1.5)",
+    )
+    parser.add_argument(
+        "--success-cooldown-every",
+        type=int,
+        default=100,
+        help="cool down after this many successful probes; 0 disables it (default: 100)",
+    )
+    parser.add_argument(
+        "--success-cooldown",
+        type=float,
+        default=60.0,
+        help="seconds to cool down after each success milestone (default: 60)",
     )
     parser.add_argument(
         "--max-rate-limit-wait",
         type=float,
-        default=30.0,
+        default=60.0,
         help="retry a 429 once when its server wait is no longer than this; "
-        "longer waits stop safely (default: 30)",
+        "longer waits stop safely (default: 60)",
+    )
+    parser.add_argument(
+        "--missing-rate-limit-wait",
+        type=float,
+        default=60.0,
+        help="fallback wait before one retry when a 429 has no wait header "
+        "(default: 60)",
     )
     parser.add_argument(
         "--sync-postgres",
@@ -195,8 +214,14 @@ def main() -> int:
         parser.error("--batch-size must be between 1 and 100")
     if args.interval < 0:
         parser.error("--interval must be non-negative")
+    if args.success_cooldown_every < 0:
+        parser.error("--success-cooldown-every must be non-negative")
+    if args.success_cooldown < 0:
+        parser.error("--success-cooldown must be non-negative")
     if args.max_rate_limit_wait < 0:
         parser.error("--max-rate-limit-wait must be non-negative")
+    if args.missing_rate_limit_wait < 0:
+        parser.error("--missing-rate-limit-wait must be non-negative")
     if args.sync_only and not args.sync_postgres:
         parser.error("--sync-only requires --sync-postgres")
 
@@ -242,29 +267,40 @@ def main() -> int:
     )
     if not batch:
         print("Nothing to validate.")
+        if conn is not None:
+            conn.close()
         return 0
 
     added = 0
     rate_limited = False
-    previous_request = 0.0
+    next_request_at = 0.0
+    successful_probes = 0
     for index, entry in enumerate(batch, start=1):
-        wait = args.interval - (time.monotonic() - previous_request)
-        if previous_request and wait > 0:
+        wait = next_request_at - time.monotonic()
+        if wait > 0:
             time.sleep(wait)
         slug = entry["slug"]
-        previous_request = time.monotonic()
         result = job_boards.probe_workable_board(slug)
+        next_request_at = time.monotonic() + args.interval
 
         if (
             result.get("http_status") == 429
-            and result.get("retry_after_seconds") is not None
-            and float(result["retry_after_seconds"]) <= args.max_rate_limit_wait
         ):
-            retry_wait = max(args.interval, float(result["retry_after_seconds"]))
-            print(f"{slug}: HTTP 429; waiting {retry_wait:.1f}s before one retry")
-            time.sleep(retry_wait)
-            previous_request = time.monotonic()
-            result = job_boards.probe_workable_board(slug)
+            retry_wait = result.get("retry_after_seconds")
+            if retry_wait is None:
+                retry_wait = args.missing_rate_limit_wait
+                wait_source = "fallback"
+            else:
+                wait_source = "server"
+            if float(retry_wait) <= args.max_rate_limit_wait:
+                retry_wait = max(args.interval, float(retry_wait))
+                print(
+                    f"{slug}: HTTP 429; waiting {retry_wait:.1f}s "
+                    f"({wait_source}) before one retry"
+                )
+                time.sleep(retry_wait)
+                result = job_boards.probe_workable_board(slug)
+                next_request_at = time.monotonic() + args.interval
 
         classification = str(result["classification"])
         entry["status"] = classification
@@ -272,10 +308,18 @@ def main() -> int:
         entry["reason"] = result.get("reason")
         if result.get("retry_after_seconds") is not None:
             entry["retry_after_seconds"] = result["retry_after_seconds"]
+        for key in (
+            "rate_limit_limit",
+            "rate_limit_remaining",
+            "rate_limit_wait_seconds",
+        ):
+            if result.get(key) is not None:
+                entry[key] = result[key]
         state["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         _atomic_write(args.state, state)
 
         if classification == "verified":
+            successful_probes += 1
             if _cache_verified(args.cache, slug):
                 added += 1
             if conn is not None:
@@ -283,6 +327,32 @@ def main() -> int:
                 if synced:
                     print(f"  PostgreSQL registry: added {slug}")
             print(f"[{index}/{len(batch)}] {slug}: verified; added={added}")
+            remaining_wait = result.get("rate_limit_wait_seconds")
+            remaining = result.get("rate_limit_remaining")
+            if (
+                remaining == 0
+                and remaining_wait is not None
+                and float(remaining_wait) > 0
+            ):
+                next_request_at = max(
+                    next_request_at,
+                    time.monotonic() + float(remaining_wait),
+                )
+                print(
+                    f"  Workable rate window exhausted; waiting "
+                    f"{float(remaining_wait):.1f}s for reset"
+                )
+            if (
+                args.success_cooldown_every
+                and successful_probes % args.success_cooldown_every == 0
+                and index < len(batch)
+            ):
+                print(
+                    f"  success milestone {successful_probes}; cooling down "
+                    f"{args.success_cooldown:.1f}s"
+                )
+                time.sleep(args.success_cooldown)
+                next_request_at = time.monotonic() + args.interval
         else:
             print(
                 f"[{index}/{len(batch)}] {slug}: {classification} "
