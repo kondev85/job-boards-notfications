@@ -67,7 +67,7 @@ def _deactivate(conn: psycopg.Connection, board_values: list[str]) -> None:
             row = conn.execute(
                 """
                 UPDATE job_boards
-                SET active = FALSE, updated_at = now()
+                SET active = FALSE
                 WHERE ats = %s AND slug = %s
                 RETURNING board_id
                 """,
@@ -89,7 +89,7 @@ def _deactivate_failures(
         rows = conn.execute(
             """
             UPDATE job_boards AS b
-            SET active = FALSE, updated_at = now()
+            SET active = FALSE
             FROM daily_import_run_boards AS rb
             WHERE rb.import_run_id = %s
               AND rb.board_id = b.board_id
