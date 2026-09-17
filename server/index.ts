@@ -437,8 +437,8 @@ app.patch("/api/jobs/:jobId/status", async (req: AuthedRequest, res) => {
 app.post("/api/jobs/:jobId/viewed", async (req: AuthedRequest, res) => {
   const viewedAt = new Date();
   const result = await pool.query(
-    `INSERT INTO user_job_state(user_id,job_id,viewed_at)
-     SELECT $1,j.job_id,$3
+    `INSERT INTO user_job_state(user_id,job_id,status,viewed_at)
+     SELECT $1,j.job_id,'viewed',$3
      FROM jobs j
      WHERE j.job_id=$2 AND j.closed_at IS NULL
        AND EXISTS (SELECT 1 FROM job_boards b WHERE b.board_id=j.board_id AND b.active IS TRUE)
