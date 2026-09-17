@@ -11,3 +11,4 @@
 - [ATS constraint synchronization](ats-constraint-synchronization.md) — keep the TypeScript startup migration and Python schema allowlists identical when adding an ATS.
 - [Workable validation rate limits](workable-validation-rate-limits.md) — broad public-feed sweeps can trigger provider-wide 429s; treat them as inconclusive.
 - [Board registry maintenance schema](board-registry-maintenance-schema.md) — job_boards has no updated_at column; status maintenance should only change active.
+- [Workable empty-board pruning](workable-empty-board-pruning.md) — prune only after a successful widget response confirms zero total jobs; preserve boards with older-only postings.

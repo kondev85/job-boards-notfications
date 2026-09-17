@@ -996,6 +996,24 @@ def _record_daily_board_success(
     )
 
 
+def _deactivate_workable_board(
+    cur: psycopg.Cursor,
+    slug: str,
+) -> int:
+    """Remove an empty Workable account from the active PostgreSQL registry."""
+    cur.execute(
+        """
+        UPDATE job_boards
+        SET active = FALSE
+        WHERE ats = 'workable'
+          AND slug = %s
+          AND active IS TRUE
+        """,
+        (slug,),
+    )
+    return cur.rowcount
+
+
 def _record_daily_board_failure(
     conn: psycopg.Connection,
     import_run_id: int,
@@ -1200,6 +1218,10 @@ def _import_daily_board(
             cached_workday_jobs=cached_workday_jobs,
             detail_concurrency=DAILY_DETAIL_CONCURRENCY,
         )
+        empty_workable_board = (
+            ats == "workable"
+            and fetch_meta.get("workable_source_job_count") == 0
+        )
         with connection.transaction():
             with connection.cursor() as cur:
                 seen_at = datetime.now(timezone.utc)
@@ -1222,6 +1244,11 @@ def _import_daily_board(
                     seen_at,
                     published_after,
                 )
+                deactivated = (
+                    _deactivate_workable_board(cur, slug)
+                    if empty_workable_board
+                    else 0
+                )
                 _record_daily_board_success(
                     cur,
                     import_run_id,
@@ -1231,6 +1258,16 @@ def _import_daily_board(
                     updated=existing,
                     worker_id=board_worker_id,
                 )
+        if empty_workable_board:
+            cache_removed = job_boards.remove_workable_board_from_cache(slug)
+            print(
+                f"{position}/{daily_board_count} workable/{slug}: "
+                "no current jobs; deactivated PostgreSQL board "
+                f"({deactivated}) and "
+                f"{'removed it from boards.json' if cache_removed else 'it was not in boards.json'}; "
+                "historical jobs retained",
+                flush=True,
+            )
         print(
             f"{position}/{daily_board_count} {ats}/{slug}: "
             f"{len(rows)} jobs ({new} new, {existing} updated, "
@@ -1244,6 +1281,7 @@ def _import_daily_board(
             "closed": closed,
             "unchanged": 0,
             "failed": 0,
+            "pruned": 1 if empty_workable_board else 0,
         }
     except job_boards.NotModified:
         if connection is not None:
@@ -1282,6 +1320,7 @@ def _import_daily_board(
             "closed": 0,
             "unchanged": 1,
             "failed": 0,
+            "pruned": 0,
         }
     except job_boards.NotFound as exc:
         if connection is not None:
@@ -1307,6 +1346,7 @@ def _import_daily_board(
             "closed": 0,
             "unchanged": 0,
             "failed": 1,
+            "pruned": 0,
         }
     except Exception as exc:
         if connection is not None:
@@ -1340,6 +1380,7 @@ def _import_daily_board(
             "closed": 0,
             "unchanged": 0,
             "failed": 1,
+            "pruned": 0,
         }
     finally:
         if connection is not None:
@@ -1377,6 +1418,7 @@ def _run_daily_boards_parallel(
         "closed": 0,
         "unchanged": 0,
         "failed": 0,
+        "pruned": 0,
     }
     print(
         f"Daily import parallelism: {DAILY_BOARD_WORKERS} total board workers; "
@@ -1473,6 +1515,7 @@ def _run_daily_boards_parallel(
                             "closed": 0,
                             "unchanged": 0,
                             "failed": 1,
+                            "pruned": 0,
                         }
                     for key in stats:
                         stats[key] += result[key]
@@ -1534,6 +1577,12 @@ def _fetch_normalized(
         raw_jobs = source["jobs"](payload)
     if not isinstance(raw_jobs, list):
         raise ValueError(f"{ats}/{slug}: response has no jobs array")
+    if ats == "workable" and meta is not None:
+        meta["workable_source_job_count"] = getattr(
+            raw_jobs,
+            "source_job_count",
+            None,
+        )
 
     normalized_rows: list[dict[str, Any]] = []
     skipped = 0
@@ -3552,6 +3601,7 @@ def _run(args: argparse.Namespace) -> int:
     total_new = 0
     total_updated = 0
     total_closed = 0
+    total_pruned = 0
     failed = 0
     unchanged = 0
     daily_import_run_id: int | None = None
@@ -3642,6 +3692,7 @@ def _run(args: argparse.Namespace) -> int:
             total_closed += parallel_stats["closed"]
             unchanged += parallel_stats["unchanged"]
             failed += parallel_stats["failed"]
+            total_pruned += parallel_stats["pruned"]
             # The parallel worker has consumed the entire immutable snapshot.
             # Leave the existing loop for explicitly scoped, non-daily imports.
             daily_scan_items = []
@@ -3937,13 +3988,15 @@ def _run(args: argparse.Namespace) -> int:
         print(
             f"\nPostgreSQL import complete: {total_jobs} current jobs, "
             f"{total_new} new, {total_updated} updated, {total_closed} closed, "
-            f"{unchanged} unchanged, {failed} failed boards"
+            f"{unchanged} unchanged, {total_pruned} Workable boards deactivated, "
+            f"{failed} failed boards"
         )
     elif not match_requested and not recommend_requested:
         print(
             f"\nPostgreSQL import complete: {total_jobs} current jobs, "
             f"{total_new} new, {total_updated} updated, {total_closed} closed, "
-            f"{unchanged} unchanged, {failed} failed boards"
+            f"{unchanged} unchanged, {total_pruned} Workable boards deactivated, "
+            f"{failed} failed boards"
         )
     return 1 if failed else 0
 

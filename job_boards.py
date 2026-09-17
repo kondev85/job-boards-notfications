@@ -133,6 +133,7 @@ _NEXT_REQUEST_AT: dict[str, float] = {}
 _REQUEST_INTERVALS = {
     "apply.workable.com": 2.0,
 }
+_WORKABLE_CACHE_LOCK = threading.Lock()
 
 
 def _wait_for_paced_host(netloc: str) -> None:
@@ -898,6 +899,12 @@ def normalize_workable(job: dict) -> dict | None:
 _WORKABLE_DETAIL_CONCURRENCY = 3
 
 
+class WorkableJobList(list):
+    """Eligible Workable jobs plus the provider's total current-job count."""
+
+    source_job_count: int = 0
+
+
 def fetch_workable_jobs(
     slug: str,
     published_after: datetime | None = None,
@@ -921,7 +928,9 @@ def fetch_workable_jobs(
                 continue
         eligible.append(item)
 
-    return eligible
+    result = WorkableJobList(eligible)
+    result.source_job_count = len(jobs)
+    return result
 
 
 def _workable_board_exists(slug: str) -> bool:
@@ -930,6 +939,24 @@ def _workable_board_exists(slug: str) -> bool:
         return isinstance(payload, dict) and isinstance(payload.get("jobs"), list)
     except Exception:
         return False
+
+
+def remove_workable_board_from_cache(slug: str) -> bool:
+    """Remove one Workable account from the runtime board cache."""
+    with _WORKABLE_CACHE_LOCK:
+        boards = _read_boards(BOARDS_CACHE)
+        known = boards.get("workable")
+        if not isinstance(known, list):
+            return False
+        retained = [
+            item for item in known
+            if str(item).casefold() != str(slug).casefold()
+        ]
+        if len(retained) == len(known):
+            return False
+        boards["workable"] = retained
+        _write_json_atomic(BOARDS_CACHE, boards)
+        return True
 
 
 def normalize_ashby(job: dict) -> dict | None:

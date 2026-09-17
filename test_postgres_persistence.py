@@ -580,6 +580,31 @@ def test_adapter_mappings_are_offline_and_keep_descriptions():
     assert skipped == 0 and greenhouse_rows[0]["external_id"] == "42"
     assert greenhouse_rows[0]["description_text"] is None
 
+    workable_meta: dict[str, object] = {}
+    original_workable_get = job_boards._workable_get_json
+    job_boards._workable_get_json = lambda *args, **kwargs: {
+        "jobs": [
+            {
+                "shortcode": "old-workable-1",
+                "title": "Older Engineer",
+                "state": "published",
+                "publishedAt": "2026-07-01T10:00:00Z",
+                "location": {"city": "Paris", "country": "France"},
+            }
+        ]
+    }
+    try:
+        workable_rows, skipped = persistence._fetch_normalized(
+            "workable",
+            "acme",
+            published_after=datetime(2026, 8, 1, tzinfo=timezone.utc),
+            meta=workable_meta,
+        )
+    finally:
+        job_boards._workable_get_json = original_workable_get
+    assert skipped == 0 and not workable_rows
+    assert workable_meta["workable_source_job_count"] == 1
+
 
 def test_timestamp_conversion_handles_iso_epoch_and_invalid_values():
     assert persistence._timestamp("2026-08-01T12:30:00Z") == datetime(
