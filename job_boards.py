@@ -128,6 +128,27 @@ _POOLED_HOSTS = {
 # serialise the pool; a thread-local dict keeps the 8 workers independent, so a full
 # run opens ~8 connections per host rather than one per board.
 _CONNECTIONS = threading.local()
+_REQUEST_PACING_LOCK = threading.Lock()
+_NEXT_REQUEST_AT: dict[str, float] = {}
+_REQUEST_INTERVALS = {
+    "apply.workable.com": 2.0,
+}
+
+
+def _wait_for_paced_host(netloc: str) -> None:
+    """Keep provider requests spaced even when callers use worker threads."""
+    hostname = netloc.split(":", 1)[0].lower()
+    interval = _REQUEST_INTERVALS.get(hostname)
+    if interval is None:
+        return
+
+    with _REQUEST_PACING_LOCK:
+        now = time.monotonic()
+        scheduled = _NEXT_REQUEST_AT.get(hostname, now)
+        wait = max(0.0, scheduled - now)
+        _NEXT_REQUEST_AT[hostname] = max(now, scheduled) + interval
+    if wait > 0:
+        time.sleep(wait)
 
 
 def _lower_headers(items) -> dict:
@@ -168,6 +189,7 @@ def _pooled_request(
                 parts.netloc, timeout=timeout
             )
         try:
+            _wait_for_paced_host(parts.netloc)
             if body is None:
                 conn.request(method, target, headers=headers)
             else:
@@ -529,6 +551,15 @@ def workable_board_url(slug: str) -> str:
     return f"https://apply.workable.com/api/v3/accounts/{account}/jobs"
 
 
+def workable_widget_url(slug: str) -> str:
+    """Return Workable's public widget endpoint with complete job data."""
+    account = urllib.parse.quote(str(slug).strip(), safe="")
+    return (
+        f"https://apply.workable.com/api/v1/widget/accounts/"
+        f"{account}?details=true"
+    )
+
+
 def workable_career_url(slug: str) -> str:
     return f"https://apply.workable.com/{urllib.parse.quote(str(slug).strip(), safe='')}/"
 
@@ -580,6 +611,50 @@ def _workable_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
             if exc.code not in (429, 500, 502, 503, 504) or attempt == 3:
                 raise
             time.sleep(_retry_delay(exc.headers.get("Retry-After"), attempt))
+        except (urllib.error.URLError, TimeoutError, http.client.HTTPException, OSError):
+            if attempt == 3:
+                raise
+            time.sleep(2**attempt)
+    raise RuntimeError("unreachable")
+
+
+def _workable_get_json(url: str, timeout: int = 30) -> dict:
+    """GET a Workable public endpoint with bounded retry handling."""
+    headers = {
+        "User-Agent": UA,
+        "Accept": "application/json",
+    }
+    for attempt in range(4):
+        try:
+            if _is_pooled_host(urllib.parse.urlsplit(url).netloc):
+                status, response_headers, response_body = _pooled_request(
+                    url, "GET", timeout, headers
+                )
+                if status == 404:
+                    raise NotFound(url)
+                if status >= 400:
+                    if status not in (429, 500, 502, 503, 504) or attempt == 3:
+                        raise urllib.error.HTTPError(
+                            url, status, "Workable request failed",
+                            response_headers, None,
+                        )
+                    time.sleep(_retry_delay(response_headers.get("retry-after"), attempt))
+                    continue
+                result = json.loads(response_body)
+            else:
+                request = urllib.request.Request(url, headers=headers, method="GET")
+                with urllib.request.urlopen(request, timeout=timeout) as response:
+                    result = json.loads(response.read())
+            if not isinstance(result, dict):
+                raise ValueError("Workable response is not an object")
+            return result
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                raise NotFound(url) from exc
+            if exc.code not in (429, 500, 502, 503, 504) or attempt == 3:
+                raise
+            retry_after = exc.headers.get("retry-after") if exc.headers else None
+            time.sleep(_retry_delay(retry_after, attempt))
         except (urllib.error.URLError, TimeoutError, http.client.HTTPException, OSError):
             if attempt == 3:
                 raise
@@ -650,6 +725,10 @@ def _workable_rate_limit_metadata(headers: dict[str, str]) -> dict[str, object]:
     return metadata
 
 
+def _workable_published_value(job: dict) -> object:
+    return job.get("published") or job.get("published_on") or job.get("publishedAt")
+
+
 def probe_workable_board(
     slug: str,
     timeout: int = 25,
@@ -663,16 +742,14 @@ def probe_workable_board(
     to continue. When ``published_after`` is supplied, verification also
     requires at least one posting published on or after that cutoff.
     """
-    url = workable_board_url(slug)
-    body = b"{}"
+    url = workable_widget_url(slug)
     headers = {
         "User-Agent": UA,
         "Accept": "application/json",
-        "Content-Type": "application/json",
     }
     try:
         status, response_headers, response_body = _pooled_request(
-            url, "POST", timeout, headers, body
+            url, "GET", timeout, headers
         )
     except Exception as exc:
         return {
@@ -704,15 +781,20 @@ def probe_workable_board(
                 "stop": False,
                 **rate_limit_metadata,
             }
-        if isinstance(result, dict) and isinstance(result.get("results"), list):
-            jobs = result["results"]
+        jobs = None
+        if isinstance(result, dict):
+            if isinstance(result.get("jobs"), list):
+                jobs = result["jobs"]
+            elif isinstance(result.get("results"), list):
+                jobs = result["results"]
+        if jobs is not None:
             if published_after is not None:
                 recent_jobs = [
                     item
                     for item in jobs
                     if isinstance(item, dict)
                     and published_within(
-                        _provider_datetime(item.get("published")),
+                        _provider_datetime(_workable_published_value(item)),
                         published_after,
                     )
                 ]
@@ -743,7 +825,7 @@ def probe_workable_board(
         return {
             "classification": "inconclusive",
             "http_status": status,
-            "reason": "200 response has no results array",
+            "reason": "200 response has no jobs array",
             "stop": False,
             **rate_limit_metadata,
         }
@@ -783,7 +865,7 @@ def normalize_workable(job: dict) -> dict | None:
     labels = [_location_label(location) for location in locations]
     labels = list(dict.fromkeys(label for label in labels if label))
     workplace_key = str(job.get("workplace") or "").casefold().replace("-", "_")
-    if job.get("remote") or workplace_key == "remote":
+    if job.get("remote") or job.get("telecommuting") or workplace_key == "remote":
         workplace = "remote"
     elif workplace_key in {"hybrid", "on_site", "onsite"}:
         workplace = "hybrid" if workplace_key == "hybrid" else "onsite"
@@ -802,8 +884,8 @@ def normalize_workable(job: dict) -> dict | None:
         "isRemote": workplace == "remote",
         "workplaceType": workplace,
         "address": {"locations": locations} if locations else None,
-        "publishedAt": _provider_datetime(job.get("published")),
-        "jobUrl": job.get("url") or "",
+        "publishedAt": _provider_datetime(_workable_published_value(job)),
+        "jobUrl": job.get("url") or job.get("shortlink") or "",
         "_description": "\n\n".join(
             str(job.get(key) or "")
             for key in ("description", "requirements", "benefits")
@@ -821,56 +903,31 @@ def fetch_workable_jobs(
     published_after: datetime | None = None,
     detail_concurrency: int | None = None,
 ) -> list[dict]:
-    """Fetch Workable's complete public list and enrich cutoff-eligible jobs."""
-    payload = _workable_post_json(workable_board_url(slug), {})
-    jobs = payload.get("results")
+    """Fetch Workable's complete public widget list."""
+    payload = _workable_get_json(workable_widget_url(slug))
+    jobs = payload.get("jobs")
     if not isinstance(jobs, list):
-        raise ValueError(f"workable/{slug}: response has no results array")
-    total = payload.get("total")
-    if total is not None and int(total) != len(jobs):
-        raise ValueError(
-            f"workable/{slug}: response total {total} differs from results {len(jobs)}"
-        )
+        raise ValueError(f"workable/{slug}: response has no jobs array")
 
     eligible: list[dict] = []
     for item in jobs:
         if not isinstance(item, dict):
             continue
         if published_after is not None:
-            published = _provider_datetime(item.get("published"))
+            published = _provider_datetime(_workable_published_value(item))
             if not published:
                 continue
             if datetime.fromisoformat(published) < published_after:
                 continue
         eligible.append(item)
 
-    def enrich(item: dict) -> dict:
-        shortcode = str(item.get("shortcode") or "").strip()
-        if not shortcode:
-            return item
-        try:
-            detail = _workable_detail(slug, shortcode)
-        except Exception as exc:
-            print(
-                f"  workable/{slug}/{shortcode}: detail request failed "
-                f"({type(exc).__name__}: {exc})",
-                file=sys.stderr,
-            )
-            return item
-        merged = dict(item)
-        merged.update(detail)
-        return merged
-
-    with ThreadPoolExecutor(
-        max_workers=detail_concurrency or _WORKABLE_DETAIL_CONCURRENCY
-    ) as pool:
-        return list(pool.map(enrich, eligible))
+    return eligible
 
 
 def _workable_board_exists(slug: str) -> bool:
     try:
-        payload = _workable_post_json(workable_board_url(slug), {}, timeout=25)
-        return isinstance(payload, dict) and isinstance(payload.get("results"), list)
+        payload = _workable_get_json(workable_widget_url(slug), timeout=25)
+        return isinstance(payload, dict) and isinstance(payload.get("jobs"), list)
     except Exception:
         return False
 
@@ -1659,7 +1716,7 @@ SOURCES = {
         "domains": ["apply.workable.com"],
         "registry_only": True,
         "api": None,
-        "jobs": lambda payload: payload.get("results"),
+        "jobs": lambda payload: payload.get("jobs"),
         "normalize": normalize_workable,
         "content_param": None,
         "junk_prefixes": (),

@@ -522,47 +522,37 @@ def test_teamtailor_adapter_follows_json_feed_pagination():
     assert any("page=2" in url for url in calls)
 
 
-def test_workable_adapter_enriches_cutoff_eligible_jobs():
+def test_workable_adapter_uses_widget_jobs_after_cutoff():
     import job_boards
 
-    original_post = job_boards._workable_post_json
-    original_detail = job_boards._workable_detail
-    calls = []
+    original_get = job_boards._workable_get_json
 
-    def fake_post(url, payload, timeout=30):
+    def fake_get(url, timeout=30):
         return {
-            "total": 2,
-            "results": [
+            "jobs": [
                 {
                     "shortcode": "recent",
                     "title": "Recent",
-                    "state": "published",
-                    "published": "2026-09-01T00:00:00Z",
+                    "published_on": "2026-09-01",
+                    "description": "<p>Recent description</p>",
                 },
                 {
                     "shortcode": "old",
                     "title": "Old",
-                    "state": "published",
-                    "published": "2026-07-01T00:00:00Z",
+                    "published_on": "2026-07-01",
                 },
             ],
         }
 
-    def fake_detail(slug, shortcode):
-        calls.append((slug, shortcode))
-        return {"description": "<p>Recent description</p>"}
-
-    job_boards._workable_post_json = fake_post
-    job_boards._workable_detail = fake_detail
+    job_boards._workable_get_json = fake_get
     try:
         rows = job_boards.fetch_workable_jobs(
             "acme", datetime(2026, 8, 1, tzinfo=timezone.utc), detail_concurrency=1
         )
     finally:
-        job_boards._workable_post_json = original_post
-        job_boards._workable_detail = original_detail
+        job_boards._workable_get_json = original_get
     assert [row["shortcode"] for row in rows] == ["recent"]
-    assert calls == [("acme", "recent")]
+    assert rows[0]["description"] == "<p>Recent description</p>"
 
 
 def test_workable_probe_preserves_404_and_429_outcomes():
