@@ -10,5 +10,7 @@ validation under that condition is inconclusive, not evidence that the boards ar
 **Why:** A high-concurrency sweep triggered the same long rate limit for known-good accounts,
 including an account previously confirmed to have current published jobs.
 
-**How to apply:** Validate Workable registries conservatively, record rate-limit failures
-separately from invalid feeds, and only add boards with successful feed evidence.
+**How to apply:** Validate Workable registries conservatively with checkpointed batches,
+record rate-limit failures separately from invalid feeds, and only add boards with
+successful feed evidence. The accepted workflow is an append-only cache plus explicit
+PostgreSQL synchronization for verified entries.

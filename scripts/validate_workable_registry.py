@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.11"
-# dependencies = []
+# dependencies = ["psycopg[binary]>=3.2,<4"]
 # ///
 """Safely validate a Workable account registry in resumable batches.
 
@@ -20,14 +20,18 @@ import argparse
 import csv
 import hashlib
 import json
+import os
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import job_boards
+import psycopg
+import postgres_persistence
 
 
 DEFAULT_STATE = ROOT / "reports" / "workable-validation-progress.json"
@@ -120,6 +124,18 @@ def _summary(entries: dict[str, dict]) -> dict[str, int]:
     return counts
 
 
+def _sync_postgres(conn: psycopg.Connection, slugs: list[str]) -> int:
+    if not slugs:
+        return 0
+    with conn.transaction():
+        with conn.cursor() as cur:
+            return postgres_persistence._sync_board_registry(
+                cur,
+                [("workable", slug) for slug in slugs],
+                datetime.now(timezone.utc),
+            )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Validate Workable registry slugs without losing rate-limited candidates."
@@ -156,6 +172,16 @@ def main() -> int:
         help="retry a 429 once when its server wait is no longer than this; "
         "longer waits stop safely (default: 30)",
     )
+    parser.add_argument(
+        "--sync-postgres",
+        action="store_true",
+        help="also add verified slugs to the PostgreSQL job_boards registry",
+    )
+    parser.add_argument(
+        "--sync-only",
+        action="store_true",
+        help="synchronize verified checkpoint entries without probing new slugs",
+    )
     args = parser.parse_args()
 
     if not args.registry.exists():
@@ -166,6 +192,8 @@ def main() -> int:
         parser.error("--interval must be non-negative")
     if args.max_rate_limit_wait < 0:
         parser.error("--max-rate-limit-wait must be non-negative")
+    if args.sync_only and not args.sync_postgres:
+        parser.error("--sync-only requires --sync-postgres")
 
     candidates = _read_candidates(args.registry)
     state = _load_state(args.state, args.registry, candidates)
@@ -173,12 +201,34 @@ def main() -> int:
     state["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     _atomic_write(args.state, state)
 
+    conn = None
+    if args.sync_postgres:
+        dsn = os.environ.get("DATABASE_URL")
+        if not dsn:
+            raise SystemExit(
+                "DATABASE_URL is not set; omit --sync-postgres or configure the "
+                "Replit-managed database"
+            )
+        conn = psycopg.connect(dsn)
+        try:
+            existing_verified = [
+                entry["slug"]
+                for entry in state["entries"].values()
+                if entry.get("status") == "verified"
+            ]
+            synced = _sync_postgres(conn, existing_verified)
+            if synced:
+                print(f"PostgreSQL registry: synchronized {synced} verified boards")
+        except Exception:
+            conn.close()
+            raise
+
     pending = [
         entry
         for entry in state["entries"].values()
         if entry.get("status") in {"pending", "inconclusive"}
     ]
-    batch = pending[: args.batch_size]
+    batch = [] if args.sync_only else pending[: args.batch_size]
     print(
         f"Workable registry: {len(candidates)} candidates; "
         f"{len(batch)} to probe; current {_summary(state['entries'])}"
@@ -221,6 +271,10 @@ def main() -> int:
         if classification == "verified":
             if _cache_verified(args.cache, slug):
                 added += 1
+            if conn is not None:
+                synced = _sync_postgres(conn, [slug])
+                if synced:
+                    print(f"  PostgreSQL registry: added {slug}")
             print(f"[{index}/{len(batch)}] {slug}: verified; added={added}")
         else:
             print(
@@ -242,6 +296,8 @@ def main() -> int:
     )
     if rate_limited:
         print(f"Resume later with the same command and checkpoint: {args.state}")
+    if conn is not None:
+        conn.close()
     return 0
 
 

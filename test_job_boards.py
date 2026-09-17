@@ -565,6 +565,57 @@ def test_workable_adapter_enriches_cutoff_eligible_jobs():
     assert calls == [("acme", "recent")]
 
 
+def test_workable_probe_preserves_404_and_429_outcomes():
+    import job_boards
+
+    original_pooled = job_boards._pooled_request
+    try:
+        job_boards._pooled_request = lambda *args, **kwargs: (404, {}, b"")
+        invalid = job_boards.probe_workable_board("missing")
+        assert invalid["classification"] == "invalid"
+        assert invalid["http_status"] == 404
+        assert invalid["stop"] is False
+
+        job_boards._pooled_request = lambda *args, **kwargs: (
+            429,
+            {"retry-after": "120"},
+            b'{"error":"rate limited"}',
+        )
+        throttled = job_boards.probe_workable_board("known-good")
+        assert throttled["classification"] == "inconclusive"
+        assert throttled["http_status"] == 429
+        assert throttled["retry_after_seconds"] == 120.0
+        assert throttled["stop"] is True
+    finally:
+        job_boards._pooled_request = original_pooled
+
+
+def test_workable_probe_requires_results_array_for_verification():
+    import job_boards
+
+    original_pooled = job_boards._pooled_request
+    try:
+        job_boards._pooled_request = lambda *args, **kwargs: (
+            200,
+            {},
+            b'{"total": 0}',
+        )
+        result = job_boards.probe_workable_board("incomplete-response")
+        assert result["classification"] == "inconclusive"
+        assert result["http_status"] == 200
+
+        job_boards._pooled_request = lambda *args, **kwargs: (
+            200,
+            {},
+            b'{"total": 0, "results": []}',
+        )
+        verified = job_boards.probe_workable_board("empty-but-valid")
+        assert verified["classification"] == "verified"
+        assert verified["reason"] == "results array (0 jobs)"
+    finally:
+        job_boards._pooled_request = original_pooled
+
+
 def test_smartrecruiters_adapter_paginates_and_enriches_details():
     import job_boards
 

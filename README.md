@@ -547,6 +547,26 @@ platform's posting API. Cached to `boards.json` and skipped on later runs unless
 directly; their public feeds are validated with provider-specific GET/POST shape checks
 instead of archive discovery.
 
+### Workable registry validation
+
+Workable's public account endpoint is rate-limited, so its supplied registry must be
+validated in small, resumable batches. The validator stores progress in
+`reports/workable-validation-progress.json`, appends only successful probes to
+`boards.json`, and never treats a throttle or server error as a dead board:
+
+```bash
+uv run scripts/validate_workable_registry.py \
+  attached_assets/workable_1789592949726.csv \
+  --batch-size 25 \
+  --interval 1.2 \
+  --sync-postgres
+```
+
+HTTP 404 responses are recorded as invalid. HTTP 429, 5xx, timeout, and network
+failures remain retryable; a provider throttle stops the current batch safely.
+`--sync-postgres --sync-only` promotes already verified checkpoint entries without
+making any new Workable requests.
+
 Measured funnels:
 
 ```
