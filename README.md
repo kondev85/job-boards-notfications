@@ -557,10 +557,15 @@ validated in small, resumable batches. The validator stores progress in
 ```bash
 uv run scripts/validate_workable_registry.py \
   attached_assets/workable_1789592949726.csv \
-  --batch-size 25 \
+  --all \
   --interval 1.2 \
   --sync-postgres
 ```
+
+`--all` does not disable resumability: every result is checkpointed before the next
+probe, so rerunning the same command continues from the remaining pending or
+inconclusive entries. The run also stops safely if Workable reports provider/server
+throttling.
 
 HTTP 404 responses are recorded as invalid. HTTP 429, 5xx, timeout, and network
 failures remain retryable; a provider throttle stops the current batch safely.

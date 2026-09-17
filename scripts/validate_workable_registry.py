@@ -160,6 +160,11 @@ def main() -> int:
         help="maximum candidates to probe in this run (default: 25)",
     )
     parser.add_argument(
+        "--all",
+        action="store_true",
+        help="probe all pending candidates in this resumable run",
+    )
+    parser.add_argument(
         "--interval",
         type=float,
         default=1.2,
@@ -228,7 +233,9 @@ def main() -> int:
         for entry in state["entries"].values()
         if entry.get("status") in {"pending", "inconclusive"}
     ]
-    batch = [] if args.sync_only else pending[: args.batch_size]
+    batch = [] if args.sync_only else (
+        pending if args.all else pending[: args.batch_size]
+    )
     print(
         f"Workable registry: {len(candidates)} candidates; "
         f"{len(batch)} to probe; current {_summary(state['entries'])}"
