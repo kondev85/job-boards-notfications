@@ -585,6 +585,7 @@ def test_workable_probe_preserves_404_and_429_outcomes():
         assert throttled["classification"] == "inconclusive"
         assert throttled["http_status"] == 429
         assert throttled["retry_after_seconds"] == 120.0
+        assert throttled["rate_limit_headers"] == {"retry-after": "120"}
         assert throttled["stop"] is True
     finally:
         job_boards._pooled_request = original_pooled
@@ -645,6 +646,7 @@ def test_workable_probe_exports_rate_limit_headers():
                 "x-rate-limit-limit": "10",
                 "x-rate-limit-remaining": "0",
                 "x-rate-limit-reset": str(time.time() + 30),
+                "retry-after": "30",
             },
             b'{"results": []}',
         )
@@ -653,6 +655,8 @@ def test_workable_probe_exports_rate_limit_headers():
         assert result["rate_limit_limit"] == 10
         assert result["rate_limit_remaining"] == 0
         assert result["rate_limit_wait_seconds"] > 0
+        assert result["rate_limit_headers"]["x-rate-limit-limit"] == "10"
+        assert result["rate_limit_headers"]["x-rate-limit-remaining"] == "0"
     finally:
         job_boards._pooled_request = original_pooled
 

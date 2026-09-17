@@ -13,8 +13,8 @@ public-endpoint throttle returned `Retry-After: 86400`. Workable officially docu
 10 requests per 10 seconds for account tokens, but that short-window limit does not explain
 the additional public/shared-network quota.
 
-**How to apply:** Validate conservatively with checkpointed batches, a default ceiling of
-100 probes per 24-hour window, and the provider's longer `Retry-After` whenever present.
-During an active cooldown, send no requests. Keep throttles retryable, and only register
+**How to apply:** Validate conservatively with checkpointed batches, a 1.5-second floor,
+the existing 60-second pause after 100 successful probes, and the provider's `Retry-After`
+and `X-Rate-Limit-*` headers whenever present. Keep throttles retryable, and only register
 boards with a qualifying recent posting. Do not rotate or spoof source IPs to bypass the
 limit; request provider authorization or a documented partner allowance for higher volume.
