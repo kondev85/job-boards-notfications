@@ -4,16 +4,17 @@ description: Workable's public account jobs endpoint can impose a provider-wide 
 ---
 
 Workable's public `POST /api/v3/accounts/{account}/jobs` endpoint can return a provider-wide
-HTTP 429 with a very long `Retry-After` after a broad multi-board sweep. A zero-result
-validation under that condition is inconclusive, not evidence that the boards are invalid.
+HTTP 429 with a 24-hour `Retry-After` after about 150 requests from Replit's shared outbound
+network. A zero-result validation under that condition is inconclusive, not evidence that
+the boards are invalid.
 
-**Why:** A high-concurrency sweep triggered the same long rate limit for known-good accounts,
-including an account previously confirmed to have current published jobs.
+**Why:** Multiple paced sweeps consistently completed about 150 responses before a headerless
+public-endpoint throttle returned `Retry-After: 86400`. Workable officially documents
+10 requests per 10 seconds for account tokens, but that short-window limit does not explain
+the additional public/shared-network quota.
 
-**How to apply:** Validate Workable registries conservatively with checkpointed batches,
-record rate-limit failures separately from invalid feeds, and only add boards with
-successful feed evidence. The accepted workflow is an append-only cache plus explicit
-PostgreSQL synchronization for verified entries. Workable documents 10 account-token
-requests per 10 seconds; use a 1.5-second floor, honor rate-window headers, and pause
-60 seconds after 100 successes. In a sustained run, even that cadence can encounter a
-provider-wide headerless 429; retry once after 60 seconds, then stop rather than loop.
+**How to apply:** Validate conservatively with checkpointed batches, a default ceiling of
+100 probes per 24-hour window, and the provider's longer `Retry-After` whenever present.
+During an active cooldown, send no requests. Keep throttles retryable, and only register
+boards with a qualifying recent posting. Do not rotate or spoof source IPs to bypass the
+limit; request provider authorization or a documented partner allowance for higher volume.

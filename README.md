@@ -566,9 +566,13 @@ uv run scripts/validate_workable_registry.py \
 `--all` does not disable resumability: every result is checkpointed before the next
 probe, so rerunning the same command continues from the remaining pending or
 inconclusive entries. The validator stays below Workable's documented 10-requests-
-per-10-seconds account limit, reads the provider's rate-window headers, and pauses
-for 60 seconds after every 100 successful probes. The run also stops safely if
-Workable reports provider/server throttling.
+per-10-seconds account limit and reads the provider's rate-window headers. Because
+the public endpoint has also returned a 24-hour throttle after roughly 150 requests
+from the shared outbound network, the validator defaults to a conservative
+100-probe budget followed by a checkpointed 24-hour cooldown. It exits during the
+cooldown rather than keeping a process asleep; rerun the same command after the
+printed time. Override these safeguards with `--probe-budget` and
+`--quota-cooldown` only when Workable has granted a different limit.
 
 HTTP 404 responses are recorded as invalid. HTTP 429, 5xx, timeout, and network
 failures remain retryable; a provider throttle stops the current batch safely.

@@ -23,7 +23,7 @@ import json
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,6 +36,8 @@ import postgres_persistence
 
 DEFAULT_STATE = ROOT / "reports" / "workable-validation-progress.json"
 DEFAULT_PUBLISHED_AFTER = "2026-08-01"
+DEFAULT_PROBE_BUDGET = 100
+DEFAULT_QUOTA_COOLDOWN_SECONDS = 86_400
 
 
 def _atomic_write(path: Path, payload: object) -> None:
@@ -86,12 +88,12 @@ def _load_state(
     except (FileNotFoundError, json.JSONDecodeError):
         state = {}
 
-    entries = state.get("entries") if isinstance(state, dict) else None
-    if not isinstance(entries, dict):
-        entries = {}
+    stored_entries = state.get("entries") if isinstance(state, dict) else None
+    if not isinstance(stored_entries, dict):
+        stored_entries = {}
 
     reset_entries = state.get("validation_rule") != validation_rule
-    old_entries = {} if reset_entries else entries
+    old_entries = {} if reset_entries else stored_entries
     entries = {}
     for slug in candidates:
         key = slug.casefold()
@@ -103,13 +105,62 @@ def _load_state(
         else:
             entries[key] = {"slug": slug, "status": "pending"}
 
-    return {
+    loaded = {
         "version": 1,
         "source": str(source),
         "source_sha256": source_hash,
         "validation_rule": validation_rule,
         "entries": entries,
     }
+    if state.get("next_allowed_at"):
+        loaded["next_allowed_at"] = state["next_allowed_at"]
+    elif state.get("updated_at"):
+        retry_after = max(
+            (
+                float(entry.get("retry_after_seconds") or 0)
+                for entry in stored_entries.values()
+                if entry.get("http_status") == 429
+            ),
+            default=0.0,
+        )
+        if retry_after > 0:
+            try:
+                throttled_at = datetime.fromisoformat(
+                    str(state["updated_at"]).replace("Z", "+00:00")
+                )
+            except ValueError:
+                pass
+            else:
+                if throttled_at.tzinfo is None:
+                    throttled_at = throttled_at.replace(tzinfo=timezone.utc)
+                loaded["next_allowed_at"] = (
+                    throttled_at + timedelta(seconds=retry_after)
+                ).isoformat(timespec="seconds")
+    return loaded
+
+
+def _cooldown_remaining(state: dict) -> float:
+    value = str(state.get("next_allowed_at") or "").strip()
+    if not value:
+        return 0.0
+    try:
+        allowed_at = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        state.pop("next_allowed_at", None)
+        return 0.0
+    if allowed_at.tzinfo is None:
+        allowed_at = allowed_at.replace(tzinfo=timezone.utc)
+    remaining = (allowed_at - datetime.now(timezone.utc)).total_seconds()
+    if remaining <= 0:
+        state.pop("next_allowed_at", None)
+        return 0.0
+    return remaining
+
+
+def _set_cooldown(state: dict, seconds: float) -> None:
+    allowed_at = datetime.now(timezone.utc) + timedelta(seconds=max(0.0, seconds))
+    state["next_allowed_at"] = allowed_at.isoformat(timespec="seconds")
+    state["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
 def _cache_verified(cache_path: Path, slug: str) -> bool:
@@ -213,6 +264,24 @@ def main() -> int:
         help="seconds to cool down after each success milestone (default: 60)",
     )
     parser.add_argument(
+        "--probe-budget",
+        type=int,
+        default=DEFAULT_PROBE_BUDGET,
+        help=(
+            "maximum candidates to probe before a checkpointed quota cooldown; "
+            f"0 disables it (default: {DEFAULT_PROBE_BUDGET})"
+        ),
+    )
+    parser.add_argument(
+        "--quota-cooldown",
+        type=float,
+        default=DEFAULT_QUOTA_COOLDOWN_SECONDS,
+        help=(
+            "seconds to wait between probe-budget windows "
+            f"(default: {DEFAULT_QUOTA_COOLDOWN_SECONDS})"
+        ),
+    )
+    parser.add_argument(
         "--max-rate-limit-wait",
         type=float,
         default=60.0,
@@ -257,6 +326,10 @@ def main() -> int:
         parser.error("--success-cooldown-every must be non-negative")
     if args.success_cooldown < 0:
         parser.error("--success-cooldown must be non-negative")
+    if args.probe_budget < 0:
+        parser.error("--probe-budget must be non-negative")
+    if args.quota_cooldown < 0:
+        parser.error("--quota-cooldown must be non-negative")
     if args.max_rate_limit_wait < 0:
         parser.error("--max-rate-limit-wait must be non-negative")
     if args.missing_rate_limit_wait < 0:
@@ -269,6 +342,17 @@ def main() -> int:
     state = _load_state(args.state, args.registry, candidates, validation_rule)
     state["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     _atomic_write(args.state, state)
+
+    cooldown_remaining = _cooldown_remaining(state)
+    if cooldown_remaining > 0:
+        allowed_at = state["next_allowed_at"]
+        print(
+            "Workable quota cooldown is active; no requests were sent. "
+            f"Resume after {allowed_at} "
+            f"({cooldown_remaining / 3600:.1f} hours remaining)."
+        )
+        _atomic_write(args.state, state)
+        return 0
 
     conn = None
     if args.sync_postgres:
@@ -297,12 +381,24 @@ def main() -> int:
         for entry in state["entries"].values()
         if entry.get("status") in {"pending", "inconclusive"}
     ]
-    batch = [] if args.sync_only else (
+    requested_batch = [] if args.sync_only else (
         pending if args.all else pending[: args.batch_size]
+    )
+    batch = (
+        requested_batch[: args.probe_budget]
+        if args.probe_budget
+        else requested_batch
     )
     print(
         f"Workable registry: {len(candidates)} candidates; "
-        f"{len(batch)} to probe; current {_summary(state['entries'])}"
+        f"{len(batch)} to probe"
+        + (
+            f" ({len(requested_batch)} eligible before the "
+            f"{args.probe_budget}-probe budget)"
+            if len(requested_batch) != len(batch)
+            else ""
+        )
+        + f"; current {_summary(state['entries'])}"
     )
     if not batch:
         print("Nothing to validate.")
@@ -410,6 +506,10 @@ def main() -> int:
 
         if result.get("stop"):
             rate_limited = True
+            retry_after = result.get("retry_after_seconds")
+            if retry_after is not None:
+                _set_cooldown(state, float(retry_after))
+                _atomic_write(args.state, state)
             print(
                 "Stopping batch after a provider/server throttle. "
                 "The candidate remains retryable in the checkpoint."
@@ -422,6 +522,17 @@ def main() -> int:
     )
     if rate_limited:
         print(f"Resume later with the same command and checkpoint: {args.state}")
+    elif (
+        args.probe_budget
+        and len(batch) == args.probe_budget
+        and len(requested_batch) > len(batch)
+    ):
+        _set_cooldown(state, args.quota_cooldown)
+        _atomic_write(args.state, state)
+        print(
+            f"Probe budget reached; checkpointed a cooldown until "
+            f"{state['next_allowed_at']}. Resume with the same command after that time."
+        )
     if conn is not None:
         conn.close()
     return 0
