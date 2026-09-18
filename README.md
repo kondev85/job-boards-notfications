@@ -225,6 +225,9 @@ with a reliable publication date on or after the cutoff. Validation checkpoints
 every row in `provider-registry-progress.json`; rerunning the same command
 reuses completed valid/invalid rows and retries only inconclusive requests.
 Provider failures are never treated as inactive boards.
+Pinpoint is the exception to the date field rule: its public feed commonly omits
+publication timestamps, so a listing with `deadline_at` on or after the cutoff is
+accepted as active without changing that value into the job's `publishedAt`.
 
 An individual CDX page gets two attempts with a 60-second timeout. If it still fails, the
 page is recorded and the crawler continues so one slow archive shard cannot block hundreds

@@ -1851,9 +1851,35 @@ def pinpoint_board_url(slug: str) -> str:
     return f"https://{host}/postings.json"
 
 
+def _pinpoint_payload(slug: str) -> dict:
+    """Fetch a Pinpoint feed, following its small official tenant redirect."""
+    url = pinpoint_board_url(slug)
+    body = fetch(url, timeout=30, retries=3)
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        match = re.search(rb'href=["\'](https://[^"\']+/postings\.json)["\']', body)
+        if not match:
+            raise
+        redirected = match.group(1).decode("ascii")
+        target = urllib.parse.urlsplit(redirected)
+        if (
+            target.hostname is None
+            or not target.hostname.endswith(".pinpointhq.com")
+            or target.path != "/postings.json"
+            or target.query
+            or target.fragment
+        ):
+            raise ValueError(f"pinpoint/{slug}: unsafe redirect target")
+        payload = json.loads(fetch(redirected, timeout=30, retries=3))
+    if not isinstance(payload, dict):
+        raise ValueError(f"pinpoint/{slug}: response is not an object")
+    return payload
+
+
 def fetch_pinpoint_jobs(slug: str, published_after: datetime | None = None) -> list[dict]:
-    payload = json.loads(fetch(pinpoint_board_url(slug), timeout=30, retries=3))
-    jobs = payload.get("data") if isinstance(payload, dict) else None
+    payload = _pinpoint_payload(slug)
+    jobs = payload.get("data")
     if not isinstance(jobs, list):
         raise ValueError(f"pinpoint/{slug}: response has no data array")
     return [item for item in jobs if isinstance(item, dict)]
@@ -1861,8 +1887,7 @@ def fetch_pinpoint_jobs(slug: str, published_after: datetime | None = None) -> l
 
 def pinpoint_board_exists(slug: str) -> bool:
     try:
-        payload = json.loads(fetch(pinpoint_board_url(slug), timeout=25, retries=2))
-        return isinstance(payload, dict) and isinstance(payload.get("data"), list)
+        return isinstance(fetch_pinpoint_jobs(slug), list)
     except Exception:
         return False
 

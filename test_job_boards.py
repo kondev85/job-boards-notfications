@@ -24,6 +24,7 @@ from job_boards import (
     normalize_ashby,
     normalize_greenhouse,
     normalize_lever,
+    normalize_pinpoint,
     normalize_smartrecruiters,
     normalize_recruitee,
     normalize_teamtailor,
@@ -1914,6 +1915,28 @@ def test_published_within_boundaries():
     # safe direction is to drop what cannot be shown to be fresh
     assert not published_within("", cutoff)
     assert not published_within("not a date", cutoff)
+
+
+def test_pinpoint_registry_uses_deadline_without_overwriting_published_at():
+    cutoff = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    job = {
+        "id": "pin-1",
+        "title": "Sustainability Lead",
+        "deadline_at": "2026-09-30T22:59:59Z",
+        "location": {"name": "Remote"},
+    }
+    normalized = normalize_pinpoint(job)
+    assert normalized["publishedAt"] == ""
+
+    original = job_boards.SOURCES["pinpoint"]["fetch_jobs"]
+    job_boards.SOURCES["pinpoint"]["fetch_jobs"] = lambda slug, cutoff: [job]
+    try:
+        result = job_boards._registry_status("pinpoint", "anthesisgroup", cutoff)
+    finally:
+        job_boards.SOURCES["pinpoint"]["fetch_jobs"] = original
+
+    assert result["classification"] == "verified"
+    assert result["newestPostedAt"] == "2026-09-30T22:59:59+00:00"
 
 
 def test_since_filters_by_publish_date():

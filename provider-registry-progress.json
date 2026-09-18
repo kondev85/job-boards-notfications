@@ -1,6 +1,6 @@
 {
   "cutoff": "2026-08-01T00:00:00+00:00",
-  "updatedAt": "2026-09-18T12:55:15+00:00",
+  "updatedAt": "2026-09-18T13:03:18+00:00",
   "validations": {
     "personio:10xfounders": {
       "ats": "personio",
@@ -42822,3250 +42822,3390 @@
     "pinpoint:accenture": {
       "ats": "pinpoint",
       "slug": "accenture",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:17+00:00"
+      "classification": "verified",
+      "recentCount": 4,
+      "newestPostedAt": "2026-10-25T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:30+00:00"
     },
     "pinpoint:acme": {
       "ats": "pinpoint",
       "slug": "acme",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:18+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:31+00:00"
     },
     "pinpoint:acrobat": {
       "ats": "pinpoint",
       "slug": "acrobat",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:18+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:31+00:00"
     },
     "pinpoint:actica": {
       "ats": "pinpoint",
       "slug": "actica",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:19+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:32+00:00"
     },
     "pinpoint:glp": {
       "ats": "pinpoint",
       "slug": "glp",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:19+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:32+00:00"
     },
     "pinpoint:adaptix": {
       "ats": "pinpoint",
       "slug": "adaptix",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:20+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-10-14T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:33+00:00"
     },
     "pinpoint:admgroup": {
       "ats": "pinpoint",
       "slug": "admgroup",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:21+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:34+00:00"
     },
     "pinpoint:advitaortho": {
       "ats": "pinpoint",
       "slug": "advitaortho",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:22+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:35+00:00"
     },
     "pinpoint:aeriz": {
       "ats": "pinpoint",
       "slug": "aeriz",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:22+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:36+00:00"
     },
     "pinpoint:agencyanalytics": {
       "ats": "pinpoint",
       "slug": "agencyanalytics",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:23+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:36+00:00"
     },
     "pinpoint:aireon": {
       "ats": "pinpoint",
       "slug": "aireon",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:23+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:37+00:00"
     },
     "pinpoint:airtanker": {
       "ats": "pinpoint",
       "slug": "airtanker",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:24+00:00"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-10-01T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:37+00:00"
     },
     "pinpoint:alcanzaclinical": {
       "ats": "pinpoint",
       "slug": "alcanzaclinical",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:25+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:39+00:00"
     },
     "pinpoint:algomarketing": {
       "ats": "pinpoint",
       "slug": "algomarketing",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:26+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:40+00:00"
     },
     "pinpoint:alliedtalentpartners": {
       "ats": "pinpoint",
       "slug": "alliedtalentpartners",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:27+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:40+00:00"
     },
     "pinpoint:alternativeheat": {
       "ats": "pinpoint",
       "slug": "alternativeheat",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:28+00:00"
+      "classification": "verified",
+      "recentCount": 41,
+      "newestPostedAt": "2026-10-02T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:42+00:00"
     },
     "pinpoint:americanveterinarygroup": {
       "ats": "pinpoint",
       "slug": "americanveterinarygroup",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:29+00:00"
+      "classification": "verified",
+      "recentCount": 6,
+      "newestPostedAt": "2027-01-01T04:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:42+00:00"
     },
     "pinpoint:aawdc": {
       "ats": "pinpoint",
       "slug": "aawdc",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:30+00:00"
+      "classification": "verified",
+      "recentCount": 11,
+      "newestPostedAt": "2027-01-02T04:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:43+00:00"
     },
     "pinpoint:anthesisgroup": {
       "ats": "pinpoint",
       "slug": "anthesisgroup",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:31+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-30T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:44+00:00"
     },
     "pinpoint:anthonycollins": {
       "ats": "pinpoint",
       "slug": "anthonycollins",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:32+00:00"
+      "classification": "verified",
+      "recentCount": 6,
+      "newestPostedAt": "2026-12-17T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:45+00:00"
     },
     "pinpoint:apd": {
       "ats": "pinpoint",
       "slug": "apd",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:33+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:46+00:00"
     },
     "pinpoint:apollo": {
       "ats": "pinpoint",
       "slug": "apollo",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:33+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:46+00:00"
     },
     "pinpoint:appquantum": {
       "ats": "pinpoint",
       "slug": "appquantum",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:34+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:47+00:00"
     },
     "pinpoint:aria": {
       "ats": "pinpoint",
       "slug": "aria",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:34+00:00"
+      "classification": "verified",
+      "recentCount": 6,
+      "newestPostedAt": "2026-10-11T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:48+00:00"
     },
     "pinpoint:arkatechture": {
       "ats": "pinpoint",
       "slug": "arkatechture",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:35+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:48+00:00"
     },
     "pinpoint:armis": {
       "ats": "pinpoint",
       "slug": "armis",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:36+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:49+00:00"
     },
     "pinpoint:arrowglobal": {
       "ats": "pinpoint",
       "slug": "arrowglobal",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:36+00:00"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-09-30T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:49+00:00"
     },
     "pinpoint:arthurcox": {
       "ats": "pinpoint",
       "slug": "arthurcox",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:37+00:00"
+      "classification": "verified",
+      "recentCount": 7,
+      "newestPostedAt": "2026-11-27T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:50+00:00"
     },
     "pinpoint:article": {
       "ats": "pinpoint",
       "slug": "article",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:38+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:51+00:00"
     },
     "pinpoint:asc-es-reliable": {
       "ats": "pinpoint",
       "slug": "asc-es-reliable",
-      "classification": "inconclusive",
-      "reason": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:38+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-10-01T04:59:59+00:00",
+      "attempts": 3,
+      "checkedAt": "2026-09-18T13:03:15+00:00"
     },
     "pinpoint:ascensusspecialties": {
       "ats": "pinpoint",
       "slug": "ascensusspecialties",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:39+00:00"
+      "classification": "verified",
+      "recentCount": 9,
+      "newestPostedAt": "2026-11-01T06:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:52+00:00"
     },
     "pinpoint:roofsbyaspen": {
       "ats": "pinpoint",
       "slug": "roofsbyaspen",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:40+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:54+00:00"
     },
     "pinpoint:aspireallergy": {
       "ats": "pinpoint",
       "slug": "aspireallergy",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:42+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:55+00:00"
     },
     "pinpoint:astonmartinf1": {
       "ats": "pinpoint",
       "slug": "astonmartinf1",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:43+00:00"
+      "classification": "verified",
+      "recentCount": 13,
+      "newestPostedAt": "2026-10-02T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:56+00:00"
     },
     "pinpoint:astorg": {
       "ats": "pinpoint",
       "slug": "astorg",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:43+00:00"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-11-30T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:57+00:00"
     },
     "pinpoint:astranahealth": {
       "ats": "pinpoint",
       "slug": "astranahealth",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:45+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:58+00:00"
     },
     "pinpoint:astrolab": {
       "ats": "pinpoint",
       "slug": "astrolab",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:46+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:56:59+00:00"
     },
     "pinpoint:aciedge": {
       "ats": "pinpoint",
       "slug": "aciedge",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:47+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:00+00:00"
     },
     "pinpoint:auroraer": {
       "ats": "pinpoint",
       "slug": "auroraer",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:49+00:00"
+      "classification": "verified",
+      "recentCount": 6,
+      "newestPostedAt": "2026-10-30T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:02+00:00"
     },
     "pinpoint:bactobio": {
       "ats": "pinpoint",
       "slug": "bactobio",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:49+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:03+00:00"
     },
     "pinpoint:barnetsouthgate": {
       "ats": "pinpoint",
       "slug": "barnetsouthgate",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:50+00:00"
+      "classification": "verified",
+      "recentCount": 8,
+      "newestPostedAt": "2026-10-18T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:03+00:00"
     },
     "pinpoint:bathcollege": {
       "ats": "pinpoint",
       "slug": "bathcollege",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:51+00:00"
+      "classification": "verified",
+      "recentCount": 9,
+      "newestPostedAt": "2026-10-04T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:04+00:00"
     },
     "pinpoint:bathspa": {
       "ats": "pinpoint",
       "slug": "bathspa",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:52+00:00"
+      "classification": "verified",
+      "recentCount": 15,
+      "newestPostedAt": "2026-10-09T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:05+00:00"
     },
     "pinpoint:bdoireland": {
       "ats": "pinpoint",
       "slug": "bdoireland",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:53+00:00"
+      "classification": "verified",
+      "recentCount": 14,
+      "newestPostedAt": "2027-08-25T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:06+00:00"
     },
     "pinpoint:bedegaming": {
       "ats": "pinpoint",
       "slug": "bedegaming",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:53+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:07+00:00"
     },
     "pinpoint:bedellcristin": {
       "ats": "pinpoint",
       "slug": "bedellcristin",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:53+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:07+00:00"
     },
     "pinpoint:bighatbiosciences": {
       "ats": "pinpoint",
       "slug": "bighatbiosciences",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:54+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:08+00:00"
     },
     "pinpoint:biorelate": {
       "ats": "pinpoint",
       "slug": "biorelate",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:55+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:08+00:00"
     },
     "pinpoint:birchesgroup": {
       "ats": "pinpoint",
       "slug": "birchesgroup",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:55+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:09+00:00"
     },
     "pinpoint:bluecross": {
       "ats": "pinpoint",
       "slug": "bluecross",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:56+00:00"
+      "classification": "verified",
+      "recentCount": 21,
+      "newestPostedAt": "2026-10-01T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:10+00:00"
     },
     "pinpoint:bluemantis": {
       "ats": "pinpoint",
       "slug": "bluemantis",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:57+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:11+00:00"
     },
     "pinpoint:bluestreamfiber": {
       "ats": "pinpoint",
       "slug": "bluestreamfiber",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:58+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:12+00:00"
     },
     "pinpoint:bmt": {
       "ats": "pinpoint",
       "slug": "bmt",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:51:59+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:13+00:00"
     },
     "pinpoint:btny": {
       "ats": "pinpoint",
       "slug": "btny",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:00+00:00"
+      "classification": "verified",
+      "recentCount": 3,
+      "newestPostedAt": "2026-10-14T03:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:14+00:00"
     },
     "pinpoint:bright": {
       "ats": "pinpoint",
       "slug": "bright",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:01+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:15+00:00"
     },
     "pinpoint:bsr": {
       "ats": "pinpoint",
       "slug": "bsr",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:01+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:15+00:00"
     },
     "pinpoint:bluesentry": {
       "ats": "pinpoint",
       "slug": "bluesentry",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:02+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:16+00:00"
     },
     "pinpoint:bucksmindcareers": {
       "ats": "pinpoint",
       "slug": "bucksmindcareers",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:02+00:00"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-10-05T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:16+00:00"
     },
     "pinpoint:buildarocketboy": {
       "ats": "pinpoint",
       "slug": "buildarocketboy",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:03+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:17+00:00"
     },
     "pinpoint:butlins": {
       "ats": "pinpoint",
       "slug": "butlins",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:04+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:18+00:00"
     },
     "pinpoint:c10labs": {
       "ats": "pinpoint",
       "slug": "c10labs",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:05+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:20+00:00"
     },
     "pinpoint:cnps": {
       "ats": "pinpoint",
       "slug": "cnps",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:06+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-10-13T06:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:21+00:00"
     },
     "pinpoint:calligo": {
       "ats": "pinpoint",
       "slug": "calligo",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:06+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:21+00:00"
     },
     "pinpoint:knack": {
       "ats": "pinpoint",
       "slug": "knack",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:07+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:22+00:00"
     },
     "pinpoint:tripledotstudios": {
       "ats": "pinpoint",
       "slug": "tripledotstudios",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:07+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:22+00:00"
     },
     "pinpoint:carma": {
       "ats": "pinpoint",
       "slug": "carma",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:08+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:23+00:00"
     },
     "pinpoint:carmel": {
       "ats": "pinpoint",
       "slug": "carmel",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:09+00:00"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-09-21T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:24+00:00"
     },
     "pinpoint:carto": {
       "ats": "pinpoint",
       "slug": "carto",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:09+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:25+00:00"
     },
     "pinpoint:cdlsoftware": {
       "ats": "pinpoint",
       "slug": "cdlsoftware",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:10+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:25+00:00"
     },
     "pinpoint:celnor": {
       "ats": "pinpoint",
       "slug": "celnor",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:12+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:27+00:00"
     },
     "pinpoint:lbresearch": {
       "ats": "pinpoint",
       "slug": "lbresearch",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:13+00:00"
+      "classification": "verified",
+      "recentCount": 3,
+      "newestPostedAt": "2026-10-30T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:28+00:00"
     },
     "pinpoint:cfc": {
       "ats": "pinpoint",
       "slug": "cfc",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:14+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:30+00:00"
     },
     "pinpoint:cfcunderwriting": {
       "ats": "pinpoint",
       "slug": "cfcunderwriting",
-      "classification": "inconclusive",
-      "reason": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:14+00:00"
+      "classification": "invalid",
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 3,
+      "checkedAt": "2026-09-18T13:03:17+00:00"
     },
     "pinpoint:cfra": {
       "ats": "pinpoint",
       "slug": "cfra",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:15+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:31+00:00"
     },
     "pinpoint:cgt": {
       "ats": "pinpoint",
       "slug": "cgt",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:16+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:31+00:00"
     },
     "pinpoint:chetwood-bank": {
       "ats": "pinpoint",
       "slug": "chetwood-bank",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:16+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-30T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:32+00:00"
     },
     "pinpoint:clareps": {
       "ats": "pinpoint",
       "slug": "clareps",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:17+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:33+00:00"
     },
     "pinpoint:cinven": {
       "ats": "pinpoint",
       "slug": "cinven",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:18+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:33+00:00"
     },
     "pinpoint:clearlyrated": {
       "ats": "pinpoint",
       "slug": "clearlyrated",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:18+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-27T06:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:34+00:00"
     },
     "pinpoint:climatebonds": {
       "ats": "pinpoint",
       "slug": "climatebonds",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:19+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:34+00:00"
     },
     "pinpoint:cmap": {
       "ats": "pinpoint",
       "slug": "cmap",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:19+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:35+00:00"
     },
     "pinpoint:codec": {
       "ats": "pinpoint",
       "slug": "codec",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:20+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:36+00:00"
     },
     "pinpoint:codexis": {
       "ats": "pinpoint",
       "slug": "codexis",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:21+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:37+00:00"
     },
     "pinpoint:coforma": {
       "ats": "pinpoint",
       "slug": "coforma",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:22+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:37+00:00"
     },
     "pinpoint:colegsirgar": {
       "ats": "pinpoint",
       "slug": "colegsirgar",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:22+00:00"
+      "classification": "verified",
+      "recentCount": 8,
+      "newestPostedAt": "2026-10-02T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:38+00:00"
     },
     "pinpoint:gmesupply": {
       "ats": "pinpoint",
       "slug": "gmesupply",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:24+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:39+00:00"
     },
     "pinpoint:company": {
       "ats": "pinpoint",
       "slug": "company",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:24+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:40+00:00"
     },
     "pinpoint:compasshealthnetwork": {
       "ats": "pinpoint",
       "slug": "compasshealthnetwork",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:26+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:42+00:00"
     },
     "pinpoint:compassionuk": {
       "ats": "pinpoint",
       "slug": "compassionuk",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:27+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-10-05T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:43+00:00"
     },
     "pinpoint:compregroup": {
       "ats": "pinpoint",
       "slug": "compregroup",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:28+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:43+00:00"
     },
     "pinpoint:confluence": {
       "ats": "pinpoint",
       "slug": "confluence",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:29+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:45+00:00"
     },
     "pinpoint:cpcatapult": {
       "ats": "pinpoint",
       "slug": "cpcatapult",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:29+00:00"
+      "classification": "verified",
+      "recentCount": 4,
+      "newestPostedAt": "2026-10-01T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:45+00:00"
     },
     "pinpoint:continentalserves": {
       "ats": "pinpoint",
       "slug": "continentalserves",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:31+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:47+00:00"
     },
     "pinpoint:convexin": {
       "ats": "pinpoint",
       "slug": "convexin",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:31+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-30T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:47+00:00"
     },
     "pinpoint:conveylaw": {
       "ats": "pinpoint",
       "slug": "conveylaw",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:32+00:00"
+      "classification": "verified",
+      "recentCount": 5,
+      "newestPostedAt": "2026-10-06T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:48+00:00"
     },
     "pinpoint:cottonholdings": {
       "ats": "pinpoint",
       "slug": "cottonholdings",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:34+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:49+00:00"
     },
     "pinpoint:coursedog": {
       "ats": "pinpoint",
       "slug": "coursedog",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:34+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:50+00:00"
     },
     "pinpoint:crawfordtech": {
       "ats": "pinpoint",
       "slug": "crawfordtech",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:35+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-29T05:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:50+00:00"
     },
     "pinpoint:ctidigital": {
       "ats": "pinpoint",
       "slug": "ctidigital",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:35+00:00"
+      "classification": "verified",
+      "recentCount": 3,
+      "newestPostedAt": "2026-09-25T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:51+00:00"
     },
     "pinpoint:cubico": {
       "ats": "pinpoint",
       "slug": "cubico",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:36+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:52+00:00"
     },
     "pinpoint:wagepoint": {
       "ats": "pinpoint",
       "slug": "wagepoint",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:36+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:52+00:00"
     },
     "pinpoint:cybernetic-controls": {
       "ats": "pinpoint",
       "slug": "cybernetic-controls",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:37+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:53+00:00"
     },
     "pinpoint:davies": {
       "ats": "pinpoint",
       "slug": "davies",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:39+00:00"
+      "classification": "verified",
+      "recentCount": 46,
+      "newestPostedAt": "2026-11-25T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:55+00:00"
     },
     "pinpoint:d1a": {
       "ats": "pinpoint",
       "slug": "d1a",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:40+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:56+00:00"
     },
     "pinpoint:dazn": {
       "ats": "pinpoint",
       "slug": "dazn",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:42+00:00"
+      "classification": "verified",
+      "recentCount": 7,
+      "newestPostedAt": "2026-10-29T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:57+00:00"
     },
     "pinpoint:db1group": {
       "ats": "pinpoint",
       "slug": "db1group",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:42+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:58+00:00"
     },
     "pinpoint:dbrand": {
       "ats": "pinpoint",
       "slug": "dbrand",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:43+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:59+00:00"
     },
     "pinpoint:dea": {
       "ats": "pinpoint",
       "slug": "dea",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:44+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-25T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:57:59+00:00"
     },
     "pinpoint:instantimpactrecruitment": {
       "ats": "pinpoint",
       "slug": "instantimpactrecruitment",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:44+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:00+00:00"
     },
     "pinpoint:designline": {
       "ats": "pinpoint",
       "slug": "designline",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:45+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:01+00:00"
     },
     "pinpoint:desmos": {
       "ats": "pinpoint",
       "slug": "desmos",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:45+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:01+00:00"
     },
     "pinpoint:developers-test": {
       "ats": "pinpoint",
       "slug": "developers-test",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:46+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:02+00:00"
     },
     "pinpoint:digitalscience": {
       "ats": "pinpoint",
       "slug": "digitalscience",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:46+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:02+00:00"
     },
     "pinpoint:elliptic": {
       "ats": "pinpoint",
       "slug": "elliptic",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:47+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:03+00:00"
     },
     "pinpoint:disturbia": {
       "ats": "pinpoint",
       "slug": "disturbia",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:47+00:00"
+      "classification": "verified",
+      "recentCount": 5,
+      "newestPostedAt": "2026-10-16T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:03+00:00"
     },
     "pinpoint:dixonwilson": {
       "ats": "pinpoint",
       "slug": "dixonwilson",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:48+00:00"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-10-31T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:04+00:00"
     },
     "pinpoint:dmchealthcare": {
       "ats": "pinpoint",
       "slug": "dmchealthcare",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:49+00:00"
+      "classification": "verified",
+      "recentCount": 6,
+      "newestPostedAt": "2026-12-31T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:05+00:00"
     },
     "pinpoint:driverondemand": {
       "ats": "pinpoint",
       "slug": "driverondemand",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:49+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:06+00:00"
     },
     "pinpoint:ebcap": {
       "ats": "pinpoint",
       "slug": "ebcap",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:51+00:00"
+      "classification": "verified",
+      "recentCount": 16,
+      "newestPostedAt": "2026-10-03T03:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:07+00:00"
     },
     "pinpoint:eastlandsvsl": {
       "ats": "pinpoint",
       "slug": "eastlandsvsl",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:51+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-30T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:07+00:00"
     },
     "pinpoint:eberjey": {
       "ats": "pinpoint",
       "slug": "eberjey",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:52+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:08+00:00"
     },
     "pinpoint:ebiquity": {
       "ats": "pinpoint",
       "slug": "ebiquity",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:53+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-10-05T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:09+00:00"
     },
     "pinpoint:elevategroup": {
       "ats": "pinpoint",
       "slug": "elevategroup",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:53+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:09+00:00"
     },
     "pinpoint:embark": {
       "ats": "pinpoint",
       "slug": "embark",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:54+00:00"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-10-01T03:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:10+00:00"
     },
     "pinpoint:emeraldtransformer": {
       "ats": "pinpoint",
       "slug": "emeraldtransformer",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:55+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:11+00:00"
     },
     "pinpoint:encompass": {
       "ats": "pinpoint",
       "slug": "encompass",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:55+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:12+00:00"
     },
     "pinpoint:endsight": {
       "ats": "pinpoint",
       "slug": "endsight",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:56+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:12+00:00"
     },
     "pinpoint:enhance": {
       "ats": "pinpoint",
       "slug": "enhance",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:56+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:13+00:00"
     },
     "pinpoint:enosisbd": {
       "ats": "pinpoint",
       "slug": "enosisbd",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:57+00:00"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-09-30T17:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:13+00:00"
     },
     "pinpoint:eptura": {
       "ats": "pinpoint",
       "slug": "eptura",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:58+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:14+00:00"
     },
     "pinpoint:estalent": {
       "ats": "pinpoint",
       "slug": "estalent",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:52:58+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:14+00:00"
     },
     "pinpoint:esland": {
       "ats": "pinpoint",
       "slug": "esland",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:00+00:00"
+      "classification": "verified",
+      "recentCount": 3,
+      "newestPostedAt": "2026-10-16T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:16+00:00"
     },
     "pinpoint:esss": {
       "ats": "pinpoint",
       "slug": "esss",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:01+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:17+00:00"
     },
     "pinpoint:eventbase": {
       "ats": "pinpoint",
       "slug": "eventbase",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:01+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:17+00:00"
     },
     "pinpoint:exclaimer": {
       "ats": "pinpoint",
       "slug": "exclaimer",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:02+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:18+00:00"
     },
     "pinpoint:fidelitone": {
       "ats": "pinpoint",
       "slug": "fidelitone",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:03+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:19+00:00"
     },
     "pinpoint:field": {
       "ats": "pinpoint",
       "slug": "field",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:04+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:20+00:00"
     },
     "pinpoint:forterro": {
       "ats": "pinpoint",
       "slug": "forterro",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:05+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:21+00:00"
     },
     "pinpoint:fortifyhealth": {
       "ats": "pinpoint",
       "slug": "fortifyhealth",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:06+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:22+00:00"
     },
     "pinpoint:foxconnwi": {
       "ats": "pinpoint",
       "slug": "foxconnwi",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:07+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:23+00:00"
     },
     "pinpoint:franklin-electric": {
       "ats": "pinpoint",
       "slug": "franklin-electric",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:09+00:00"
+      "classification": "verified",
+      "recentCount": 5,
+      "newestPostedAt": "2027-08-02T03:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:25+00:00"
     },
     "pinpoint:frazil": {
       "ats": "pinpoint",
       "slug": "frazil",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:09+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:25+00:00"
     },
     "pinpoint:fremontgroup": {
       "ats": "pinpoint",
       "slug": "fremontgroup",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:10+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:26+00:00"
     },
     "pinpoint:frontline": {
       "ats": "pinpoint",
       "slug": "frontline",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:10+00:00"
+      "classification": "verified",
+      "recentCount": 4,
+      "newestPostedAt": "2026-10-12T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:27+00:00"
     },
     "pinpoint:fscurtis": {
       "ats": "pinpoint",
       "slug": "fscurtis",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:11+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:27+00:00"
     },
     "pinpoint:fs-elliott": {
       "ats": "pinpoint",
       "slug": "fs-elliott",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:12+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:28+00:00"
     },
     "pinpoint:fulwellentertainment": {
       "ats": "pinpoint",
       "slug": "fulwellentertainment",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:12+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:28+00:00"
     },
     "pinpoint:fundapps": {
       "ats": "pinpoint",
       "slug": "fundapps",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:13+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:29+00:00"
     },
     "pinpoint:futuregroup": {
       "ats": "pinpoint",
       "slug": "futuregroup",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:13+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:29+00:00"
     },
     "pinpoint:gainuk": {
       "ats": "pinpoint",
       "slug": "gainuk",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:14+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:30+00:00"
     },
     "pinpoint:gameplaygalaxy": {
       "ats": "pinpoint",
       "slug": "gameplaygalaxy",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:14+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:30+00:00"
     },
     "pinpoint:gig": {
       "ats": "pinpoint",
       "slug": "gig",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:15+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:31+00:00"
     },
     "pinpoint:gappify": {
       "ats": "pinpoint",
       "slug": "gappify",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:16+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:32+00:00"
     },
     "pinpoint:gardiner": {
       "ats": "pinpoint",
       "slug": "gardiner",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:17+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-10-10T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:33+00:00"
     },
     "pinpoint:geeiq": {
       "ats": "pinpoint",
       "slug": "geeiq",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:17+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:33+00:00"
     },
     "pinpoint:gembaadvantage": {
       "ats": "pinpoint",
       "slug": "gembaadvantage",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:18+00:00"
+      "classification": "verified",
+      "recentCount": 11,
+      "newestPostedAt": "2026-10-30T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:34+00:00"
     },
     "pinpoint:girlsontherun": {
       "ats": "pinpoint",
       "slug": "girlsontherun",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:18+00:00"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-09-29T03:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:35+00:00"
     },
     "pinpoint:gloryglobal": {
       "ats": "pinpoint",
       "slug": "gloryglobal",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:20+00:00"
+      "classification": "verified",
+      "recentCount": 3,
+      "newestPostedAt": "2026-12-31T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:37+00:00"
     },
     "pinpoint:gordonmurraygroup": {
       "ats": "pinpoint",
       "slug": "gordonmurraygroup",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:21+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:37+00:00"
     },
     "pinpoint:gtci": {
       "ats": "pinpoint",
       "slug": "gtci",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:21+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:38+00:00"
     },
     "pinpoint:grasshopper": {
       "ats": "pinpoint",
       "slug": "grasshopper",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:22+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:38+00:00"
     },
     "pinpoint:gravityglobal": {
       "ats": "pinpoint",
       "slug": "gravityglobal",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:23+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:39+00:00"
     },
     "pinpoint:greenergy": {
       "ats": "pinpoint",
       "slug": "greenergy",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:24+00:00"
+      "classification": "verified",
+      "recentCount": 10,
+      "newestPostedAt": "2026-10-03T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:40+00:00"
     },
     "pinpoint:greenwoodproject": {
       "ats": "pinpoint",
       "slug": "greenwoodproject",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:25+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:41+00:00"
     },
     "pinpoint:groupgti": {
       "ats": "pinpoint",
       "slug": "groupgti",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:25+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:42+00:00"
     },
     "pinpoint:groupo": {
       "ats": "pinpoint",
       "slug": "groupo",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:26+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:43+00:00"
     },
     "pinpoint:gs1ca": {
       "ats": "pinpoint",
       "slug": "gs1ca",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:27+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:43+00:00"
     },
     "pinpoint:guernseyelectricity": {
       "ats": "pinpoint",
       "slug": "guernseyelectricity",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:28+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:44+00:00"
     },
     "pinpoint:harmeny": {
       "ats": "pinpoint",
       "slug": "harmeny",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:28+00:00"
+      "classification": "verified",
+      "recentCount": 4,
+      "newestPostedAt": "2026-10-02T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:45+00:00"
     },
     "pinpoint:harnham": {
       "ats": "pinpoint",
       "slug": "harnham",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:29+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:45+00:00"
     },
     "pinpoint:hazelcast": {
       "ats": "pinpoint",
       "slug": "hazelcast",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:30+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:46+00:00"
     },
     "pinpoint:hcbrands": {
       "ats": "pinpoint",
       "slug": "hcbrands",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:30+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:47+00:00"
     },
     "pinpoint:headkount": {
       "ats": "pinpoint",
       "slug": "headkount",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:32+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:48+00:00"
     },
     "pinpoint:medical": {
       "ats": "pinpoint",
       "slug": "medical",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:33+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:49+00:00"
     },
     "pinpoint:herrs": {
       "ats": "pinpoint",
       "slug": "herrs",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:34+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:50+00:00"
     },
     "pinpoint:huddnewcoll": {
       "ats": "pinpoint",
       "slug": "huddnewcoll",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:35+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-10-04T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:51+00:00"
     },
     "pinpoint:hollandamericagroup": {
       "ats": "pinpoint",
       "slug": "hollandamericagroup",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:37+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:53+00:00"
     },
     "pinpoint:hollandamericaprincess": {
       "ats": "pinpoint",
       "slug": "hollandamericaprincess",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:38+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:54+00:00"
     },
     "pinpoint:hooli": {
       "ats": "pinpoint",
       "slug": "hooli",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:38+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:55+00:00"
     },
     "pinpoint:hopwood": {
       "ats": "pinpoint",
       "slug": "hopwood",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:39+00:00"
+      "classification": "verified",
+      "recentCount": 7,
+      "newestPostedAt": "2026-10-31T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:55+00:00"
     },
     "pinpoint:hughbaird": {
       "ats": "pinpoint",
       "slug": "hughbaird",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:40+00:00"
+      "classification": "verified",
+      "recentCount": 12,
+      "newestPostedAt": "2026-10-19T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:56+00:00"
     },
     "pinpoint:wearehuman8": {
       "ats": "pinpoint",
       "slug": "wearehuman8",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:41+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:57+00:00"
     },
     "pinpoint:icario": {
       "ats": "pinpoint",
       "slug": "icario",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:41+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:57+00:00"
     },
     "pinpoint:ifx": {
       "ats": "pinpoint",
       "slug": "ifx",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:42+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:58+00:00"
     },
     "pinpoint:everi": {
       "ats": "pinpoint",
       "slug": "everi",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:42+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:58:59+00:00"
     },
     "pinpoint:imagemaker": {
       "ats": "pinpoint",
       "slug": "imagemaker",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:44+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:00+00:00"
     },
     "pinpoint:impactassets": {
       "ats": "pinpoint",
       "slug": "impactassets",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:44+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:01+00:00"
     },
     "pinpoint:impulsespace": {
       "ats": "pinpoint",
       "slug": "impulsespace",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:46+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:03+00:00"
     },
     "pinpoint:intandem": {
       "ats": "pinpoint",
       "slug": "intandem",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:47+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:04+00:00"
     },
     "pinpoint:indrive": {
       "ats": "pinpoint",
       "slug": "indrive",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:49+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:06+00:00"
     },
     "pinpoint:inmusicbrands": {
       "ats": "pinpoint",
       "slug": "inmusicbrands",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:50+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:07+00:00"
     },
     "pinpoint:innovetivepetcare": {
       "ats": "pinpoint",
       "slug": "innovetivepetcare",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:52+00:00"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2027-07-02T04:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:09+00:00"
     },
     "pinpoint:instant-impact": {
       "ats": "pinpoint",
       "slug": "instant-impact",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:53+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-11-23T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:10+00:00"
     },
     "pinpoint:intellihr": {
       "ats": "pinpoint",
       "slug": "intellihr",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:53+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:10+00:00"
     },
     "pinpoint:intermedia": {
       "ats": "pinpoint",
       "slug": "intermedia",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:54+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:11+00:00"
     },
     "pinpoint:iwbi": {
       "ats": "pinpoint",
       "slug": "iwbi",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:55+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:12+00:00"
     },
     "pinpoint:interopio": {
       "ats": "pinpoint",
       "slug": "interopio",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:55+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:12+00:00"
     },
     "pinpoint:investorhub": {
       "ats": "pinpoint",
       "slug": "investorhub",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:56+00:00"
+      "classification": "verified",
+      "recentCount": 3,
+      "newestPostedAt": "2026-10-31T12:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:13+00:00"
     },
     "pinpoint:invictus-verus": {
       "ats": "pinpoint",
       "slug": "invictus-verus",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:57+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:14+00:00"
     },
     "pinpoint:ipsos": {
       "ats": "pinpoint",
       "slug": "ipsos",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:57+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:14+00:00"
     },
     "pinpoint:isginc": {
       "ats": "pinpoint",
       "slug": "isginc",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:53:59+00:00"
+      "classification": "verified",
+      "recentCount": 29,
+      "newestPostedAt": "2026-10-31T04:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:16+00:00"
     },
     "pinpoint:itvet": {
       "ats": "pinpoint",
       "slug": "itvet",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:00+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:17+00:00"
     },
     "pinpoint:iventure": {
       "ats": "pinpoint",
       "slug": "iventure",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:00+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:17+00:00"
     },
     "pinpoint:jbs-ltd": {
       "ats": "pinpoint",
       "slug": "jbs-ltd",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:01+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:18+00:00"
     },
     "pinpoint:jec": {
       "ats": "pinpoint",
       "slug": "jec",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:02+00:00"
+      "classification": "verified",
+      "recentCount": 5,
+      "newestPostedAt": "2026-12-31T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:19+00:00"
     },
     "pinpoint:jimersonfirm": {
       "ats": "pinpoint",
       "slug": "jimersonfirm",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:03+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:19+00:00"
     },
     "pinpoint:joe-testing": {
       "ats": "pinpoint",
       "slug": "joe-testing",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:03+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:20+00:00"
     },
     "pinpoint:joinparachute": {
       "ats": "pinpoint",
       "slug": "joinparachute",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:06+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:24+00:00"
     },
     "pinpoint:joveo-sandbox": {
       "ats": "pinpoint",
       "slug": "joveo-sandbox",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:07+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2027-01-31T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:25+00:00"
     },
     "pinpoint:jtglobal": {
       "ats": "pinpoint",
       "slug": "jtglobal",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:07+00:00"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-09-23T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:25+00:00"
     },
     "pinpoint:judge-priestley": {
       "ats": "pinpoint",
       "slug": "judge-priestley",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:08+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-11-20T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:26+00:00"
     },
     "pinpoint:karpstrategies": {
       "ats": "pinpoint",
       "slug": "karpstrategies",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:09+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-10-01T03:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:27+00:00"
     },
     "pinpoint:kempinski": {
       "ats": "pinpoint",
       "slug": "kempinski",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:13+00:00"
+      "classification": "verified",
+      "recentCount": 70,
+      "newestPostedAt": "2027-09-30T21:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:29+00:00"
     },
     "pinpoint:kenwayconsulting": {
       "ats": "pinpoint",
       "slug": "kenwayconsulting",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:14+00:00"
+      "classification": "verified",
+      "recentCount": 6,
+      "newestPostedAt": "2026-11-01T04:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:30+00:00"
     },
     "pinpoint:kharon": {
       "ats": "pinpoint",
       "slug": "kharon",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:15+00:00"
+      "classification": "verified",
+      "recentCount": 11,
+      "newestPostedAt": "2026-11-03T07:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:31+00:00"
     },
     "pinpoint:krestonreeves": {
       "ats": "pinpoint",
       "slug": "krestonreeves",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:16+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:31+00:00"
     },
     "pinpoint:loccitane": {
       "ats": "pinpoint",
       "slug": "loccitane",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:16+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:32+00:00"
     },
     "pinpoint:leski": {
       "ats": "pinpoint",
       "slug": "leski",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:17+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:33+00:00"
     },
     "pinpoint:leadingedgeaviation": {
       "ats": "pinpoint",
       "slug": "leadingedgeaviation",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:18+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-18T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:34+00:00"
     },
     "pinpoint:lendable": {
       "ats": "pinpoint",
       "slug": "lendable",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:18+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:34+00:00"
     },
     "pinpoint:lichfields": {
       "ats": "pinpoint",
       "slug": "lichfields",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:19+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:35+00:00"
     },
     "pinpoint:lingoda": {
       "ats": "pinpoint",
       "slug": "lingoda",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:19+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:35+00:00"
     },
     "pinpoint:livelink": {
       "ats": "pinpoint",
       "slug": "livelink",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:20+00:00"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-10-02T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:36+00:00"
     },
     "pinpoint:londonhireltd": {
       "ats": "pinpoint",
       "slug": "londonhireltd",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:21+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:37+00:00"
     },
     "pinpoint:londonyouth": {
       "ats": "pinpoint",
       "slug": "londonyouth",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:21+00:00"
+      "classification": "verified",
+      "recentCount": 4,
+      "newestPostedAt": "2026-10-12T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:37+00:00"
     },
     "pinpoint:lush": {
       "ats": "pinpoint",
       "slug": "lush",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:23+00:00"
+      "classification": "verified",
+      "recentCount": 45,
+      "newestPostedAt": "2026-12-12T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:39+00:00"
     },
     "pinpoint:lvcaregroup": {
       "ats": "pinpoint",
       "slug": "lvcaregroup",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:24+00:00"
+      "classification": "verified",
+      "recentCount": 3,
+      "newestPostedAt": "2026-10-30T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:40+00:00"
     },
     "pinpoint:madfishdigital": {
       "ats": "pinpoint",
       "slug": "madfishdigital",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:24+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:40+00:00"
     },
     "pinpoint:made-tech": {
       "ats": "pinpoint",
       "slug": "made-tech",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:25+00:00"
+      "classification": "verified",
+      "recentCount": 5,
+      "newestPostedAt": "2026-10-16T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:41+00:00"
     },
     "pinpoint:magic": {
       "ats": "pinpoint",
       "slug": "magic",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:27+00:00"
+      "classification": "verified",
+      "recentCount": 52,
+      "newestPostedAt": "2026-09-30T15:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:43+00:00"
     },
     "pinpoint:mainstreetanesthesia": {
       "ats": "pinpoint",
       "slug": "mainstreetanesthesia",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:28+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:44+00:00"
     },
     "pinpoint:malaa": {
       "ats": "pinpoint",
       "slug": "malaa",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:28+00:00"
+      "classification": "verified",
+      "recentCount": 4,
+      "newestPostedAt": "2026-10-15T20:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:45+00:00"
     },
     "pinpoint:wearemapp": {
       "ats": "pinpoint",
       "slug": "wearemapp",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:29+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:46+00:00"
     },
     "pinpoint:marketingpros": {
       "ats": "pinpoint",
       "slug": "marketingpros",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:30+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-25T21:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:46+00:00"
     },
     "pinpoint:marlboroughhighways": {
       "ats": "pinpoint",
       "slug": "marlboroughhighways",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:31+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:47+00:00"
     },
     "pinpoint:matter": {
       "ats": "pinpoint",
       "slug": "matter",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:31+00:00"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-10-31T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:48+00:00"
     },
     "pinpoint:maverick-games": {
       "ats": "pinpoint",
       "slug": "maverick-games",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:32+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:48+00:00"
     },
     "pinpoint:mcbains": {
       "ats": "pinpoint",
       "slug": "mcbains",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:32+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:49+00:00"
     },
     "pinpoint:mechanismventures": {
       "ats": "pinpoint",
       "slug": "mechanismventures",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:33+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:49+00:00"
     },
     "pinpoint:mymedtrust": {
       "ats": "pinpoint",
       "slug": "mymedtrust",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:33+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:50+00:00"
     },
     "pinpoint:menzies": {
       "ats": "pinpoint",
       "slug": "menzies",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:34+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:51+00:00"
     },
     "pinpoint:midkent": {
       "ats": "pinpoint",
       "slug": "midkent",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:35+00:00"
+      "classification": "verified",
+      "recentCount": 7,
+      "newestPostedAt": "2026-10-07T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:52+00:00"
     },
     "pinpoint:migso-pcubed": {
       "ats": "pinpoint",
       "slug": "migso-pcubed",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:36+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:53+00:00"
     },
     "pinpoint:mimeo": {
       "ats": "pinpoint",
       "slug": "mimeo",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:37+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:53+00:00"
     },
     "pinpoint:moleonline": {
       "ats": "pinpoint",
       "slug": "moleonline",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:38+00:00"
+      "classification": "verified",
+      "recentCount": 44,
+      "newestPostedAt": "2026-11-30T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:55+00:00"
     },
     "pinpoint:mpdn": {
       "ats": "pinpoint",
       "slug": "mpdn",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:39+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:56+00:00"
     },
     "pinpoint:mooreks": {
       "ats": "pinpoint",
       "slug": "mooreks",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:40+00:00"
+      "classification": "verified",
+      "recentCount": 8,
+      "newestPostedAt": "2026-10-01T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:57+00:00"
     },
     "pinpoint:mosaicvet": {
       "ats": "pinpoint",
       "slug": "mosaicvet",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:41+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T12:59:57+00:00"
     },
     "pinpoint:mountainwarehouse": {
       "ats": "pinpoint",
       "slug": "mountainwarehouse",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:43+00:00"
+      "classification": "verified",
+      "recentCount": 85,
+      "newestPostedAt": "2027-07-31T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:00+00:00"
     },
     "pinpoint:mplc": {
       "ats": "pinpoint",
       "slug": "mplc",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:43+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:00+00:00"
     },
     "pinpoint:multiplier-careers": {
       "ats": "pinpoint",
       "slug": "multiplier-careers",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:44+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:01+00:00"
     },
     "pinpoint:myinterview": {
       "ats": "pinpoint",
       "slug": "myinterview",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:44+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:01+00:00"
     },
     "pinpoint:nfamilyclub": {
       "ats": "pinpoint",
       "slug": "nfamilyclub",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:47+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:04+00:00"
     },
     "pinpoint:naimaudio": {
       "ats": "pinpoint",
       "slug": "naimaudio",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:48+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:04+00:00"
     },
     "pinpoint:napier": {
       "ats": "pinpoint",
       "slug": "napier",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:48+00:00"
+      "classification": "verified",
+      "recentCount": 5,
+      "newestPostedAt": "2026-11-13T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:05+00:00"
     },
     "pinpoint:nasstar": {
       "ats": "pinpoint",
       "slug": "nasstar",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:49+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:06+00:00"
     },
     "pinpoint:navigatepower": {
       "ats": "pinpoint",
       "slug": "navigatepower",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:51+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:07+00:00"
     },
     "pinpoint:ncheurope": {
       "ats": "pinpoint",
       "slug": "ncheurope",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:51+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:08+00:00"
     },
     "pinpoint:networkplus": {
       "ats": "pinpoint",
       "slug": "networkplus",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:53+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:10+00:00"
     },
     "pinpoint:newfireglobal": {
       "ats": "pinpoint",
       "slug": "newfireglobal",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:54+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:11+00:00"
     },
     "pinpoint:nodalexchange": {
       "ats": "pinpoint",
       "slug": "nodalexchange",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:55+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:12+00:00"
     },
     "pinpoint:northcodersgroup": {
       "ats": "pinpoint",
       "slug": "northcodersgroup",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:55+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:12+00:00"
     },
     "pinpoint:northernbedrockcorps": {
       "ats": "pinpoint",
       "slug": "northernbedrockcorps",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:56+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:13+00:00"
     },
     "pinpoint:notonthehighstreet": {
       "ats": "pinpoint",
       "slug": "notonthehighstreet",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:56+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:13+00:00"
     },
     "pinpoint:nuvitek": {
       "ats": "pinpoint",
       "slug": "nuvitek",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:57+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-22T03:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:14+00:00"
     },
     "pinpoint:ohiovalleyelectriccorporation": {
       "ats": "pinpoint",
       "slug": "ohiovalleyelectriccorporation",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:58+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:15+00:00"
     },
     "pinpoint:oilchange": {
       "ats": "pinpoint",
       "slug": "oilchange",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:58+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-10-01T03:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:16+00:00"
     },
     "pinpoint:oneapp": {
       "ats": "pinpoint",
       "slug": "oneapp",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:59+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:16+00:00"
     },
     "pinpoint:oneplan": {
       "ats": "pinpoint",
       "slug": "oneplan",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:54:59+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:17+00:00"
     },
     "pinpoint:onlineriver": {
       "ats": "pinpoint",
       "slug": "onlineriver",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:01+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:18+00:00"
     },
     "pinpoint:doradosoftwaregroup": {
       "ats": "pinpoint",
       "slug": "doradosoftwaregroup",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:02+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:19+00:00"
     },
     "pinpoint:overlandpartners": {
       "ats": "pinpoint",
       "slug": "overlandpartners",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:02+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:19+00:00"
     },
     "pinpoint:oxfordinternational": {
       "ats": "pinpoint",
       "slug": "oxfordinternational",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:03+00:00"
+      "classification": "verified",
+      "recentCount": 9,
+      "newestPostedAt": "2026-10-11T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:20+00:00"
     },
     "pinpoint:oxfordmetrics": {
       "ats": "pinpoint",
       "slug": "oxfordmetrics",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:04+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:20+00:00"
     },
     "pinpoint:partnersforhome": {
       "ats": "pinpoint",
       "slug": "partnersforhome",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:04+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:21+00:00"
     },
     "pinpoint:pathify": {
       "ats": "pinpoint",
       "slug": "pathify",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:05+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-10-01T03:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:21+00:00"
     },
     "pinpoint:pssg": {
       "ats": "pinpoint",
       "slug": "pssg",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:06+00:00"
+      "classification": "verified",
+      "recentCount": 3,
+      "newestPostedAt": "2026-09-22T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:22+00:00"
     },
     "pinpoint:peninsula360": {
       "ats": "pinpoint",
       "slug": "peninsula360",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:06+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:23+00:00"
     },
     "pinpoint:penrosehealth": {
       "ats": "pinpoint",
       "slug": "penrosehealth",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:07+00:00"
+      "classification": "verified",
+      "recentCount": 9,
+      "newestPostedAt": "2026-10-30T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:24+00:00"
     },
     "pinpoint:pexcard": {
       "ats": "pinpoint",
       "slug": "pexcard",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:08+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:24+00:00"
     },
     "pinpoint:pinnbank": {
       "ats": "pinpoint",
       "slug": "pinnbank",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:09+00:00"
+      "classification": "verified",
+      "recentCount": 41,
+      "newestPostedAt": "2027-01-01T05:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:26+00:00"
     },
     "pinpoint:workwithus": {
       "ats": "pinpoint",
       "slug": "workwithus",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:10+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:27+00:00"
     },
     "pinpoint:pipedreams": {
       "ats": "pinpoint",
       "slug": "pipedreams",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:11+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:27+00:00"
     },
     "pinpoint:pipeworks": {
       "ats": "pinpoint",
       "slug": "pipeworks",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:11+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:29+00:00"
     },
     "pinpoint:pod-point": {
       "ats": "pinpoint",
       "slug": "pod-point",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:12+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:30+00:00"
     },
     "pinpoint:polfed": {
       "ats": "pinpoint",
       "slug": "polfed",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:13+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-10-05T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:31+00:00"
     },
     "pinpoint:poloworks": {
       "ats": "pinpoint",
       "slug": "poloworks",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:14+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:32+00:00"
     },
     "pinpoint:portakabin": {
       "ats": "pinpoint",
       "slug": "portakabin",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:15+00:00"
+      "classification": "verified",
+      "recentCount": 20,
+      "newestPostedAt": "2026-10-02T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:33+00:00"
     },
     "pinpoint:portnox": {
       "ats": "pinpoint",
       "slug": "portnox",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:15+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:33+00:00"
     },
     "pinpoint:ports": {
       "ats": "pinpoint",
       "slug": "ports",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:16+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-25T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:34+00:00"
     },
     "pinpoint:precisionneuro": {
       "ats": "pinpoint",
       "slug": "precisionneuro",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:16+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:34+00:00"
     },
     "pinpoint:pricebrotherskc": {
       "ats": "pinpoint",
       "slug": "pricebrotherskc",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:17+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:35+00:00"
     },
     "pinpoint:princesscruises": {
       "ats": "pinpoint",
       "slug": "princesscruises",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:21+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:37+00:00"
     },
     "pinpoint:projectcanary": {
       "ats": "pinpoint",
       "slug": "projectcanary",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:21+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:38+00:00"
     },
     "pinpoint:propelleraero": {
       "ats": "pinpoint",
       "slug": "propelleraero",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:22+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:39+00:00"
     },
     "pinpoint:pxlimited": {
       "ats": "pinpoint",
       "slug": "pxlimited",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:23+00:00"
+      "classification": "verified",
+      "recentCount": 42,
+      "newestPostedAt": "2026-10-09T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:40+00:00"
     },
     "pinpoint:qellus": {
       "ats": "pinpoint",
       "slug": "qellus",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:24+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:41+00:00"
     },
     "pinpoint:qualitylogic": {
       "ats": "pinpoint",
       "slug": "qualitylogic",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:24+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:41+00:00"
     },
     "pinpoint:qac": {
       "ats": "pinpoint",
       "slug": "qac",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:25+00:00"
+      "classification": "verified",
+      "recentCount": 7,
+      "newestPostedAt": "2026-10-01T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:42+00:00"
     },
     "pinpoint:rangeline": {
       "ats": "pinpoint",
       "slug": "rangeline",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:26+00:00"
+      "classification": "verified",
+      "recentCount": 9,
+      "newestPostedAt": "2026-10-31T03:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:43+00:00"
     },
     "pinpoint:ravelin": {
       "ats": "pinpoint",
       "slug": "ravelin",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:27+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:44+00:00"
     },
     "pinpoint:recentive": {
       "ats": "pinpoint",
       "slug": "recentive",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:27+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:44+00:00"
     },
     "pinpoint:reconomy": {
       "ats": "pinpoint",
       "slug": "reconomy",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:29+00:00"
+      "classification": "verified",
+      "recentCount": 18,
+      "newestPostedAt": "2026-10-03T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:46+00:00"
     },
     "pinpoint:reimaginedcareers": {
       "ats": "pinpoint",
       "slug": "reimaginedcareers",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:30+00:00"
+      "classification": "verified",
+      "recentCount": 69,
+      "newestPostedAt": "2026-10-17T03:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:47+00:00"
     },
     "pinpoint:rethinkpriorities": {
       "ats": "pinpoint",
       "slug": "rethinkpriorities",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:31+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:48+00:00"
     },
     "pinpoint:rewardgateway": {
       "ats": "pinpoint",
       "slug": "rewardgateway",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:32+00:00"
+      "classification": "verified",
+      "recentCount": 4,
+      "newestPostedAt": "2026-10-16T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:49+00:00"
     },
     "pinpoint:rlb": {
       "ats": "pinpoint",
       "slug": "rlb",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:33+00:00"
+      "classification": "verified",
+      "recentCount": 8,
+      "newestPostedAt": "2026-12-31T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:50+00:00"
     },
     "pinpoint:riipen": {
       "ats": "pinpoint",
       "slug": "riipen",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:34+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:51+00:00"
     },
     "pinpoint:rivalry": {
       "ats": "pinpoint",
       "slug": "rivalry",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:34+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:51+00:00"
     },
     "pinpoint:rockborne": {
       "ats": "pinpoint",
       "slug": "rockborne",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:35+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-12-31T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:52+00:00"
     },
     "pinpoint:rowdentech": {
       "ats": "pinpoint",
       "slug": "rowdentech",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:36+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:53+00:00"
     },
     "pinpoint:recycle": {
       "ats": "pinpoint",
       "slug": "recycle",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:37+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:54+00:00"
     },
     "pinpoint:ruffwear": {
       "ats": "pinpoint",
       "slug": "ruffwear",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:37+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-29T06:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:54+00:00"
     },
     "pinpoint:rwdi": {
       "ats": "pinpoint",
       "slug": "rwdi",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:38+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:55+00:00"
     },
     "pinpoint:sabio": {
       "ats": "pinpoint",
       "slug": "sabio",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:39+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:56+00:00"
     },
     "pinpoint:safetywing": {
       "ats": "pinpoint",
       "slug": "safetywing",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:40+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-25T06:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:57+00:00"
     },
     "pinpoint:saffery": {
       "ats": "pinpoint",
       "slug": "saffery",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:40+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:58+00:00"
     },
     "pinpoint:sandpiperci": {
       "ats": "pinpoint",
       "slug": "sandpiperci",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:41+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:58+00:00"
     },
     "pinpoint:sans": {
       "ats": "pinpoint",
       "slug": "sans",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:42+00:00"
+      "classification": "verified",
+      "recentCount": 4,
+      "newestPostedAt": "2026-09-25T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:00:59+00:00"
     },
     "pinpoint:savannainstitute": {
       "ats": "pinpoint",
       "slug": "savannainstitute",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:43+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-10-05T04:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:00+00:00"
     },
     "pinpoint:scandiweb": {
       "ats": "pinpoint",
       "slug": "scandiweb",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:44+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:01+00:00"
     },
     "pinpoint:scottishfa": {
       "ats": "pinpoint",
       "slug": "scottishfa",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:44+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-29T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:01+00:00"
     },
     "pinpoint:securiancanada": {
       "ats": "pinpoint",
       "slug": "securiancanada",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:45+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:02+00:00"
     },
     "pinpoint:serefin": {
       "ats": "pinpoint",
       "slug": "serefin",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:45+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:02+00:00"
     },
     "pinpoint:sevenpointscapital": {
       "ats": "pinpoint",
       "slug": "sevenpointscapital",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:46+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:03+00:00"
     },
     "pinpoint:seymourhotels": {
       "ats": "pinpoint",
       "slug": "seymourhotels",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:46+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:04+00:00"
     },
     "pinpoint:shieldtp": {
       "ats": "pinpoint",
       "slug": "shieldtp",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:47+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:05+00:00"
     },
     "pinpoint:simpleclub": {
       "ats": "pinpoint",
       "slug": "simpleclub",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:48+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:05+00:00"
     },
     "pinpoint:skims": {
       "ats": "pinpoint",
       "slug": "skims",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:50+00:00"
+      "classification": "verified",
+      "recentCount": 6,
+      "newestPostedAt": "2026-12-01T07:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:07+00:00"
     },
     "pinpoint:skinspirit": {
       "ats": "pinpoint",
       "slug": "skinspirit",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:51+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:08+00:00"
     },
     "pinpoint:smartthings": {
       "ats": "pinpoint",
       "slug": "smartthings",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:52+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:09+00:00"
     },
     "pinpoint:snapanalytics": {
       "ats": "pinpoint",
       "slug": "snapanalytics",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:52+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-30T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:10+00:00"
     },
     "pinpoint:sobencc": {
       "ats": "pinpoint",
       "slug": "sobencc",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:53+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:11+00:00"
     },
     "pinpoint:sbgl": {
       "ats": "pinpoint",
       "slug": "sbgl",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:54+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:11+00:00"
     },
     "pinpoint:spektrix": {
       "ats": "pinpoint",
       "slug": "spektrix",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:54+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:12+00:00"
     },
     "pinpoint:spiralyze": {
       "ats": "pinpoint",
       "slug": "spiralyze",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:56+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:13+00:00"
     },
     "pinpoint:weare54": {
       "ats": "pinpoint",
       "slug": "weare54",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:56+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:14+00:00"
     },
     "pinpoint:stpetrocs": {
       "ats": "pinpoint",
       "slug": "stpetrocs",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:57+00:00"
+      "classification": "verified",
+      "recentCount": 4,
+      "newestPostedAt": "2026-10-30T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:14+00:00"
     },
     "pinpoint:stratom": {
       "ats": "pinpoint",
       "slug": "stratom",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:57+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:15+00:00"
     },
     "pinpoint:summitk12": {
       "ats": "pinpoint",
       "slug": "summitk12",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:55:58+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:16+00:00"
     },
     "pinpoint:sunking": {
       "ats": "pinpoint",
       "slug": "sunking",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:00+00:00"
+      "classification": "verified",
+      "recentCount": 3,
+      "newestPostedAt": "2026-09-30T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:19+00:00"
     },
     "pinpoint:superside": {
       "ats": "pinpoint",
       "slug": "superside",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:00+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:19+00:00"
     },
     "pinpoint:surgohealth": {
       "ats": "pinpoint",
       "slug": "surgohealth",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:01+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:20+00:00"
     },
     "pinpoint:systematica": {
       "ats": "pinpoint",
       "slug": "systematica",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:02+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:21+00:00"
     },
     "pinpoint:tabby": {
       "ats": "pinpoint",
       "slug": "tabby",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:03+00:00"
+      "classification": "verified",
+      "recentCount": 3,
+      "newestPostedAt": "2026-12-31T19:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:22+00:00"
     },
     "pinpoint:tails": {
       "ats": "pinpoint",
       "slug": "tails",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:04+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:23+00:00"
     },
     "pinpoint:tandym": {
       "ats": "pinpoint",
       "slug": "tandym",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:04+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:23+00:00"
     },
     "pinpoint:tatachemicals": {
       "ats": "pinpoint",
       "slug": "tatachemicals",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:05+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-18T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:24+00:00"
     },
     "pinpoint:teacherapprenticeship": {
       "ats": "pinpoint",
       "slug": "teacherapprenticeship",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:05+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:24+00:00"
     },
     "pinpoint:teaching-strategies": {
       "ats": "pinpoint",
       "slug": "teaching-strategies",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:06+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-22T03:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:25+00:00"
     },
     "pinpoint:teachmichigan": {
       "ats": "pinpoint",
       "slug": "teachmichigan",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:07+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:26+00:00"
     },
     "pinpoint:telesolvconsulting": {
       "ats": "pinpoint",
       "slug": "telesolvconsulting",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:08+00:00"
+      "classification": "verified",
+      "recentCount": 13,
+      "newestPostedAt": "2026-10-02T03:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:27+00:00"
     },
     "pinpoint:thearchco": {
       "ats": "pinpoint",
       "slug": "thearchco",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:08+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-10-26T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:27+00:00"
     },
     "pinpoint:thebulwark": {
       "ats": "pinpoint",
       "slug": "thebulwark",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:09+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:28+00:00"
     },
     "pinpoint:crcna": {
       "ats": "pinpoint",
       "slug": "crcna",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:09+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-28T03:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:29+00:00"
     },
     "pinpoint:dofe": {
       "ats": "pinpoint",
       "slug": "dofe",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:10+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-27T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:29+00:00"
     },
     "pinpoint:jed": {
       "ats": "pinpoint",
       "slug": "jed",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:10+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-10-03T03:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:30+00:00"
     },
     "pinpoint:lancashire-group": {
       "ats": "pinpoint",
       "slug": "lancashire-group",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:11+00:00"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-09-23T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:30+00:00"
     },
     "pinpoint:themischgroup": {
       "ats": "pinpoint",
       "slug": "themischgroup",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:12+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:32+00:00"
     },
     "pinpoint:natcen": {
       "ats": "pinpoint",
       "slug": "natcen",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:14+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-20T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:33+00:00"
     },
     "pinpoint:nypl": {
       "ats": "pinpoint",
       "slug": "nypl",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:15+00:00"
+      "classification": "verified",
+      "recentCount": 5,
+      "newestPostedAt": "2026-10-01T03:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:34+00:00"
     },
     "pinpoint:nmc": {
       "ats": "pinpoint",
       "slug": "nmc",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:16+00:00"
+      "classification": "verified",
+      "recentCount": 9,
+      "newestPostedAt": "2026-10-05T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:35+00:00"
     },
     "pinpoint:premierleague": {
       "ats": "pinpoint",
       "slug": "premierleague",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:17+00:00"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-09-26T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:36+00:00"
     },
     "pinpoint:theready": {
       "ats": "pinpoint",
       "slug": "theready",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:18+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:37+00:00"
     },
     "pinpoint:theiagen": {
       "ats": "pinpoint",
       "slug": "theiagen",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:18+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:37+00:00"
     },
     "pinpoint:thompsonslaw": {
       "ats": "pinpoint",
       "slug": "thompsonslaw",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:19+00:00"
+      "classification": "verified",
+      "recentCount": 22,
+      "newestPostedAt": "2026-10-02T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:38+00:00"
     },
     "pinpoint:thorne": {
       "ats": "pinpoint",
       "slug": "thorne",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:20+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:39+00:00"
     },
     "pinpoint:tithely": {
       "ats": "pinpoint",
       "slug": "tithely",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:21+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:40+00:00"
     },
     "pinpoint:therapymgmt": {
       "ats": "pinpoint",
       "slug": "therapymgmt",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:21+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:41+00:00"
     },
     "pinpoint:torbaycouncil": {
       "ats": "pinpoint",
       "slug": "torbaycouncil",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:22+00:00"
+      "classification": "verified",
+      "recentCount": 21,
+      "newestPostedAt": "2026-11-16T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:42+00:00"
     },
     "pinpoint:tradingtechnologies": {
       "ats": "pinpoint",
       "slug": "tradingtechnologies",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:23+00:00"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-09-25T04:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:43+00:00"
     },
     "pinpoint:transformuk": {
       "ats": "pinpoint",
       "slug": "transformuk",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:24+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:44+00:00"
     },
     "pinpoint:trilongroup": {
       "ats": "pinpoint",
       "slug": "trilongroup",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:30+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:50+00:00"
     },
     "pinpoint:trinidadbenham": {
       "ats": "pinpoint",
       "slug": "trinidadbenham",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:31+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:51+00:00"
     },
     "pinpoint:trivandi": {
       "ats": "pinpoint",
       "slug": "trivandi",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:31+00:00"
+      "classification": "verified",
+      "recentCount": 3,
+      "newestPostedAt": "2026-10-01T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:52+00:00"
     },
     "pinpoint:trulygoodfoods": {
       "ats": "pinpoint",
       "slug": "trulygoodfoods",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:32+00:00"
+      "classification": "verified",
+      "recentCount": 9,
+      "newestPostedAt": "2026-10-31T03:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:52+00:00"
     },
     "pinpoint:epuki": {
       "ats": "pinpoint",
       "slug": "epuki",
-      "classification": "inconclusive",
-      "reason": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:33+00:00"
+      "classification": "verified",
+      "recentCount": 7,
+      "newestPostedAt": "2026-10-02T22:59:59+00:00",
+      "attempts": 3,
+      "checkedAt": "2026-09-18T13:03:18+00:00"
     },
     "pinpoint:twiningsovocareers": {
       "ats": "pinpoint",
       "slug": "twiningsovocareers",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:34+00:00"
+      "classification": "verified",
+      "recentCount": 14,
+      "newestPostedAt": "2027-08-10T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:54+00:00"
     },
     "pinpoint:uktv": {
       "ats": "pinpoint",
       "slug": "uktv",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:34+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:55+00:00"
     },
     "pinpoint:ouswre": {
       "ats": "pinpoint",
       "slug": "ouswre",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:35+00:00"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-09-22T03:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:55+00:00"
     },
     "pinpoint:upway": {
       "ats": "pinpoint",
       "slug": "upway",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:36+00:00"
+      "classification": "verified",
+      "recentCount": 3,
+      "newestPostedAt": "2026-12-31T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:57+00:00"
     },
     "pinpoint:utilitiesone": {
       "ats": "pinpoint",
       "slug": "utilitiesone",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:38+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:01:58+00:00"
     },
     "pinpoint:vgroup": {
       "ats": "pinpoint",
       "slug": "vgroup",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:40+00:00"
+      "classification": "verified",
+      "recentCount": 5,
+      "newestPostedAt": "3100-01-01T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:01+00:00"
     },
     "pinpoint:vaiie": {
       "ats": "pinpoint",
       "slug": "vaiie",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:41+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:01+00:00"
     },
     "pinpoint:vena": {
       "ats": "pinpoint",
       "slug": "vena",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:42+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:02+00:00"
     },
     "pinpoint:alcumus": {
       "ats": "pinpoint",
       "slug": "alcumus",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:43+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:04+00:00"
     },
     "pinpoint:vitalbio": {
       "ats": "pinpoint",
       "slug": "vitalbio",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:44+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:04+00:00"
     },
     "pinpoint:weoneil": {
       "ats": "pinpoint",
       "slug": "weoneil",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:45+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:06+00:00"
     },
     "pinpoint:wanstor": {
       "ats": "pinpoint",
       "slug": "wanstor",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:46+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:06+00:00"
     },
     "pinpoint:waymark": {
       "ats": "pinpoint",
       "slug": "waymark",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:46+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:07+00:00"
     },
     "pinpoint:wealthwizards": {
       "ats": "pinpoint",
       "slug": "wealthwizards",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:47+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:07+00:00"
     },
     "pinpoint:whiteswandata": {
       "ats": "pinpoint",
       "slug": "whiteswandata",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:47+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:08+00:00"
     },
     "pinpoint:windward-energy": {
       "ats": "pinpoint",
       "slug": "windward-energy",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:48+00:00"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-09-30T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:09+00:00"
     },
     "pinpoint:wmhsolutions": {
       "ats": "pinpoint",
       "slug": "wmhsolutions",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:49+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:10+00:00"
     },
     "pinpoint:woodrodgers": {
       "ats": "pinpoint",
       "slug": "woodrodgers",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:50+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:11+00:00"
     },
     "pinpoint:workstaff360": {
       "ats": "pinpoint",
       "slug": "workstaff360",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:51+00:00"
+      "classification": "verified",
+      "recentCount": 7,
+      "newestPostedAt": "2026-10-04T03:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:12+00:00"
     },
     "pinpoint:worldanimalprotection": {
       "ats": "pinpoint",
       "slug": "worldanimalprotection",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:52+00:00"
+      "classification": "verified",
+      "recentCount": 3,
+      "newestPostedAt": "2026-10-11T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:12+00:00"
     },
     "pinpoint:wyld": {
       "ats": "pinpoint",
       "slug": "wyld",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:53+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:14+00:00"
     },
     "pinpoint:xantura": {
       "ats": "pinpoint",
       "slug": "xantura",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:54+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:14+00:00"
     },
     "pinpoint:xeneta": {
       "ats": "pinpoint",
       "slug": "xeneta",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:54+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:15+00:00"
     },
     "pinpoint:ymcaboston": {
       "ats": "pinpoint",
       "slug": "ymcaboston",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:57+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:17+00:00"
     },
     "pinpoint:ynab": {
       "ats": "pinpoint",
       "slug": "ynab",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:57+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:18+00:00"
     },
     "pinpoint:zencargo": {
       "ats": "pinpoint",
       "slug": "zencargo",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:58+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:18+00:00"
     },
     "pinpoint:zenergi": {
       "ats": "pinpoint",
       "slug": "zenergi",
       "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:58+00:00"
+      "reason": "no listing deadline on or after 2026-08-01",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:19+00:00"
     },
     "pinpoint:zevohealth": {
       "ats": "pinpoint",
       "slug": "zevohealth",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:56:59+00:00"
+      "classification": "verified",
+      "recentCount": 15,
+      "newestPostedAt": "2026-10-31T23:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:20+00:00"
     },
     "pinpoint:zincwork": {
       "ats": "pinpoint",
       "slug": "zincwork",
-      "classification": "invalid",
-      "reason": "no listing published on or after 2026-08-01",
-      "attempts": 1,
-      "checkedAt": "2026-09-18T11:57:00+00:00"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-20T22:59:59+00:00",
+      "attempts": 2,
+      "checkedAt": "2026-09-18T13:02:21+00:00"
     },
     "rippling:11fs-group-ltd": {
       "ats": "rippling",
