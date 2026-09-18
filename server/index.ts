@@ -358,7 +358,7 @@ app.get("/api/jobs/matched", async (req: AuthedRequest, res) => {
   const date = q.date || q.date_from;
   if (workplace) add("lower(j.workplace_type)=lower(?)", workplace); if (minScore) add("jm.score>=?", Number(minScore));
   if (q.status) { params.push(q.status); where.push(`COALESCE(s.status,'new')=$${params.length}`); }
-  if (date) add("j.published_at>=?", date);
+  if (date) add("(j.published_at>=? OR (j.ats='bamboohr' AND j.published_at IS NULL))", date);
   const locationSql = `(CASE
     WHEN lower(trim(location_part)) LIKE '%monaco%' OR lower(trim(location_part)) ~ '(^|[, -])(mc)([, -]|$)' THEN 'monaco'
     WHEN lower(trim(location_part)) ~ '^remote([[:space:]]*[-:][[:space:]]*|[[:space:]]+|$)' THEN 'remote'

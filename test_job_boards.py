@@ -1994,6 +1994,18 @@ def test_bamboohr_registry_uses_positive_current_feed_count():
     assert "does not publish listing dates" in result["reason"]
 
 
+def test_bamboohr_normalizes_deadline_to_published_date():
+    normalized = normalize_bamboohr(
+        {
+            "id": "575",
+            "jobOpeningName": "Founding Head of Engineering",
+            "deadline": "2026-09-30T22:59:59Z",
+        }
+    )
+
+    assert normalized["publishedAt"] == "2026-08-31T22:59:59+00:00"
+
+
 def test_bamboohr_registry_rejects_empty_current_feed():
     cutoff = datetime(2026, 8, 1, tzinfo=timezone.utc)
     original = job_boards._bamboohr_payload

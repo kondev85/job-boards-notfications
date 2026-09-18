@@ -1786,6 +1786,27 @@ def normalize_bamboohr(job: dict) -> dict | None:
     location = _location_label(_provider_value(job, "location", "locationLabel", "locations"))
     workplace = str(_provider_value(job, "workplaceType", "workplace", "employmentType") or "")
     remote = "remote" in f"{location} {workplace}".casefold()
+    published_at = _provider_datetime(
+        _provider_value(job, "datePosted", "publishedAt", "createdAt")
+    )
+    if not published_at:
+        deadline_at = _provider_datetime(
+            _provider_value(
+                job,
+                "deadline",
+                "deadlineAt",
+                "deadline_at",
+                "closingDate",
+                "closing_date",
+                "applicationDeadline",
+                "application_deadline",
+                "jobClosingDate",
+            )
+        )
+        if deadline_at:
+            published_at = (
+                datetime.fromisoformat(deadline_at) - timedelta(days=30)
+            ).isoformat(timespec="seconds")
     return {
         "id": posting_id,
         "title": title,
@@ -1796,9 +1817,7 @@ def normalize_bamboohr(job: dict) -> dict | None:
         "isRemote": remote,
         "workplaceType": "remote" if remote else workplace,
         "address": {"location": job.get("location")} if job.get("location") is not None else None,
-        "publishedAt": _provider_datetime(
-            _provider_value(job, "datePosted", "publishedAt", "createdAt")
-        ),
+        "publishedAt": published_at,
         "jobUrl": _provider_value(job, "jobUrl", "url", "externalUrl"),
         "_description": _provider_value(job, "jobDescription", "description"),
         "_sourceUpdatedAt": _provider_value(job, "updatedAt", "dateUpdated"),

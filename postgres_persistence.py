@@ -1626,11 +1626,17 @@ def _fetch_normalized(
             )
         normalized = job_boards._clean(normalized)
         published_at = _timestamp(normalized.get("publishedAt"))
-        if published_after is not None and (
-            published_at is None or published_at < published_after
-        ):
-            skipped += 1
-            continue
+        if published_after is not None:
+            if published_at is None:
+                # BambooHR exposes a current-openings feed without publication
+                # or deadline dates. Keep those active jobs in the bounded
+                # provider scan instead of treating missing metadata as stale.
+                if ats != "bamboohr":
+                    skipped += 1
+                    continue
+            elif published_at < published_after:
+                skipped += 1
+                continue
         normalized_rows.append({
             "ats": ats,
             "slug": slug,
@@ -2886,7 +2892,10 @@ def run_matching(
         job_cutoff = ""
         job_params: tuple[Any, ...] = ()
         if published_after is not None:
-            job_cutoff = " AND j.published_at >= %s"
+            job_cutoff = (
+                " AND (j.published_at >= %s "
+                "OR (b.ats = 'bamboohr' AND j.published_at IS NULL))"
+            )
             job_params = (published_after,)
         ats_clause = ""
         if ats:
@@ -3162,7 +3171,10 @@ def run_recommendations(
     job_cutoff = ""
     job_params: tuple[Any, ...] = ()
     if published_after is not None:
-        job_cutoff = " AND j.published_at >= %s"
+        job_cutoff = (
+            " AND (j.published_at >= %s "
+            "OR (b.ats = 'bamboohr' AND j.published_at IS NULL))"
+        )
         job_params = (published_after,)
     ats_clause = ""
     if ats:

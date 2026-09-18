@@ -580,6 +580,27 @@ def test_adapter_mappings_are_offline_and_keep_descriptions():
     assert skipped == 0 and greenhouse_rows[0]["external_id"] == "42"
     assert greenhouse_rows[0]["description_text"] is None
 
+    bamboohr_rows, skipped = _with_fetch(
+        {
+            "meta": {"totalCount": 1},
+            "result": [
+                {
+                    "id": "bamboo-1",
+                    "jobOpeningName": "Current BambooHR role",
+                    "location": {"city": "Paris", "state": None},
+                }
+            ],
+        },
+        lambda: persistence._fetch_normalized(
+            "bamboohr",
+            "acme",
+            published_after=datetime(2026, 8, 1, tzinfo=timezone.utc),
+        ),
+    )
+    assert skipped == 0 and len(bamboohr_rows) == 1
+    assert bamboohr_rows[0]["external_id"] == "acme:bamboo-1"
+    assert bamboohr_rows[0]["published_at"] is None
+
     workable_meta: dict[str, object] = {}
     original_workable_get = job_boards._workable_get_json
     job_boards._workable_get_json = lambda *args, **kwargs: {
