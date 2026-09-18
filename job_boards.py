@@ -2925,7 +2925,18 @@ def _registry_status(
             if not isinstance(raw, dict):
                 continue
             normalized = SOURCES[ats]["normalize"](raw)
-            if normalized and published_within(normalized.get("publishedAt", ""), cutoff):
+            if not normalized:
+                continue
+            if ats == "pinpoint":
+                # Pinpoint's public feed omits publication timestamps. Its
+                # structured deadline is the available evidence that a posting
+                # was active in the requested window; do not copy it into the
+                # posting's publishedAt field because that would corrupt search
+                # recency semantics.
+                deadline = _provider_datetime(raw.get("deadline_at"))
+                if published_within(deadline, cutoff):
+                    recent.append(deadline)
+            elif published_within(normalized.get("publishedAt", ""), cutoff):
                 recent.append(normalized["publishedAt"])
         if recent:
             return {
@@ -2935,11 +2946,14 @@ def _registry_status(
                 "recentCount": len(recent),
                 "newestPostedAt": max(recent),
             }
+        evidence = "deadline" if ats == "pinpoint" else "publication date"
         return {
             "ats": ats,
             "slug": slug,
             "classification": "invalid",
-            "reason": f"no listing published on or after {cutoff.date().isoformat()}",
+            "reason": (
+                f"no listing {evidence} on or after {cutoff.date().isoformat()}"
+            ),
         }
     except NotFound as exc:
         return {
@@ -2984,6 +2998,36 @@ def validate_registry_files(
     except (OSError, json.JSONDecodeError):
         state = {}
     validations = dict(state.get("validations") or {})
+    for ats, slug in candidates:
+        key = f"{ats}:{slug.casefold()}"
+        existing = validations.get(key)
+        if (
+            ats == "pinpoint"
+            and isinstance(existing, dict)
+            and existing.get("classification") == "invalid"
+            and str(existing.get("reason", "")).startswith(
+                "no listing published on or after "
+            )
+        ):
+            # Older checkpoints used publication dates for Pinpoint. Recheck
+            # those rows under the provider-specific deadline rule.
+            existing["classification"] = "pending"
+        validations.setdefault(
+            key,
+            {
+                "ats": ats,
+                "slug": slug,
+                "classification": "pending",
+            },
+        )
+    _write_json_atomic(
+        progress_path,
+        {
+            "cutoff": cutoff.isoformat(),
+            "updatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "validations": validations,
+        },
+    )
     pending = [
         item for item in candidates
         if validations.get(f"{item[0]}:{item[1].casefold()}", {}).get("classification")
