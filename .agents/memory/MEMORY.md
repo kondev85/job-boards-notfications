@@ -13,3 +13,4 @@
 - [Board registry maintenance schema](board-registry-maintenance-schema.md) — job_boards has no updated_at column; status maintenance should only change active.
 - [Workable empty-board pruning](workable-empty-board-pruning.md) — prune only after a successful widget response confirms zero total jobs; preserve boards with older-only postings.
 - [Workable location state](workable-location-state.md) — widget `state` is often a region, not a publication status; do not reject visible postings based on it.
+- [Pinpoint feed dates](pinpoint-public-feed.md) — the public postings feed may omit publication timestamps; without reliable dates, strict cutoff validation must exclude the board.

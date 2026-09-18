@@ -204,6 +204,28 @@ uv run job_boards.py --ats workday --validate-discovered --discover-only
 This keeps the incomplete crawl checkpoint for a later resume. Repeating the command reuses
 completed validation outcomes and retries only request errors.
 
+### Supplied ATS registries
+
+Personio, BambooHR, Pinpoint, Breezy, and Rippling do not provide an anonymous
+customer directory. Their public structured feeds can be validated from a
+bounded CSV registry containing `name`, `slug`, and `url` columns:
+
+```bash
+uv run job_boards.py \
+  --validate-registry personio:attached_assets/personio_1789719143420.csv \
+  --validate-registry bamboohr:attached_assets/bamboohr_1789719143420.csv \
+  --validate-registry pinpoint:attached_assets/pinpoint_1789719143419.csv \
+  --validate-registry rippling:attached_assets/rippling_1789719143418.csv \
+  --registry-cutoff 2026-08-01
+```
+
+Each provider is paced at one request per second. A board is written to
+`boards.json` only when its structured response contains at least one listing
+with a reliable publication date on or after the cutoff. Validation checkpoints
+every row in `provider-registry-progress.json`; rerunning the same command
+reuses completed valid/invalid rows and retries only inconclusive requests.
+Provider failures are never treated as inactive boards.
+
 An individual CDX page gets two attempts with a 60-second timeout. If it still fails, the
 page is recorded and the crawler continues so one slow archive shard cannot block hundreds
 of later pages. Three consecutive page failures stop the run because they usually indicate

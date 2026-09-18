@@ -66,6 +66,11 @@ DAILY_ATS_CONCURRENCY = {
     "recruitee": 2,
     "teamtailor": 2,
     "workable": 1,
+    "personio": 1,
+    "bamboohr": 1,
+    "pinpoint": 1,
+    "breezy": 1,
+    "rippling": 1,
 }
 
 
@@ -185,7 +190,8 @@ CREATE TABLE IF NOT EXISTS job_boards (
     company_id  BIGINT NOT NULL REFERENCES companies(company_id),
     ats         TEXT NOT NULL CHECK (ats IN (
         'ashby', 'greenhouse', 'lever', 'smartrecruiters', 'workday',
-        'recruitee', 'teamtailor', 'workable'
+        'recruitee', 'teamtailor', 'workable',
+        'personio', 'bamboohr', 'pinpoint', 'breezy', 'rippling'
     )),
     slug        TEXT NOT NULL,
     active      BOOLEAN NOT NULL DEFAULT TRUE,
@@ -205,7 +211,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     company            TEXT,
     ats                TEXT NOT NULL CHECK (ats IN (
         'ashby', 'greenhouse', 'lever', 'smartrecruiters', 'workday',
-        'recruitee', 'teamtailor', 'workable'
+        'recruitee', 'teamtailor', 'workable',
+        'personio', 'bamboohr', 'pinpoint', 'breezy', 'rippling'
     )),
     external_id        TEXT NOT NULL,
     title              TEXT NOT NULL,
@@ -239,13 +246,15 @@ ALTER TABLE job_boards DROP CONSTRAINT IF EXISTS job_boards_ats_check;
 ALTER TABLE job_boards ADD CONSTRAINT job_boards_ats_check
     CHECK (ats IN (
         'ashby', 'greenhouse', 'lever', 'smartrecruiters', 'workday',
-        'recruitee', 'teamtailor', 'workable'
+        'recruitee', 'teamtailor', 'workable',
+        'personio', 'bamboohr', 'pinpoint', 'breezy', 'rippling'
     ));
 ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_ats_check;
 ALTER TABLE jobs ADD CONSTRAINT jobs_ats_check
     CHECK (ats IN (
         'ashby', 'greenhouse', 'lever', 'smartrecruiters', 'workday',
-        'recruitee', 'teamtailor', 'workable'
+        'recruitee', 'teamtailor', 'workable',
+        'personio', 'bamboohr', 'pinpoint', 'breezy', 'rippling'
     ));
 
 CREATE TABLE IF NOT EXISTS users (
@@ -671,6 +680,11 @@ def _source_updated_at(ats: str, raw_job: dict[str, Any]) -> datetime | None:
         "recruitee": ("updated_at", "updatedAt", "modified_at", "modifiedAt"),
         "teamtailor": ("date_modified", "dateModified", "updated_at", "updatedAt"),
         "workable": ("updated_at", "updatedAt", "modified_at", "modifiedAt"),
+        "personio": ("updatedAt", "updated_at", "modifiedAt", "modified_at"),
+        "bamboohr": ("updatedAt", "dateUpdated", "updated_at"),
+        "pinpoint": ("updated_at", "updatedAt", "modified_at"),
+        "breezy": ("updatedAt", "updated_at", "modifiedAt"),
+        "rippling": ("updatedOn", "updatedAt", "createdOn"),
     }
     for key in keys_by_ats[ats]:
         if raw_job.get(key) not in (None, ""):
@@ -1598,6 +1612,11 @@ def _fetch_normalized(
             "recruitee",
             "teamtailor",
             "workable",
+            "personio",
+            "bamboohr",
+            "pinpoint",
+            "breezy",
+            "rippling",
         }:
             normalized["id"] = f"{slug}:{normalized['id']}"
         if ats == "workable" and not normalized.get("jobUrl"):

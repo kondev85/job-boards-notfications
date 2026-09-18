@@ -42,6 +42,7 @@ import sqlite3
 import sys
 import threading
 import time
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 import urllib.error
 import urllib.parse
@@ -59,6 +60,7 @@ BOARDS_SEED = HERE / "boards.seed.json"
 BOARDS_CACHE = HERE / "boards.json"
 WORKDAY_DISCOVERY_REPORT = HERE / "workday-discovery-report.json"
 WORKDAY_DISCOVERY_PROGRESS = HERE / "workday-discovery-progress.json"
+REGISTRY_VALIDATION_PROGRESS = HERE / "provider-registry-progress.json"
 COLLINFO = "https://index.commoncrawl.org/collinfo.json"
 WAYBACK_CDX = (
     "https://web.archive.org/cdx/search/cdx?url={domain}"
@@ -133,6 +135,7 @@ _NEXT_REQUEST_AT: dict[str, float] = {}
 _REQUEST_INTERVALS = {
     "apply.workable.com": 2.0,
 }
+_PROVIDER_REQUEST_INTERVAL = 1.0
 _WORKABLE_CACHE_LOCK = threading.Lock()
 
 
@@ -140,6 +143,15 @@ def _wait_for_paced_host(netloc: str) -> None:
     """Keep provider requests spaced even when callers use worker threads."""
     hostname = netloc.split(":", 1)[0].lower()
     interval = _REQUEST_INTERVALS.get(hostname)
+    if interval is None and (
+        hostname == "ats.rippling.com"
+        or hostname.endswith(".bamboohr.com")
+        or hostname.endswith(".personio.com")
+        or hostname.endswith(".personio.de")
+        or hostname.endswith(".pinpointhq.com")
+        or hostname.endswith(".breezy.hr")
+    ):
+        interval = _PROVIDER_REQUEST_INTERVAL
     if interval is None:
         return
 
@@ -234,6 +246,12 @@ def _is_pooled_host(netloc: str) -> bool:
         or hostname.endswith(".myworkdayjobs.com")
         or hostname.endswith(".recruitee.com")
         or hostname.endswith(".teamtailor.com")
+        or hostname == "ats.rippling.com"
+        or hostname.endswith(".bamboohr.com")
+        or hostname.endswith(".personio.com")
+        or hostname.endswith(".personio.de")
+        or hostname.endswith(".pinpointhq.com")
+        or hostname.endswith(".breezy.hr")
     )
 
 
@@ -321,6 +339,14 @@ def plain_text(value: str) -> str:
 
 def _provider_datetime(value: object) -> str:
     """Normalize provider ISO and trailing-UTC timestamps to ISO UTC."""
+    if isinstance(value, (int, float)):
+        try:
+            seconds = value / 1000 if abs(value) > 10_000_000_000 else value
+            return datetime.fromtimestamp(seconds, timezone.utc).isoformat(
+                timespec="seconds"
+            )
+        except (OverflowError, OSError, ValueError):
+            return ""
     text = str(value or "").strip()
     if not text:
         return ""
@@ -1663,6 +1689,313 @@ def workday_board_exists(identifier: str) -> bool:
     return bool(inspect_workday_board(identifier).get("live"))
 
 
+def _provider_value(job: dict, *keys: str) -> object:
+    for key in keys:
+        value = job.get(key)
+        if value not in (None, ""):
+            return value
+    return ""
+
+
+def _provider_locations(job: dict, *keys: str) -> list[object]:
+    for key in keys:
+        value = job.get(key)
+        if isinstance(value, list):
+            return value
+        if value not in (None, ""):
+            return [value]
+    return []
+
+
+def normalize_personio(job: dict) -> dict | None:
+    posting_id = str(job.get("id") or "").strip()
+    title = str(job.get("name") or job.get("title") or "").strip()
+    if not posting_id or not title:
+        return None
+    locations = _provider_locations(job, "office", "additionalOffices")
+    labels = list(dict.fromkeys(_location_label(item) for item in locations if _location_label(item)))
+    description = job.get("description") or job.get("jobDescriptions") or ""
+    return {
+        "id": posting_id,
+        "title": title,
+        "department": job.get("department") or job.get("recruitingCategory") or "",
+        "team": job.get("subcompany") or "",
+        "employmentType": job.get("employmentType") or job.get("schedule") or "",
+        "location": "; ".join(labels),
+        "isRemote": any("remote" in label.casefold() for label in labels),
+        "workplaceType": "remote" if any("remote" in label.casefold() for label in labels) else "",
+        "address": {"offices": locations} if locations else None,
+        "publishedAt": _provider_datetime(
+            job.get("createdAt") or job.get("publishedAt") or job.get("datePosted")
+        ),
+        "jobUrl": job.get("jobUrl") or job.get("url") or "",
+        "_description": description,
+        "_sourceUpdatedAt": job.get("updatedAt") or job.get("updated_at") or "",
+    }
+
+
+def personio_board_url(slug: str) -> str:
+    host = str(slug).strip()
+    if "." not in host:
+        host = f"{host}.jobs.personio.com"
+    return f"https://{host}/xml?language=en"
+
+
+def fetch_personio_jobs(slug: str, published_after: datetime | None = None) -> list[dict]:
+    root = ET.fromstring(fetch(personio_board_url(slug), timeout=30, retries=3))
+    jobs: list[dict] = []
+    for position in root.findall(".//position"):
+        item: dict[str, object] = {}
+        for child in position:
+            if child.tag in {"office", "additionalOffices"}:
+                item.setdefault(child.tag, []).append((child.text or "").strip())
+            elif child.tag == "jobDescriptions":
+                item["description"] = " ".join(
+                    part.text or "" for part in child.iter() if part.text
+                )
+            else:
+                item[child.tag] = (child.text or "").strip()
+        jobs.append(item)
+    return jobs
+
+
+def personio_board_exists(slug: str) -> bool:
+    try:
+        root = ET.fromstring(fetch(personio_board_url(slug), timeout=25, retries=2))
+        return root.tag == "workzag-jobs"
+    except Exception:
+        return False
+
+
+def normalize_bamboohr(job: dict) -> dict | None:
+    posting_id = str(_provider_value(job, "id", "jobId", "jobOpeningId")).strip()
+    title = str(_provider_value(job, "jobOpeningName", "title", "name")).strip()
+    if not posting_id or not title:
+        return None
+    location = _location_label(_provider_value(job, "location", "locationLabel", "locations"))
+    workplace = str(_provider_value(job, "workplaceType", "workplace", "employmentType") or "")
+    remote = "remote" in f"{location} {workplace}".casefold()
+    return {
+        "id": posting_id,
+        "title": title,
+        "department": _provider_value(job, "departmentLabel", "department", "departmentName"),
+        "team": _provider_value(job, "team", "jobCategory"),
+        "employmentType": _provider_value(job, "employmentStatusLabel", "employmentType"),
+        "location": location,
+        "isRemote": remote,
+        "workplaceType": "remote" if remote else workplace,
+        "address": {"location": job.get("location")} if job.get("location") is not None else None,
+        "publishedAt": _provider_datetime(
+            _provider_value(job, "datePosted", "publishedAt", "createdAt")
+        ),
+        "jobUrl": _provider_value(job, "jobUrl", "url", "externalUrl"),
+        "_description": _provider_value(job, "jobDescription", "description"),
+        "_sourceUpdatedAt": _provider_value(job, "updatedAt", "dateUpdated"),
+    }
+
+
+def bamboohr_board_url(slug: str) -> str:
+    host = str(slug).strip()
+    if "." not in host:
+        host = f"{host}.bamboohr.com"
+    return f"https://{host}/careers/list"
+
+
+def fetch_bamboohr_jobs(slug: str, published_after: datetime | None = None) -> list[dict]:
+    payload = json.loads(fetch(bamboohr_board_url(slug), timeout=30, retries=3))
+    jobs = payload.get("result") if isinstance(payload, dict) else None
+    if not isinstance(jobs, list):
+        raise ValueError(f"bamboohr/{slug}: response has no result array")
+    return [item for item in jobs if isinstance(item, dict)]
+
+
+def bamboohr_board_exists(slug: str) -> bool:
+    try:
+        payload = json.loads(fetch(bamboohr_board_url(slug), timeout=25, retries=2))
+        return isinstance(payload, dict) and isinstance(payload.get("result"), list)
+    except Exception:
+        return False
+
+
+def normalize_pinpoint(job: dict) -> dict | None:
+    posting_id = str(_provider_value(job, "id", "uuid", "slug")).strip()
+    title = str(_provider_value(job, "title", "name")).strip()
+    if not posting_id or not title:
+        return None
+    locations = _provider_locations(job, "locations", "location")
+    labels = list(dict.fromkeys(_location_label(item) for item in locations if _location_label(item)))
+    remote = bool(job.get("remote")) or any("remote" in label.casefold() for label in labels)
+    return {
+        "id": posting_id,
+        "title": title,
+        "department": _provider_value(job, "department", "team"),
+        "team": _provider_value(job, "team", "category"),
+        "employmentType": _provider_value(job, "employment_type", "employmentType", "type"),
+        "location": "; ".join(labels),
+        "isRemote": remote,
+        "workplaceType": "remote" if remote else "",
+        "address": {"locations": locations} if locations else None,
+        "publishedAt": _provider_datetime(
+            _provider_value(job, "published_at", "publishedAt", "created_at", "createdAt")
+        ),
+        "jobUrl": _provider_value(job, "url", "job_url", "apply_url"),
+        "_description": _provider_value(job, "description", "description_html"),
+        "_sourceUpdatedAt": _provider_value(job, "updated_at", "updatedAt"),
+    }
+
+
+def pinpoint_board_url(slug: str) -> str:
+    host = str(slug).strip()
+    if "." not in host:
+        host = f"{host}.pinpointhq.com"
+    return f"https://{host}/postings.json"
+
+
+def fetch_pinpoint_jobs(slug: str, published_after: datetime | None = None) -> list[dict]:
+    payload = json.loads(fetch(pinpoint_board_url(slug), timeout=30, retries=3))
+    jobs = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(jobs, list):
+        raise ValueError(f"pinpoint/{slug}: response has no data array")
+    return [item for item in jobs if isinstance(item, dict)]
+
+
+def pinpoint_board_exists(slug: str) -> bool:
+    try:
+        payload = json.loads(fetch(pinpoint_board_url(slug), timeout=25, retries=2))
+        return isinstance(payload, dict) and isinstance(payload.get("data"), list)
+    except Exception:
+        return False
+
+
+def normalize_breezy(job: dict) -> dict | None:
+    posting_id = str(_provider_value(job, "id", "uuid", "slug")).strip()
+    title = str(_provider_value(job, "name", "title")).strip()
+    if not posting_id or not title:
+        return None
+    location = _location_label(_provider_value(job, "location", "friendlyLocation"))
+    workplace = str(_provider_value(job, "type", "workplaceType") or "")
+    remote = bool(job.get("remote")) or "remote" in f"{location} {workplace}".casefold()
+    return {
+        "id": posting_id,
+        "title": title,
+        "department": _provider_value(job, "department", "category"),
+        "team": _provider_value(job, "team"),
+        "employmentType": _provider_value(job, "type", "employmentType"),
+        "location": location,
+        "isRemote": remote,
+        "workplaceType": "remote" if remote else workplace,
+        "address": {"location": job.get("location")} if job.get("location") is not None else None,
+        "publishedAt": _provider_datetime(
+            _provider_value(job, "publishedDate", "published_at", "publishedAt", "createdAt")
+        ),
+        "jobUrl": _provider_value(job, "url", "friendlyUrl"),
+        "_description": _provider_value(job, "description", "descriptionHtml"),
+        "_sourceUpdatedAt": _provider_value(job, "updatedAt", "updated_at"),
+    }
+
+
+def breezy_board_url(slug: str) -> str:
+    host = str(slug).strip()
+    if "." not in host:
+        host = f"{host}.breezy.hr"
+    return f"https://{host}/json"
+
+
+def fetch_breezy_jobs(slug: str, published_after: datetime | None = None) -> list[dict]:
+    payload = json.loads(fetch(breezy_board_url(slug), timeout=30, retries=3))
+    if not isinstance(payload, list):
+        raise ValueError(f"breezy/{slug}: response is not a job array")
+    return [item for item in payload if isinstance(item, dict)]
+
+
+def breezy_board_exists(slug: str) -> bool:
+    try:
+        payload = json.loads(fetch(breezy_board_url(slug), timeout=25, retries=2))
+        return isinstance(payload, list)
+    except Exception:
+        return False
+
+
+def rippling_board_url(slug: str) -> str:
+    return (
+        "https://ats.rippling.com/api/v2/board/"
+        f"{urllib.parse.quote(str(slug).strip(), safe='')}/jobs"
+    )
+
+
+def _rippling_detail_url(slug: str, posting_id: str) -> str:
+    return (
+        f"{rippling_board_url(slug)}/"
+        f"{urllib.parse.quote(str(posting_id).strip(), safe='')}"
+    )
+
+
+def normalize_rippling(job: dict) -> dict | None:
+    posting_id = str(_provider_value(job, "uuid", "id")).strip()
+    title = str(_provider_value(job, "name", "title")).strip()
+    if not posting_id or not title:
+        return None
+    locations = _provider_locations(job, "workLocations", "locations")
+    labels = list(dict.fromkeys(_location_label(item) for item in locations if _location_label(item)))
+    remote = any("remote" in f"{_location_label(item)} {item.get('workplaceType', '')}".casefold()
+                 for item in locations if isinstance(item, dict))
+    return {
+        "id": posting_id,
+        "title": title,
+        "department": _location_label(job.get("department")),
+        "team": "",
+        "employmentType": _location_label(job.get("employmentType")),
+        "location": "; ".join(labels),
+        "isRemote": remote,
+        "workplaceType": "remote" if remote else "",
+        "address": {"locations": locations} if locations else None,
+        "publishedAt": _provider_datetime(
+            _provider_value(job, "createdOn", "createdAt", "publishedAt", "datePosted")
+        ),
+        "jobUrl": _provider_value(job, "url", "jobUrl"),
+        "_description": " ".join(
+            str(value) for value in (job.get("description") or {}).values()
+            if isinstance(value, str)
+        ) if isinstance(job.get("description"), dict) else job.get("description", ""),
+        "_sourceUpdatedAt": _provider_value(job, "updatedOn", "updatedAt"),
+    }
+
+
+def fetch_rippling_jobs(slug: str, published_after: datetime | None = None) -> list[dict]:
+    jobs: list[dict] = []
+    page = 0
+    while page < 1000:
+        url = rippling_board_url(slug) + f"?page={page}&pageSize=1000"
+        payload = json.loads(fetch(url, timeout=30, retries=3))
+        items = payload.get("items") if isinstance(payload, dict) else None
+        if not isinstance(items, list):
+            raise ValueError(f"rippling/{slug}: response has no items array")
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            posting_id = str(_provider_value(item, "uuid", "id")).strip()
+            if not posting_id:
+                continue
+            detail = json.loads(fetch(_rippling_detail_url(slug, posting_id), timeout=30, retries=3))
+            merged = dict(item)
+            if isinstance(detail, dict):
+                merged.update(detail)
+            jobs.append(merged)
+        total_pages = int(payload.get("totalPages") or 0)
+        if page + 1 >= total_pages or not items:
+            break
+        page += 1
+    return jobs
+
+
+def rippling_board_exists(slug: str) -> bool:
+    try:
+        payload = json.loads(fetch(rippling_board_url(slug) + "?page=0&pageSize=1", timeout=25, retries=2))
+        return isinstance(payload, dict) and isinstance(payload.get("items"), list)
+    except Exception:
+        return False
+
+
 SOURCES = {
     "ashby": {
         "domains": ["jobs.ashbyhq.com"],
@@ -1748,6 +2081,61 @@ SOURCES = {
         "fetch_jobs": fetch_workable_jobs,
         "board_exists": lambda slug: _workable_board_exists(slug),
     },
+    "personio": {
+        "domains": ["jobs.personio.com", "jobs.personio.de"],
+        "registry_only": True,
+        "api": None,
+        "jobs": lambda payload: payload,
+        "normalize": normalize_personio,
+        "content_param": None,
+        "junk_prefixes": (),
+        "fetch_jobs": fetch_personio_jobs,
+        "board_exists": personio_board_exists,
+    },
+    "bamboohr": {
+        "domains": ["bamboohr.com"],
+        "registry_only": True,
+        "api": None,
+        "jobs": lambda payload: payload.get("result"),
+        "normalize": normalize_bamboohr,
+        "content_param": None,
+        "junk_prefixes": (),
+        "fetch_jobs": fetch_bamboohr_jobs,
+        "board_exists": bamboohr_board_exists,
+    },
+    "pinpoint": {
+        "domains": ["pinpointhq.com"],
+        "registry_only": True,
+        "api": None,
+        "jobs": lambda payload: payload.get("data"),
+        "normalize": normalize_pinpoint,
+        "content_param": None,
+        "junk_prefixes": (),
+        "fetch_jobs": fetch_pinpoint_jobs,
+        "board_exists": pinpoint_board_exists,
+    },
+    "breezy": {
+        "domains": ["breezy.hr"],
+        "registry_only": True,
+        "api": None,
+        "jobs": lambda payload: payload,
+        "normalize": normalize_breezy,
+        "content_param": None,
+        "junk_prefixes": (),
+        "fetch_jobs": fetch_breezy_jobs,
+        "board_exists": breezy_board_exists,
+    },
+    "rippling": {
+        "domains": ["ats.rippling.com"],
+        "registry_only": True,
+        "api": None,
+        "jobs": lambda payload: payload.get("items"),
+        "normalize": normalize_rippling,
+        "content_param": None,
+        "junk_prefixes": (),
+        "fetch_jobs": fetch_rippling_jobs,
+        "board_exists": rippling_board_exists,
+    },
 }
 
 
@@ -1780,6 +2168,16 @@ def board_url(ats: str, slug: str, want_content: bool = False) -> str:
         return teamtailor_board_url(slug)
     if ats == "workable":
         return workable_board_url(slug)
+    if ats == "personio":
+        return personio_board_url(slug)
+    if ats == "bamboohr":
+        return bamboohr_board_url(slug)
+    if ats == "pinpoint":
+        return pinpoint_board_url(slug)
+    if ats == "breezy":
+        return breezy_board_url(slug)
+    if ats == "rippling":
+        return rippling_board_url(slug)
     url = SOURCES[ats]["api"].format(slug=urllib.parse.quote(slug))
     param = SOURCES[ats]["content_param"]
     if want_content and param:
@@ -2507,6 +2905,152 @@ def _read_boards(path: Path) -> dict[str, list[str]]:
     return {"ashby": data} if isinstance(data, list) else data
 
 
+def _registry_status(
+    ats: str,
+    slug: str,
+    cutoff: datetime,
+) -> dict[str, object]:
+    """Validate a supplied registry row from its public structured feed.
+
+    A board is verified only when its response is valid and at least one
+    normalized posting has a reliable publication date at or after the cutoff.
+    Missing dates are intentionally not treated as recent.
+    """
+    try:
+        jobs = SOURCES[ats]["fetch_jobs"](slug, cutoff)
+        if not isinstance(jobs, list):
+            raise ValueError("provider response did not contain a job list")
+        recent: list[str] = []
+        for raw in jobs:
+            if not isinstance(raw, dict):
+                continue
+            normalized = SOURCES[ats]["normalize"](raw)
+            if normalized and published_within(normalized.get("publishedAt", ""), cutoff):
+                recent.append(normalized["publishedAt"])
+        if recent:
+            return {
+                "ats": ats,
+                "slug": slug,
+                "classification": "verified",
+                "recentCount": len(recent),
+                "newestPostedAt": max(recent),
+            }
+        return {
+            "ats": ats,
+            "slug": slug,
+            "classification": "invalid",
+            "reason": f"no listing published on or after {cutoff.date().isoformat()}",
+        }
+    except NotFound as exc:
+        return {
+            "ats": ats,
+            "slug": slug,
+            "classification": "invalid",
+            "reason": "HTTP 404",
+        }
+    except Exception as exc:
+        return {
+            "ats": ats,
+            "slug": slug,
+            "classification": "inconclusive",
+            "reason": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def validate_registry_files(
+    sources: list[str],
+    cutoff: datetime,
+    progress_path: Path = REGISTRY_VALIDATION_PROGRESS,
+) -> dict[str, list[str]]:
+    """Validate attached ``ats:path.csv`` registries with atomic checkpoints."""
+    import csv as _csv
+
+    candidates: list[tuple[str, str]] = []
+    for spec in sources:
+        ats, separator, filename = spec.partition(":")
+        if not separator or ats not in SOURCES or not filename:
+            raise ValueError(f"--validate-registry expects ATS:CSV, got {spec!r}")
+        with Path(filename).open(newline="", encoding="utf-8-sig") as handle:
+            for row in _csv.DictReader(handle):
+                slug = str(row.get("slug") or "").strip()
+                if slug and plausible(slug, ats):
+                    candidates.append((ats, slug))
+    candidates = list(dict.fromkeys(candidates))
+
+    try:
+        state = json.loads(progress_path.read_text())
+        if state.get("cutoff") != cutoff.isoformat():
+            state = {}
+    except (OSError, json.JSONDecodeError):
+        state = {}
+    validations = dict(state.get("validations") or {})
+    pending = [
+        item for item in candidates
+        if validations.get(f"{item[0]}:{item[1].casefold()}", {}).get("classification")
+        not in {"verified", "invalid"}
+    ]
+    print(
+        f"registry validation: {len(candidates)} candidates, "
+        f"{len(candidates) - len(pending)} checkpointed, {len(pending)} pending",
+        file=sys.stderr,
+    )
+    for index, (ats, slug) in enumerate(pending, 1):
+        result = _registry_status(ats, slug, cutoff)
+        key = f"{ats}:{slug.casefold()}"
+        previous = validations.get(key, {})
+        validations[key] = {
+            **result,
+            "attempts": int(previous.get("attempts") or 0) + 1,
+            "checkedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }
+        state = {
+            "cutoff": cutoff.isoformat(),
+            "updatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "validations": validations,
+        }
+        _write_json_atomic(progress_path, state)
+        verified_for_ats = sorted(
+            {
+                str(value["slug"])
+                for value in validations.values()
+                if value.get("ats") == ats
+                and value.get("classification") == "verified"
+            },
+            key=str.casefold,
+        )
+        cached = _read_boards(BOARDS_CACHE)
+        cached[ats] = verified_for_ats
+        _write_json_atomic(BOARDS_CACHE, cached)
+        if index % 25 == 0 or index == len(pending):
+            print(
+                f"  {index}/{len(pending)} pending checked; "
+                f"{sum(v.get('classification') == 'verified' for v in validations.values())} verified",
+                file=sys.stderr,
+            )
+
+    errors = [
+        value for value in validations.values()
+        if value.get("classification") == "inconclusive"
+        and (value.get("ats"), value.get("slug")) in candidates
+    ]
+    if errors:
+        raise RuntimeError(
+            f"{len(errors)} registry requests were inconclusive; "
+            f"progress saved to {progress_path.name}. Rerun the same command to retry them."
+        )
+    boards = {ats: [] for ats, _ in candidates}
+    for value in validations.values():
+        if value.get("classification") == "verified":
+            boards.setdefault(str(value["ats"]), []).append(str(value["slug"]))
+    for ats in boards:
+        boards[ats] = sorted(set(boards[ats]), key=str.casefold)
+    cached = _read_boards(BOARDS_CACHE)
+    for ats, slugs in boards.items():
+        cached[ats] = slugs
+    _write_json_atomic(BOARDS_CACHE, cached)
+    return boards
+
+
 RECENT_WINDOW_DAYS = 30
 
 
@@ -2706,6 +3250,11 @@ def scan_board(
             "recruitee",
             "teamtailor",
             "workable",
+            "personio",
+            "bamboohr",
+            "pinpoint",
+            "breezy",
+            "rippling",
         }:
             norm["id"] = f"{slug}:{norm['id']}"
         if ats == "workable" and not norm.get("jobUrl"):
@@ -3036,6 +3585,19 @@ def main() -> None:
         "without contacting Wayback; use with --ats workday --discover-only",
     )
     p.add_argument(
+        "--validate-registry",
+        action="append",
+        metavar="ATS:CSV",
+        help="validate a supplied provider slug CSV and update boards.json; "
+        "repeat for multiple providers. Results resume from "
+        "provider-registry-progress.json",
+    )
+    p.add_argument(
+        "--registry-cutoff",
+        default="2026-08-01",
+        help="minimum publication date for --validate-registry (default: 2026-08-01)",
+    )
+    p.add_argument(
         "--workday-bruteforce",
         action="store_true",
         help="when discovering Workday, also probe fallback board names for archived tenants",
@@ -3061,6 +3623,24 @@ def main() -> None:
     )
     p.add_argument("--no-db", action="store_true", help="skip the database write")
     args = p.parse_args()
+
+    if args.validate_registry:
+        cutoff = _provider_datetime(args.registry_cutoff)
+        if not cutoff:
+            sys.exit("--registry-cutoff must be an ISO date or timestamp")
+        try:
+            boards = validate_registry_files(
+                args.validate_registry,
+                datetime.fromisoformat(cutoff),
+            )
+        except (OSError, ValueError, RuntimeError) as exc:
+            sys.exit(str(exc))
+        print(
+            "registry validation complete: "
+            + ", ".join(f"{ats}={len(slugs)}" for ats, slugs in boards.items())
+            + f" -> {BOARDS_CACHE.name}"
+        )
+        return
 
     ats_list = list(SOURCES) if args.ats == "all" else [
         a.strip() for a in args.ats.split(",") if a.strip()
