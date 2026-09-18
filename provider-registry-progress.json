@@ -1,6 +1,6 @@
 {
   "cutoff": "2026-08-01T00:00:00+00:00",
-  "updatedAt": "2026-09-18T18:44:48+00:00",
+  "updatedAt": "2026-09-18T19:19:44+00:00",
   "validations": {
     "personio:10xfounders": {
       "ats": "personio",
@@ -60520,1217 +60520,2029 @@
     "rippling:hot-8-yoga-careers": {
       "ats": "rippling",
       "slug": "hot-8-yoga-careers",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 9,
+      "newestPostedAt": "2026-09-16T18:15:10+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:46:12+00:00"
     },
     "rippling:ibt": {
       "ats": "rippling",
       "slug": "ibt",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-09-09T16:34:06+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:46:46+00:00"
     },
     "rippling:igl": {
       "ats": "rippling",
       "slug": "igl",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-08-27T20:28:36+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:46:48+00:00"
     },
     "rippling:ims": {
       "ats": "rippling",
       "slug": "ims",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:46:49+00:00"
     },
     "rippling:indeed": {
       "ats": "rippling",
       "slug": "indeed",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:46:50+00:00"
     },
     "rippling:internal": {
       "ats": "rippling",
       "slug": "internal",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:46:52+00:00"
     },
     "rippling:internships": {
       "ats": "rippling",
       "slug": "internships",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:46:53+00:00"
     },
     "rippling:it1": {
       "ats": "rippling",
       "slug": "it1",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-08-27T22:49:02+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:46:55+00:00"
     },
     "rippling:job": {
       "ats": "rippling",
       "slug": "job",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:46:56+00:00"
     },
     "rippling:join-team-ideal": {
       "ats": "rippling",
       "slug": "join-team-ideal",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-08-17T13:44:07+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:47:14+00:00"
     },
     "rippling:jpa": {
       "ats": "rippling",
       "slug": "jpa",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:47:15+00:00"
     },
     "rippling:jpgs": {
       "ats": "rippling",
       "slug": "jpgs",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:47:18+00:00"
     },
     "rippling:jtg": {
       "ats": "rippling",
       "slug": "jtg",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:47:21+00:00"
     },
     "rippling:kalkomey": {
       "ats": "rippling",
       "slug": "kalkomey",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-08-18T18:16:03+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:47:25+00:00"
     },
     "rippling:kido-careers": {
       "ats": "rippling",
       "slug": "kido-careers",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 5,
+      "newestPostedAt": "2026-09-16T19:57:52+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:47:42+00:00"
     },
     "rippling:kin": {
       "ats": "rippling",
       "slug": "kin",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:47:45+00:00"
     },
     "rippling:laborup": {
       "ats": "rippling",
       "slug": "laborup",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:47:47+00:00"
     },
     "rippling:ladybird": {
       "ats": "rippling",
       "slug": "ladybird",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 3,
+      "newestPostedAt": "2026-09-15T15:21:57+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:48:00+00:00"
     },
     "rippling:leadr": {
       "ats": "rippling",
       "slug": "leadr",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:48:01+00:00"
     },
     "rippling:leap-group": {
       "ats": "rippling",
       "slug": "leap-group",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 16,
+      "newestPostedAt": "2026-09-02T14:23:52+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:48:36+00:00"
     },
     "rippling:leeo": {
       "ats": "rippling",
       "slug": "leeo",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:48:37+00:00"
     },
     "rippling:legalontech": {
       "ats": "rippling",
       "slug": "legalontech",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-08-10T08:43:29+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:48:42+00:00"
     },
     "rippling:level": {
       "ats": "rippling",
       "slug": "level",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:48:43+00:00"
     },
     "rippling:life": {
       "ats": "rippling",
       "slug": "life",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "HTTP 404",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:48:44+00:00"
     },
     "rippling:losa": {
       "ats": "rippling",
       "slug": "losa",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:48:45+00:00"
     },
     "rippling:lydian": {
       "ats": "rippling",
       "slug": "lydian",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:48:46+00:00"
     },
     "rippling:mainline": {
       "ats": "rippling",
       "slug": "mainline",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 3,
+      "newestPostedAt": "2026-08-21T12:12:19+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:48:53+00:00"
     },
     "rippling:mainstay": {
       "ats": "rippling",
       "slug": "mainstay",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:48:54+00:00"
     },
     "rippling:maneva": {
       "ats": "rippling",
       "slug": "maneva",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:48:55+00:00"
     },
     "rippling:manlymanco": {
       "ats": "rippling",
       "slug": "manlymanco",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:49:00+00:00"
     },
     "rippling:masterworks": {
       "ats": "rippling",
       "slug": "masterworks",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "HTTP 404",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:49:01+00:00"
     },
     "rippling:maxhealth-mso": {
       "ats": "rippling",
       "slug": "maxhealth-mso",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 10,
+      "newestPostedAt": "2026-09-18T13:59:52+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:49:13+00:00"
     },
     "rippling:mentalhealthjobs": {
       "ats": "rippling",
       "slug": "mentalhealthjobs",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:55:24+00:00"
     },
     "rippling:meridian": {
       "ats": "rippling",
       "slug": "meridian",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:55:28+00:00"
     },
     "rippling:mexcor": {
       "ats": "rippling",
       "slug": "mexcor",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 27,
+      "newestPostedAt": "2026-09-17T22:25:18+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:56:13+00:00"
     },
     "rippling:midpoint": {
       "ats": "rippling",
       "slug": "midpoint",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "HTTP 404",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:56:14+00:00"
     },
     "rippling:mms": {
       "ats": "rippling",
       "slug": "mms",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:56:15+00:00"
     },
     "rippling:mnl": {
       "ats": "rippling",
       "slug": "mnl",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 6,
+      "newestPostedAt": "2026-09-10T20:18:26+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:56:28+00:00"
     },
     "rippling:momentum": {
       "ats": "rippling",
       "slug": "momentum",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-09-14T16:01:04+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:56:36+00:00"
     },
     "rippling:monarch": {
       "ats": "rippling",
       "slug": "monarch",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:56:37+00:00"
     },
     "rippling:multigate": {
       "ats": "rippling",
       "slug": "multigate",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:56:38+00:00"
     },
     "rippling:nahq": {
       "ats": "rippling",
       "slug": "nahq",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:56:39+00:00"
     },
     "rippling:name": {
       "ats": "rippling",
       "slug": "name",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:56:40+00:00"
     },
     "rippling:ncco": {
       "ats": "rippling",
       "slug": "ncco",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 5,
+      "newestPostedAt": "2026-09-17T18:30:18+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:56:46+00:00"
     },
     "rippling:neonpixel": {
       "ats": "rippling",
       "slug": "neonpixel",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "HTTP 404",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:56:47+00:00"
     },
     "rippling:neosigma": {
       "ats": "rippling",
       "slug": "neosigma",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 3,
+      "newestPostedAt": "2026-08-17T21:10:34+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:56:59+00:00"
     },
     "rippling:nes": {
       "ats": "rippling",
       "slug": "nes",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "HTTP 404",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:57:00+00:00"
     },
     "rippling:nesa": {
       "ats": "rippling",
       "slug": "nesa",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-08-24T17:44:51+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:57:03+00:00"
     },
     "rippling:new-life-ranch": {
       "ats": "rippling",
       "slug": "new-life-ranch",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-08-31T17:40:17+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:57:17+00:00"
     },
     "rippling:nexcess": {
       "ats": "rippling",
       "slug": "nexcess",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 34,
+      "newestPostedAt": "2026-09-16T21:18:30+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:58:02+00:00"
     },
     "rippling:nextech": {
       "ats": "rippling",
       "slug": "nextech",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:58:03+00:00"
     },
     "rippling:nice": {
       "ats": "rippling",
       "slug": "nice",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:58:04+00:00"
     },
     "rippling:ninety": {
       "ats": "rippling",
       "slug": "ninety",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-09-01T17:40:05+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:58:07+00:00"
     },
     "rippling:niron": {
       "ats": "rippling",
       "slug": "niron",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 8,
+      "newestPostedAt": "2026-09-15T20:00:34+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:58:25+00:00"
     },
     "rippling:nomad": {
       "ats": "rippling",
       "slug": "nomad",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-11T15:50:37+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:58:27+00:00"
     },
     "rippling:north-43-west-79-studio-inc": {
       "ats": "rippling",
       "slug": "north-43-west-79-studio-inc",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "HTTP 404",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:58:28+00:00"
     },
     "rippling:nothing": {
       "ats": "rippling",
       "slug": "nothing",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:58:29+00:00"
     },
     "rippling:novella": {
       "ats": "rippling",
       "slug": "novella",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T18:58:39+00:00"
     },
     "rippling:nws": {
       "ats": "rippling",
       "slug": "nws",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 45,
+      "newestPostedAt": "2026-09-18T18:34:05+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:00:51+00:00"
     },
     "rippling:oar": {
       "ats": "rippling",
       "slug": "oar",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "HTTP 404",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:00:52+00:00"
     },
     "rippling:odyssey": {
       "ats": "rippling",
       "slug": "odyssey",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:00:53+00:00"
     },
     "rippling:omg": {
       "ats": "rippling",
       "slug": "omg",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:00:54+00:00"
     },
     "rippling:oms": {
       "ats": "rippling",
       "slug": "oms",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-08-10T13:56:10+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:01:20+00:00"
     },
     "rippling:onevest": {
       "ats": "rippling",
       "slug": "onevest",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:01:21+00:00"
     },
     "rippling:ontrackcommunications": {
       "ats": "rippling",
       "slug": "ontrackcommunications",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:01:37+00:00"
     },
     "rippling:onward": {
       "ats": "rippling",
       "slug": "onward",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-08T20:03:30+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:01:41+00:00"
     },
     "rippling:opendoor": {
       "ats": "rippling",
       "slug": "opendoor",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 11,
+      "newestPostedAt": "2026-09-14T20:55:45+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:02:44+00:00"
     },
     "rippling:orange-barrel-media": {
       "ats": "rippling",
       "slug": "orange-barrel-media",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 9,
+      "newestPostedAt": "2026-09-16T20:50:57+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:03:01+00:00"
     },
     "rippling:overland-ai": {
       "ats": "rippling",
       "slug": "overland-ai",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 15,
+      "newestPostedAt": "2026-09-17T22:42:19+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:03:41+00:00"
     },
     "rippling:pani": {
       "ats": "rippling",
       "slug": "pani",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:03:42+00:00"
     },
     "rippling:parallax": {
       "ats": "rippling",
       "slug": "parallax",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:03:44+00:00"
     },
     "rippling:paramount": {
       "ats": "rippling",
       "slug": "paramount",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 6,
+      "newestPostedAt": "2026-09-09T15:21:03+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:04:13+00:00"
     },
     "rippling:payjoy": {
       "ats": "rippling",
       "slug": "payjoy",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "HTTP 404",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:04:14+00:00"
     },
     "rippling:peoplegrove": {
       "ats": "rippling",
       "slug": "peoplegrove",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:04:15+00:00"
     },
     "rippling:pepsi": {
       "ats": "rippling",
       "slug": "pepsi",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:04:23+00:00"
     },
     "rippling:personalrx": {
       "ats": "rippling",
       "slug": "personalrx",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:04:24+00:00"
     },
     "rippling:peterbilt-of-atlanta": {
       "ats": "rippling",
       "slug": "peterbilt-of-atlanta",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:04:25+00:00"
     },
     "rippling:phase2careers": {
       "ats": "rippling",
       "slug": "phase2careers",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:04:26+00:00"
     },
     "rippling:plexus": {
       "ats": "rippling",
       "slug": "plexus",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:04:32+00:00"
     },
     "rippling:plume-network": {
       "ats": "rippling",
       "slug": "plume-network",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:04:48+00:00"
     },
     "rippling:pmtbox": {
       "ats": "rippling",
       "slug": "pmtbox",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:04:49+00:00"
     },
     "rippling:porter": {
       "ats": "rippling",
       "slug": "porter",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:04:50+00:00"
     },
     "rippling:ppa": {
       "ats": "rippling",
       "slug": "ppa",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-09-16T20:10:12+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:04:54+00:00"
     },
     "rippling:pragma": {
       "ats": "rippling",
       "slug": "pragma",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-18T00:00:23+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:05:03+00:00"
     },
     "rippling:praia-health": {
       "ats": "rippling",
       "slug": "praia-health",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-08-24T21:51:53+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:05:08+00:00"
     },
     "rippling:prg": {
       "ats": "rippling",
       "slug": "prg",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 46,
+      "newestPostedAt": "2026-09-16T22:08:40+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:06:08+00:00"
     },
     "rippling:princesspolly": {
       "ats": "rippling",
       "slug": "princesspolly",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 61,
+      "newestPostedAt": "2026-09-14T18:14:27+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:07:19+00:00"
     },
     "rippling:private": {
       "ats": "rippling",
       "slug": "private",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:07:20+00:00"
     },
     "rippling:ptl": {
       "ats": "rippling",
       "slug": "ptl",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:07:23+00:00"
     },
     "rippling:quotewell": {
       "ats": "rippling",
       "slug": "quotewell",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 5,
+      "newestPostedAt": "2026-09-10T16:51:17+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:07:32+00:00"
     },
     "rippling:rain": {
       "ats": "rippling",
       "slug": "rain",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:07:33+00:00"
     },
     "rippling:ramona": {
       "ats": "rippling",
       "slug": "ramona",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-10T20:47:37+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:07:35+00:00"
     },
     "rippling:ras": {
       "ats": "rippling",
       "slug": "ras",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:07:36+00:00"
     },
     "rippling:rebel-athletic": {
       "ats": "rippling",
       "slug": "rebel-athletic",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 9,
+      "newestPostedAt": "2026-09-17T18:41:20+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:08:15+00:00"
     },
     "rippling:rebound": {
       "ats": "rippling",
       "slug": "rebound",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-08-05T21:32:32+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:08:31+00:00"
     },
     "rippling:rebrandly": {
       "ats": "rippling",
       "slug": "rebrandly",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-04T15:25:06+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:08:33+00:00"
     },
     "rippling:recruiting": {
       "ats": "rippling",
       "slug": "recruiting",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:08:34+00:00"
     },
     "rippling:red-antler": {
       "ats": "rippling",
       "slug": "red-antler",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:08:40+00:00"
     },
     "rippling:redwood": {
       "ats": "rippling",
       "slug": "redwood",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:08:41+00:00"
     },
     "rippling:reebelo": {
       "ats": "rippling",
       "slug": "reebelo",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:08:42+00:00"
     },
     "rippling:reserv": {
       "ats": "rippling",
       "slug": "reserv",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 25,
+      "newestPostedAt": "2026-09-16T12:41:02+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:09:35+00:00"
     },
     "rippling:results-contracting": {
       "ats": "rippling",
       "slug": "results-contracting",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 22,
+      "newestPostedAt": "2026-08-17T15:12:05+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:10:10+00:00"
     },
     "rippling:revhealth": {
       "ats": "rippling",
       "slug": "revhealth",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 7,
+      "newestPostedAt": "2026-09-10T14:11:43+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:10:19+00:00"
     },
     "rippling:ripple": {
       "ats": "rippling",
       "slug": "ripple",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:10:20+00:00"
     },
     "rippling:rmc": {
       "ats": "rippling",
       "slug": "rmc",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 5,
+      "newestPostedAt": "2026-09-14T18:35:54+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:10:26+00:00"
     },
     "rippling:rts": {
       "ats": "rippling",
       "slug": "rts",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 15,
+      "newestPostedAt": "2026-09-04T00:20:35+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:10:42+00:00"
     },
     "rippling:sagent": {
       "ats": "rippling",
       "slug": "sagent",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:10:43+00:00"
     },
     "rippling:saliense": {
       "ats": "rippling",
       "slug": "saliense",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 16,
+      "newestPostedAt": "2026-09-18T12:23:38+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:11:04+00:00"
     },
     "rippling:samara-living-inc": {
       "ats": "rippling",
       "slug": "samara-living-inc",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-09-15T00:26:49+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:11:10+00:00"
     },
     "rippling:sas": {
       "ats": "rippling",
       "slug": "sas",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-08-07T16:08:08+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:11:18+00:00"
     },
     "rippling:scc": {
       "ats": "rippling",
       "slug": "scc",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:11:21+00:00"
     },
     "rippling:sennos": {
       "ats": "rippling",
       "slug": "sennos",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "HTTP 404",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:11:22+00:00"
     },
     "rippling:sentient": {
       "ats": "rippling",
       "slug": "sentient",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:11:23+00:00"
     },
     "rippling:sentry": {
       "ats": "rippling",
       "slug": "sentry",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "HTTP 404",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:11:24+00:00"
     },
     "rippling:serve-hospitality-group-careers_1": {
       "ats": "rippling",
       "slug": "serve-hospitality-group-careers_1",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:12:30+00:00"
     },
     "rippling:service": {
       "ats": "rippling",
       "slug": "service",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:12:31+00:00"
     },
     "rippling:shift": {
       "ats": "rippling",
       "slug": "shift",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 7,
+      "newestPostedAt": "2026-09-16T15:02:44+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:12:46+00:00"
     },
     "rippling:shine": {
       "ats": "rippling",
       "slug": "shine",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:12:54+00:00"
     },
     "rippling:simeon-global-consulting": {
       "ats": "rippling",
       "slug": "simeon-global-consulting",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 5,
+      "newestPostedAt": "2026-09-01T21:36:26+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:13:01+00:00"
     },
     "rippling:simplexwellness": {
       "ats": "rippling",
       "slug": "simplexwellness",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-08-10T14:06:14+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:13:09+00:00"
     },
     "rippling:skipify-jobs": {
       "ats": "rippling",
       "slug": "skipify-jobs",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:13:11+00:00"
     },
     "rippling:spreeai": {
       "ats": "rippling",
       "slug": "spreeai",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 4,
+      "newestPostedAt": "2026-09-09T14:51:35+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:13:20+00:00"
     },
     "rippling:spring": {
       "ats": "rippling",
       "slug": "spring",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:13:21+00:00"
     },
     "rippling:squid": {
       "ats": "rippling",
       "slug": "squid",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:13:24+00:00"
     },
     "rippling:srt": {
       "ats": "rippling",
       "slug": "srt",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:13:25+00:00"
     },
     "rippling:ss": {
       "ats": "rippling",
       "slug": "ss",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:13:26+00:00"
     },
     "rippling:ssss": {
       "ats": "rippling",
       "slug": "ssss",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:13:27+00:00"
     },
     "rippling:sst": {
       "ats": "rippling",
       "slug": "sst",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:13:28+00:00"
     },
     "rippling:stamp": {
       "ats": "rippling",
       "slug": "stamp",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:13:29+00:00"
     },
     "rippling:starcloud": {
       "ats": "rippling",
       "slug": "starcloud",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:13:30+00:00"
     },
     "rippling:starry": {
       "ats": "rippling",
       "slug": "starry",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 3,
+      "newestPostedAt": "2026-08-31T12:45:36+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:13:36+00:00"
     },
     "rippling:storage-scholars": {
       "ats": "rippling",
       "slug": "storage-scholars",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:13:37+00:00"
     },
     "rippling:subduxion": {
       "ats": "rippling",
       "slug": "subduxion",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:13:38+00:00"
     },
     "rippling:suiteop": {
       "ats": "rippling",
       "slug": "suiteop",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:13:41+00:00"
     },
     "rippling:sundaysfordogs": {
       "ats": "rippling",
       "slug": "sundaysfordogs",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-10T16:00:03+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:13:45+00:00"
     },
     "rippling:surge": {
       "ats": "rippling",
       "slug": "surge",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:13:46+00:00"
     },
     "rippling:switchboard": {
       "ats": "rippling",
       "slug": "switchboard",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:13:47+00:00"
     },
     "rippling:symposia": {
       "ats": "rippling",
       "slug": "symposia",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:13:48+00:00"
     },
     "rippling:tank": {
       "ats": "rippling",
       "slug": "tank",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:13:49+00:00"
     },
     "rippling:tapi": {
       "ats": "rippling",
       "slug": "tapi",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-08-10T23:25:37+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:13:51+00:00"
     },
     "rippling:teamhorizon": {
       "ats": "rippling",
       "slug": "teamhorizon",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 8,
+      "newestPostedAt": "2026-09-14T22:36:13+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:14:17+00:00"
     },
     "rippling:teg": {
       "ats": "rippling",
       "slug": "teg",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:14:18+00:00"
     },
     "rippling:telos": {
       "ats": "rippling",
       "slug": "telos",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:14:19+00:00"
     },
     "rippling:tembo": {
       "ats": "rippling",
       "slug": "tembo",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:14:20+00:00"
     },
     "rippling:tensorwave": {
       "ats": "rippling",
       "slug": "tensorwave",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:14:21+00:00"
     },
     "rippling:the-bright-hospitality-management": {
       "ats": "rippling",
       "slug": "the-bright-hospitality-management",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:14:24+00:00"
     },
     "rippling:thecommonshealthclub": {
       "ats": "rippling",
       "slug": "thecommonshealthclub",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 3,
+      "newestPostedAt": "2026-09-15T01:26:57+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:14:31+00:00"
     },
     "rippling:threatdown": {
       "ats": "rippling",
       "slug": "threatdown",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 5,
+      "newestPostedAt": "2026-09-16T20:03:32+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:14:42+00:00"
     },
     "rippling:three": {
       "ats": "rippling",
       "slug": "three",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:14:43+00:00"
     },
     "rippling:timberline": {
       "ats": "rippling",
       "slug": "timberline",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 4,
+      "newestPostedAt": "2026-09-03T02:52:08+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:14:53+00:00"
     },
     "rippling:toonboom": {
       "ats": "rippling",
       "slug": "toonboom",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:14:54+00:00"
     },
     "rippling:trajectory": {
       "ats": "rippling",
       "slug": "trajectory",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:14:55+00:00"
     },
     "rippling:translucent": {
       "ats": "rippling",
       "slug": "translucent",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "HTTP 404",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:14:56+00:00"
     },
     "rippling:trellis": {
       "ats": "rippling",
       "slug": "trellis",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:14:57+00:00"
     },
     "rippling:truecomp": {
       "ats": "rippling",
       "slug": "truecomp",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:14:58+00:00"
     },
     "rippling:tsc": {
       "ats": "rippling",
       "slug": "tsc",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:14:59+00:00"
     },
     "rippling:tvp": {
       "ats": "rippling",
       "slug": "tvp",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:15:00+00:00"
     },
     "rippling:umbrella": {
       "ats": "rippling",
       "slug": "umbrella",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:15:07+00:00"
     },
     "rippling:uplynk": {
       "ats": "rippling",
       "slug": "uplynk",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:15:08+00:00"
     },
     "rippling:uworld": {
       "ats": "rippling",
       "slug": "uworld",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:15:10+00:00"
     },
     "rippling:valmarholdings": {
       "ats": "rippling",
       "slug": "valmarholdings",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:15:11+00:00"
     },
     "rippling:vizcom": {
       "ats": "rippling",
       "slug": "vizcom",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:15:12+00:00"
     },
     "rippling:vxco": {
       "ats": "rippling",
       "slug": "vxco",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "HTTP 404",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:15:13+00:00"
     },
     "rippling:wander": {
       "ats": "rippling",
       "slug": "wander",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 4,
+      "newestPostedAt": "2026-09-16T17:23:13+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:15:18+00:00"
     },
     "rippling:wdg": {
       "ats": "rippling",
       "slug": "wdg",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:15:19+00:00"
     },
     "rippling:wesley": {
       "ats": "rippling",
       "slug": "wesley",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:15:20+00:00"
     },
     "rippling:wolfjaw-careers": {
       "ats": "rippling",
       "slug": "wolfjaw-careers",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:15:21+00:00"
     },
     "rippling:wwd": {
       "ats": "rippling",
       "slug": "wwd",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:15:23+00:00"
     },
     "rippling:wwwcarbon3aicareers": {
       "ats": "rippling",
       "slug": "wwwcarbon3aicareers",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 7,
+      "newestPostedAt": "2026-09-18T08:44:43+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:15:35+00:00"
     },
     "rippling:xplor": {
       "ats": "rippling",
       "slug": "xplor",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-03T17:39:39+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:15:40+00:00"
     },
     "rippling:xxx": {
       "ats": "rippling",
       "slug": "xxx",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:15:41+00:00"
     },
     "rippling:zbiotics": {
       "ats": "rippling",
       "slug": "zbiotics",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "HTTP 404",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:15:42+00:00"
     },
     "rippling:zwitterco": {
       "ats": "rippling",
       "slug": "zwitterco",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:15:43+00:00"
     },
     "rippling:ab": {
       "ats": "rippling",
       "slug": "ab",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:15:44+00:00"
     },
     "rippling:afc": {
       "ats": "rippling",
       "slug": "afc",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-08-26T17:00:26+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:15:50+00:00"
     },
     "rippling:amc": {
       "ats": "rippling",
       "slug": "amc",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:15:51+00:00"
     },
     "rippling:amp": {
       "ats": "rippling",
       "slug": "amp",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-16T19:52:08+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:15:54+00:00"
     },
     "rippling:ams": {
       "ats": "rippling",
       "slug": "ams",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 3,
+      "newestPostedAt": "2026-09-02T22:22:03+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:16:03+00:00"
     },
     "rippling:anna": {
       "ats": "rippling",
       "slug": "anna",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:16:04+00:00"
     },
     "rippling:apextraderfunding": {
       "ats": "rippling",
       "slug": "apextraderfunding",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:16:06+00:00"
     },
     "rippling:aspire": {
       "ats": "rippling",
       "slug": "aspire",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 4,
+      "newestPostedAt": "2026-09-08T22:54:51+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:16:12+00:00"
     },
     "rippling:bigmarker": {
       "ats": "rippling",
       "slug": "bigmarker",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-02T21:26:25+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:16:14+00:00"
     },
     "rippling:caqh": {
       "ats": "rippling",
       "slug": "caqh",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "HTTP 404",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:16:15+00:00"
     },
     "rippling:cftc": {
       "ats": "rippling",
       "slug": "cftc",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:16:20+00:00"
     },
     "rippling:churnkey": {
       "ats": "rippling",
       "slug": "churnkey",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:16:21+00:00"
     },
     "rippling:cooper": {
       "ats": "rippling",
       "slug": "cooper",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:16:22+00:00"
     },
     "rippling:cultura": {
       "ats": "rippling",
       "slug": "cultura",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:16:23+00:00"
     },
     "rippling:databahn": {
       "ats": "rippling",
       "slug": "databahn",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:16:25+00:00"
     },
     "rippling:dealeron": {
       "ats": "rippling",
       "slug": "dealeron",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 17,
+      "newestPostedAt": "2026-09-18T15:56:31+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:16:52+00:00"
     },
     "rippling:directmeds": {
       "ats": "rippling",
       "slug": "directmeds",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 6,
+      "newestPostedAt": "2026-09-14T19:34:42+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:17:04+00:00"
     },
     "rippling:feefo": {
       "ats": "rippling",
       "slug": "feefo",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-08-21T12:53:02+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:17:09+00:00"
     },
     "rippling:fff": {
       "ats": "rippling",
       "slug": "fff",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:17:10+00:00"
     },
     "rippling:forbestravelguide": {
       "ats": "rippling",
       "slug": "forbestravelguide",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:17:17+00:00"
     },
     "rippling:gaia": {
       "ats": "rippling",
       "slug": "gaia",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:17:18+00:00"
     },
     "rippling:gannett": {
       "ats": "rippling",
       "slug": "gannett",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:17:19+00:00"
     },
     "rippling:gg": {
       "ats": "rippling",
       "slug": "gg",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:17:20+00:00"
     },
     "rippling:gotab": {
       "ats": "rippling",
       "slug": "gotab",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:17:32+00:00"
     },
     "rippling:hss": {
       "ats": "rippling",
       "slug": "hss",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:17:33+00:00"
     },
     "rippling:infra": {
       "ats": "rippling",
       "slug": "infra",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-08-08T00:47:57+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:17:38+00:00"
     },
     "rippling:kajabi": {
       "ats": "rippling",
       "slug": "kajabi",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:17:40+00:00"
     },
     "rippling:kinder": {
       "ats": "rippling",
       "slug": "kinder",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:17:41+00:00"
     },
     "rippling:kodekloud": {
       "ats": "rippling",
       "slug": "kodekloud",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:17:42+00:00"
     },
     "rippling:kt": {
       "ats": "rippling",
       "slug": "kt",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:17:50+00:00"
     },
     "rippling:liongard": {
       "ats": "rippling",
       "slug": "liongard",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:17:51+00:00"
     },
     "rippling:maplesoft": {
       "ats": "rippling",
       "slug": "maplesoft",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-10T18:37:01+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:17:53+00:00"
     },
     "rippling:meo": {
       "ats": "rippling",
       "slug": "meo",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "HTTP 404",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:17:54+00:00"
     },
     "rippling:merit": {
       "ats": "rippling",
       "slug": "merit",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:17:55+00:00"
     },
     "rippling:minga": {
       "ats": "rippling",
       "slug": "minga",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:17:56+00:00"
     },
     "rippling:moleskine": {
       "ats": "rippling",
       "slug": "moleskine",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 13,
+      "newestPostedAt": "2026-09-16T15:46:49+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:18:13+00:00"
     },
     "rippling:netnut": {
       "ats": "rippling",
       "slug": "netnut",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:18:14+00:00"
     },
     "rippling:nylas": {
       "ats": "rippling",
       "slug": "nylas",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:18:15+00:00"
     },
     "rippling:onepet": {
       "ats": "rippling",
       "slug": "onepet",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:18:16+00:00"
     },
     "rippling:osn": {
       "ats": "rippling",
       "slug": "osn",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:18:18+00:00"
     },
     "rippling:paper": {
       "ats": "rippling",
       "slug": "paper",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:18:19+00:00"
     },
     "rippling:prokeep": {
       "ats": "rippling",
       "slug": "prokeep",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:18:20+00:00"
     },
     "rippling:ringlogix": {
       "ats": "rippling",
       "slug": "ringlogix",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:18:23+00:00"
     },
     "rippling:saffire": {
       "ats": "rippling",
       "slug": "saffire",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:18:25+00:00"
     },
     "rippling:salad": {
       "ats": "rippling",
       "slug": "salad",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-18T17:20:19+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:18:27+00:00"
     },
     "rippling:sandyou": {
       "ats": "rippling",
       "slug": "sandyou",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:18:28+00:00"
     },
     "rippling:shuttle": {
       "ats": "rippling",
       "slug": "shuttle",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:18:29+00:00"
     },
     "rippling:simplemachines": {
       "ats": "rippling",
       "slug": "simplemachines",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "HTTP 404",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:18:30+00:00"
     },
     "rippling:smartly": {
       "ats": "rippling",
       "slug": "smartly",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:18:34+00:00"
     },
     "rippling:sonera": {
       "ats": "rippling",
       "slug": "sonera",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "HTTP 404",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:18:35+00:00"
     },
     "rippling:sss": {
       "ats": "rippling",
       "slug": "sss",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:18:36+00:00"
     },
     "rippling:stat": {
       "ats": "rippling",
       "slug": "stat",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-08-25T23:29:37+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:18:38+00:00"
     },
     "rippling:styleseat": {
       "ats": "rippling",
       "slug": "styleseat",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-08-18T14:51:42+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:18:40+00:00"
     },
     "rippling:sunlight": {
       "ats": "rippling",
       "slug": "sunlight",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:18:42+00:00"
     },
     "rippling:surfline": {
       "ats": "rippling",
       "slug": "surfline",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 2,
+      "newestPostedAt": "2026-08-13T05:16:52+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:18:48+00:00"
     },
     "rippling:swe": {
       "ats": "rippling",
       "slug": "swe",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:18:49+00:00"
     },
     "rippling:synapse": {
       "ats": "rippling",
       "slug": "synapse",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 4,
+      "newestPostedAt": "2026-08-14T12:29:19+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:18:54+00:00"
     },
     "rippling:tarteel": {
       "ats": "rippling",
       "slug": "tarteel",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-17T18:01:03+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:19:00+00:00"
     },
     "rippling:tcm": {
       "ats": "rippling",
       "slug": "tcm",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 9,
+      "newestPostedAt": "2026-08-26T14:34:30+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:19:10+00:00"
     },
     "rippling:temp": {
       "ats": "rippling",
       "slug": "temp",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:19:16+00:00"
     },
     "rippling:thanks": {
       "ats": "rippling",
       "slug": "thanks",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:19:20+00:00"
     },
     "rippling:theshaderoom": {
       "ats": "rippling",
       "slug": "theshaderoom",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-08-25T22:40:57+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:19:22+00:00"
     },
     "rippling:truecar": {
       "ats": "rippling",
       "slug": "truecar",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 5,
+      "newestPostedAt": "2026-09-04T17:45:02+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:19:28+00:00"
     },
     "rippling:tvo": {
       "ats": "rippling",
       "slug": "tvo",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "HTTP 404",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:19:29+00:00"
     },
     "rippling:uniqode": {
       "ats": "rippling",
       "slug": "uniqode",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:19:30+00:00"
     },
     "rippling:vital": {
       "ats": "rippling",
       "slug": "vital",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:19:31+00:00"
     },
     "rippling:wheniwork": {
       "ats": "rippling",
       "slug": "wheniwork",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:19:32+00:00"
     },
     "rippling:xcite": {
       "ats": "rippling",
       "slug": "xcite",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:19:33+00:00"
     },
     "rippling:xyz": {
       "ats": "rippling",
       "slug": "xyz",
-      "classification": "pending"
+      "classification": "invalid",
+      "reason": "no listing publication date on or after 2026-08-01",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:19:40+00:00"
     },
     "rippling:yodlee": {
       "ats": "rippling",
       "slug": "yodlee",
-      "classification": "pending"
+      "classification": "verified",
+      "recentCount": 1,
+      "newestPostedAt": "2026-09-08T14:52:19+00:00",
+      "attempts": 1,
+      "checkedAt": "2026-09-18T19:19:44+00:00"
     },
     "bamboohr:hiec": {
       "ats": "bamboohr",
