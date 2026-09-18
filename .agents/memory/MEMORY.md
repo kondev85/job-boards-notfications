@@ -15,3 +15,4 @@
 - [Workable location state](workable-location-state.md) — widget `state` is often a region, not a publication status; do not reject visible postings based on it.
 - [Pinpoint feed dates](pinpoint-public-feed.md) — the public postings feed may omit publication timestamps; without reliable dates, strict cutoff validation must exclude the board.
 - [BambooHR current-openings feed](bamboohr-current-openings-feed.md) — valid non-empty feeds prove active boards because BambooHR omits public posting dates; HTML fallbacks are invalid.
+- [Personio public job URLs](personio-public-job-urls.md) — XML feeds provide posting IDs but often omit URLs; derive the public `/job/{id}` link from the board host.

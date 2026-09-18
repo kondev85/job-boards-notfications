@@ -1745,6 +1745,11 @@ def personio_board_url(slug: str) -> str:
     return f"https://{host}/xml?language=en"
 
 
+def personio_job_url(slug: str, posting_id: str) -> str:
+    host = urllib.parse.urlsplit(personio_board_url(slug)).netloc
+    return f"https://{host}/job/{urllib.parse.quote(str(posting_id), safe='')}"
+
+
 def fetch_personio_jobs(slug: str, published_after: datetime | None = None) -> list[dict]:
     root = ET.fromstring(fetch(personio_board_url(slug), timeout=30, retries=3))
     jobs: list[dict] = []
@@ -1759,6 +1764,8 @@ def fetch_personio_jobs(slug: str, published_after: datetime | None = None) -> l
                 )
             else:
                 item[child.tag] = (child.text or "").strip()
+        if item.get("id") and not item.get("jobUrl") and not item.get("url"):
+            item["jobUrl"] = personio_job_url(slug, str(item["id"]))
         jobs.append(item)
     return jobs
 

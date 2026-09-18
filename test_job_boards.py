@@ -25,6 +25,7 @@ from job_boards import (
     normalize_bamboohr,
     normalize_greenhouse,
     normalize_lever,
+    normalize_personio,
     normalize_pinpoint,
     normalize_smartrecruiters,
     normalize_recruitee,
@@ -743,6 +744,30 @@ def test_normalize_workday():
     assert row["location"] == "USA, Remote"
     assert row["jobUrl"] == ""
     assert row["publishedAt"].endswith("+00:00")
+
+
+def test_personio_feed_derives_public_job_url_from_id():
+    xml = b"""
+    <workzag-jobs>
+      <position>
+        <id>2759944</id>
+        <name>Director of Business Technology (f/m/d)</name>
+        <office>Europe (remote)</office>
+        <createdAt>2026-09-07T11:56:14+00:00</createdAt>
+      </position>
+    </workzag-jobs>
+    """
+    original_fetch = job_boards.fetch
+    job_boards.fetch = lambda *args, **kwargs: xml
+    try:
+        (job,) = job_boards.fetch_personio_jobs("astormueller-ag")
+    finally:
+        job_boards.fetch = original_fetch
+
+    assert job["jobUrl"] == (
+        "https://astormueller-ag.jobs.personio.com/job/2759944"
+    )
+    assert normalize_personio(job)["jobUrl"] == job["jobUrl"]
 
 
 def test_workday_adapter_paginates_and_namespaces_requisition_ids():
