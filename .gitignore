@@ -1,8 +1,8 @@
 __pycache__/
 *.pyc
 
-# Nothing this tool writes belongs in the repo, and --out lets you name the output
-# anything, so deny by default and allow the one file that is genuinely source.
+# Scraper outputs are denied by default, but the board registry and its resumable
+# provider-validation checkpoint are intentionally accessible project artifacts.
 #
 # boards.json in particular: a full --refresh-boards crawl discovers ~3,400 slugs,
 # which is effectively Ashby's customer list. Committing it would turn a scraping
@@ -10,6 +10,8 @@ __pycache__/
 *.csv
 *.json
 !boards.seed.json
+!boards.json
+!provider-registry-progress.json
 !package.json
 !package-lock.json
 !tsconfig.json
