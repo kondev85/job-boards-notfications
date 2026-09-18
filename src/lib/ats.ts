@@ -7,6 +7,10 @@ export const ATS_OPTIONS = [
   { value: "recruitee", label: "Recruitee" },
   { value: "teamtailor", label: "Teamtailor" },
   { value: "workable", label: "Workable" },
+  { value: "personio", label: "Personio" },
+  { value: "bamboohr", label: "BambooHR" },
+  { value: "pinpoint", label: "Pinpoint" },
+  { value: "rippling", label: "Rippling" },
 ] as const;
 
 const ATS_LABELS = new Map<string, string>(

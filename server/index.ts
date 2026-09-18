@@ -457,7 +457,8 @@ app.post("/api/search-runs", async (req: AuthedRequest, res) => {
   if (!cutoff || !/^\d{4}-\d{2}-\d{2}$/.test(cutoff) || !["all","ats","boards"].includes(scope)) return res.status(400).json({ error: "cutoff (YYYY-MM-DD) and valid scope are required" });
   if (scope === "ats" && ![
     "ashby", "greenhouse", "lever", "smartrecruiters", "workday",
-    "recruitee", "teamtailor", "workable",
+    "recruitee", "teamtailor", "workable", "personio", "bamboohr",
+    "pinpoint", "rippling",
   ].includes(ats)) return res.status(400).json({ error: "Select a valid ATS" });
   if (scope === "boards" && (!Array.isArray(boardIds) || boardIds.length === 0)) return res.status(400).json({ error: "Select at least one board" });
   const running = await pool.query("SELECT run_id FROM search_runs WHERE owner_user_id=$1 AND status IN ('queued','running') LIMIT 1", [uid(req)]);
