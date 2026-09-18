@@ -105,6 +105,10 @@ class NotFound(Exception):
     """Board slug returned 404 — not a customer of that ATS (or never was)."""
 
 
+class InvalidBoardResponse(Exception):
+    """Board endpoint returned a successful response that is not its public feed."""
+
+
 class NotModified(Exception):
     """Server answered 304: the body is byte-identical to what we last fetched."""
 
@@ -1801,18 +1805,33 @@ def bamboohr_board_url(slug: str) -> str:
     return f"https://{host}/careers/list"
 
 
-def fetch_bamboohr_jobs(slug: str, published_after: datetime | None = None) -> list[dict]:
-    payload = json.loads(fetch(bamboohr_board_url(slug), timeout=30, retries=3))
-    jobs = payload.get("result") if isinstance(payload, dict) else None
-    if not isinstance(jobs, list):
+def _bamboohr_payload(slug: str, timeout: int, retries: int) -> dict:
+    try:
+        payload = json.loads(
+            fetch(bamboohr_board_url(slug), timeout=timeout, retries=retries)
+        )
+    except json.JSONDecodeError as exc:
+        raise InvalidBoardResponse(
+            f"bamboohr/{slug}: HTTP 200 response was not JSON"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"bamboohr/{slug}: response is not an object")
+    if not isinstance(payload.get("result"), list):
         raise ValueError(f"bamboohr/{slug}: response has no result array")
-    return [item for item in jobs if isinstance(item, dict)]
+    return payload
+
+
+def fetch_bamboohr_jobs(slug: str, published_after: datetime | None = None) -> list[dict]:
+    return [
+        item for item in _bamboohr_payload(slug, timeout=30, retries=3)["result"]
+        if isinstance(item, dict)
+    ]
 
 
 def bamboohr_board_exists(slug: str) -> bool:
     try:
-        payload = json.loads(fetch(bamboohr_board_url(slug), timeout=25, retries=2))
-        return isinstance(payload, dict) and isinstance(payload.get("result"), list)
+        _bamboohr_payload(slug, timeout=25, retries=2)
+        return True
     except Exception:
         return False
 
@@ -2937,20 +2956,44 @@ def _registry_status(
 ) -> dict[str, object]:
     """Validate a supplied registry row from its public structured feed.
 
-    A board is verified only when its response is valid and at least one
+    Most boards are verified only when their response is valid and at least one
     normalized posting has a reliable publication date at or after the cutoff.
-    Missing dates are intentionally not treated as recent.
+    BambooHR's public current-openings feed has no publication dates, so a valid
+    feed with a positive ``meta.totalCount`` is the provider-specific activity
+    evidence for that adapter.
     """
     try:
-        jobs = SOURCES[ats]["fetch_jobs"](slug, cutoff)
+        bamboo_total_count: int | None = None
+        if ats == "bamboohr":
+            payload = _bamboohr_payload(slug, timeout=30, retries=3)
+            jobs = [
+                item for item in payload["result"] if isinstance(item, dict)
+            ]
+            meta = payload.get("meta")
+            if isinstance(meta, dict):
+                raw_total_count = meta.get("totalCount")
+                if isinstance(raw_total_count, bool):
+                    raw_total_count = None
+                try:
+                    bamboo_total_count = (
+                        int(raw_total_count) if raw_total_count is not None else None
+                    )
+                except (TypeError, ValueError):
+                    bamboo_total_count = None
+        else:
+            jobs = SOURCES[ats]["fetch_jobs"](slug, cutoff)
         if not isinstance(jobs, list):
             raise ValueError("provider response did not contain a job list")
         recent: list[str] = []
+        normalized_count = 0
         for raw in jobs:
             if not isinstance(raw, dict):
                 continue
             normalized = SOURCES[ats]["normalize"](raw)
             if not normalized:
+                continue
+            normalized_count += 1
+            if ats == "bamboohr":
                 continue
             if ats == "pinpoint":
                 # Pinpoint's public feed omits publication timestamps. Its
@@ -2963,6 +3006,23 @@ def _registry_status(
                     recent.append(deadline)
             elif published_within(normalized.get("publishedAt", ""), cutoff):
                 recent.append(normalized["publishedAt"])
+        if (
+            ats == "bamboohr"
+            and bamboo_total_count is not None
+            and bamboo_total_count > 0
+            and normalized_count > 0
+        ):
+            return {
+                "ats": ats,
+                "slug": slug,
+                "classification": "verified",
+                "activeCount": normalized_count,
+                "totalCount": bamboo_total_count,
+                "reason": (
+                    f"{normalized_count} active job(s) in current feed; "
+                    "BambooHR does not publish listing dates"
+                ),
+            }
         if recent:
             return {
                 "ats": ats,
@@ -2972,6 +3032,8 @@ def _registry_status(
                 "newestPostedAt": max(recent),
             }
         evidence = "deadline" if ats == "pinpoint" else "publication date"
+        if ats == "bamboohr":
+            evidence = "active jobs in a current feed"
         return {
             "ats": ats,
             "slug": slug,
@@ -2986,6 +3048,13 @@ def _registry_status(
             "slug": slug,
             "classification": "invalid",
             "reason": "HTTP 404",
+        }
+    except InvalidBoardResponse as exc:
+        return {
+            "ats": ats,
+            "slug": slug,
+            "classification": "invalid",
+            "reason": str(exc),
         }
     except Exception as exc:
         return {
@@ -3036,6 +3105,17 @@ def validate_registry_files(
         ):
             # Older checkpoints used publication dates for Pinpoint. Recheck
             # those rows under the provider-specific deadline rule.
+            existing["classification"] = "pending"
+        if (
+            ats == "bamboohr"
+            and isinstance(existing, dict)
+            and existing.get("classification") == "invalid"
+            and str(existing.get("reason", "")).startswith(
+                "no listing publication date on or after "
+            )
+        ):
+            # Older checkpoints required a publication date. Recheck those
+            # rows under BambooHR's current-openings activity rule.
             existing["classification"] = "pending"
         validations.setdefault(
             key,

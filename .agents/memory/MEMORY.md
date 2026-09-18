@@ -14,3 +14,4 @@
 - [Workable empty-board pruning](workable-empty-board-pruning.md) — prune only after a successful widget response confirms zero total jobs; preserve boards with older-only postings.
 - [Workable location state](workable-location-state.md) — widget `state` is often a region, not a publication status; do not reject visible postings based on it.
 - [Pinpoint feed dates](pinpoint-public-feed.md) — the public postings feed may omit publication timestamps; without reliable dates, strict cutoff validation must exclude the board.
+- [BambooHR current-openings feed](bamboohr-current-openings-feed.md) — valid non-empty feeds prove active boards because BambooHR omits public posting dates; HTML fallbacks are invalid.

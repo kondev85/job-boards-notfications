@@ -22,6 +22,7 @@ from job_boards import (
     fragments,
     matches,
     normalize_ashby,
+    normalize_bamboohr,
     normalize_greenhouse,
     normalize_lever,
     normalize_pinpoint,
@@ -1937,6 +1938,70 @@ def test_pinpoint_registry_uses_deadline_without_overwriting_published_at():
 
     assert result["classification"] == "verified"
     assert result["newestPostedAt"] == "2026-09-30T22:59:59+00:00"
+
+
+def test_bamboohr_registry_uses_positive_current_feed_count():
+    cutoff = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    job = {
+        "id": "575",
+        "jobOpeningName": "Founding Head of Engineering",
+        "departmentLabel": "Engineering",
+        "employmentStatusLabel": "Permanent - Full-Time",
+        "location": {"city": None, "state": None},
+        "atsLocation": {"country": "United States", "state": "California"},
+    }
+    normalized = normalize_bamboohr(job)
+    assert normalized["publishedAt"] == ""
+
+    original = job_boards._bamboohr_payload
+    job_boards._bamboohr_payload = lambda slug, timeout, retries: {
+        "meta": {"totalCount": 1},
+        "result": [job],
+    }
+    try:
+        result = job_boards._registry_status("bamboohr", "talent", cutoff)
+    finally:
+        job_boards._bamboohr_payload = original
+
+    assert result["classification"] == "verified"
+    assert result["activeCount"] == 1
+    assert result["totalCount"] == 1
+    assert "does not publish listing dates" in result["reason"]
+
+
+def test_bamboohr_registry_rejects_empty_current_feed():
+    cutoff = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    original = job_boards._bamboohr_payload
+    job_boards._bamboohr_payload = lambda slug, timeout, retries: {
+        "meta": {"totalCount": 0},
+        "result": [],
+    }
+    try:
+        result = job_boards._registry_status("bamboohr", "empty", cutoff)
+    finally:
+        job_boards._bamboohr_payload = original
+
+    assert result["classification"] == "invalid"
+    assert "no listing active jobs in a current feed" in result["reason"]
+
+
+def test_bamboohr_registry_rejects_html_fallback_as_invalid_feed():
+    cutoff = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    original = job_boards._bamboohr_payload
+    job_boards._bamboohr_payload = lambda slug, timeout, retries: (
+        (_ for _ in ()).throw(
+            job_boards.InvalidBoardResponse(
+                "bamboohr/stale: HTTP 200 response was not JSON"
+            )
+        )
+    )
+    try:
+        result = job_boards._registry_status("bamboohr", "stale", cutoff)
+    finally:
+        job_boards._bamboohr_payload = original
+
+    assert result["classification"] == "invalid"
+    assert "HTTP 200 response was not JSON" in result["reason"]
 
 
 def test_since_filters_by_publish_date():
