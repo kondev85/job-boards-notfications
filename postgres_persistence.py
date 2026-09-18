@@ -224,6 +224,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     is_remote          BOOLEAN NOT NULL DEFAULT FALSE,
     workplace_type     TEXT,
     published_at       TIMESTAMPTZ,
+    published_at_source TEXT,
     source_updated_at  TIMESTAMPTZ,
     job_url            TEXT,
     description_text   TEXT,
@@ -237,6 +238,7 @@ CREATE TABLE IF NOT EXISTS jobs (
 
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS company TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS address JSONB;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS published_at_source TEXT;
 ALTER TABLE job_boards ADD COLUMN IF NOT EXISTS etag TEXT;
 ALTER TABLE job_boards ADD COLUMN IF NOT EXISTS etag_seen_at TIMESTAMPTZ;
 ALTER TABLE job_boards ADD COLUMN IF NOT EXISTS etag_published_after TIMESTAMPTZ;
@@ -1658,6 +1660,10 @@ def _fetch_normalized(
             "is_remote": bool(normalized.get("isRemote")),
             "workplace_type": _optional(normalized.get("workplaceType")),
             "published_at": published_at,
+            "published_at_source": (
+                _optional(normalized.get("publishedAtSource"))
+                or ("provider" if published_at is not None else None)
+            ),
             "source_updated_at": _source_updated_at(ats, raw_job),
             "job_url": _optional(normalized.get("jobUrl")),
             "description_text": _plain_description(
@@ -1870,14 +1876,27 @@ def _upsert_board_jobs(
             INSERT INTO jobs (
                 board_id, company, ats, external_id, title, department, team,
                 employment_type, location_raw, is_remote, workplace_type,
-                address, published_at, source_updated_at, job_url, description_text,
+                address, published_at, published_at_source, source_updated_at,
+                job_url, description_text,
                 first_seen, last_seen, updated_at
             ) VALUES (
                 %(board_id)s, %(company)s, %(ats)s, %(external_id)s, %(title)s,
                 %(department)s, %(team)s, %(employment_type)s,
                 %(location_raw)s, %(is_remote)s, %(workplace_type)s,
                 %(address)s,
-                %(published_at)s, %(source_updated_at)s, %(job_url)s,
+                CASE
+                    WHEN %(published_at)s::timestamptz IS NOT NULL
+                        THEN %(published_at)s::timestamptz
+                    WHEN %(ats)s = 'bamboohr' THEN %(seen_at)s
+                    ELSE NULL
+                END,
+                CASE
+                    WHEN %(published_at_source)s::text IS NOT NULL
+                        THEN %(published_at_source)s::text
+                    WHEN %(ats)s = 'bamboohr' THEN 'first_seen'
+                    ELSE NULL
+                END,
+                %(source_updated_at)s, %(job_url)s,
                 %(description_text)s, %(seen_at)s, %(seen_at)s, %(seen_at)s
             )
             ON CONFLICT (ats, external_id) DO UPDATE SET
@@ -1891,7 +1910,25 @@ def _upsert_board_jobs(
                 is_remote = EXCLUDED.is_remote,
                 workplace_type = EXCLUDED.workplace_type,
                 address = EXCLUDED.address,
-                published_at = COALESCE(EXCLUDED.published_at, jobs.published_at),
+                published_at = CASE
+                    WHEN EXCLUDED.published_at_source = 'first_seen'
+                        THEN COALESCE(jobs.published_at, jobs.first_seen)
+                    WHEN jobs.published_at_source = 'provider'
+                        AND EXCLUDED.published_at_source = 'deadline_minus_30'
+                        THEN jobs.published_at
+                    ELSE COALESCE(EXCLUDED.published_at, jobs.published_at)
+                END,
+                published_at_source = CASE
+                    WHEN EXCLUDED.published_at_source = 'first_seen'
+                        THEN COALESCE(jobs.published_at_source, 'first_seen')
+                    WHEN jobs.published_at_source = 'provider'
+                        AND EXCLUDED.published_at_source = 'deadline_minus_30'
+                        THEN jobs.published_at_source
+                    ELSE COALESCE(
+                        EXCLUDED.published_at_source,
+                        jobs.published_at_source
+                    )
+                END,
                 source_updated_at = COALESCE(
                     EXCLUDED.source_updated_at, jobs.source_updated_at
                 ),
@@ -1913,6 +1950,7 @@ def _upsert_board_jobs(
                 "board_id": board_id,
                 "company": company,
                 "seen_at": seen_at,
+                "published_at_source": row.get("published_at_source"),
             },
         )
 

@@ -600,6 +600,7 @@ def test_adapter_mappings_are_offline_and_keep_descriptions():
     assert skipped == 0 and len(bamboohr_rows) == 1
     assert bamboohr_rows[0]["external_id"] == "acme:bamboo-1"
     assert bamboohr_rows[0]["published_at"] is None
+    assert bamboohr_rows[0]["published_at_source"] is None
 
     workable_meta: dict[str, object] = {}
     original_workable_get = job_boards._workable_get_json
@@ -803,6 +804,57 @@ def test_board_etag_state_round_trips_and_refreshes_on_304():
                 '"fixture-etag"',
                 unchanged_at,
                 fetched_at,
+            )
+
+
+def test_bamboohr_unknown_date_uses_original_first_seen_timestamp():
+    with _temporary_postgres() as dsn:
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            first_seen = datetime(2026, 9, 18, 12, 30, tzinfo=timezone.utc)
+            later_seen = datetime(2026, 9, 19, 12, 30, tzinfo=timezone.utc)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    board_id = persistence._ensure_board(
+                        cur, "bamboohr", "acme", first_seen
+                    )
+                    rows = [_row("acme:bamboo-1", ats="bamboohr")]
+                    assert persistence._upsert_board_jobs(
+                        cur, board_id, "acme", rows, first_seen
+                    ) == (1, 0)
+
+            stored = conn.execute(
+                """
+                SELECT first_seen, last_seen, published_at, published_at_source
+                FROM jobs
+                WHERE ats = 'bamboohr' AND external_id = 'acme:bamboo-1'
+                """
+            ).fetchone()
+            assert stored == (
+                first_seen,
+                first_seen,
+                first_seen,
+                "first_seen",
+            )
+
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    assert persistence._upsert_board_jobs(
+                        cur, board_id, "acme", rows, later_seen
+                    ) == (1, 0)
+
+            stored = conn.execute(
+                """
+                SELECT first_seen, last_seen, published_at, published_at_source
+                FROM jobs
+                WHERE ats = 'bamboohr' AND external_id = 'acme:bamboo-1'
+                """
+            ).fetchone()
+            assert stored == (
+                first_seen,
+                later_seen,
+                first_seen,
+                "first_seen",
             )
 
 

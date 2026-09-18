@@ -2004,6 +2004,7 @@ def test_bamboohr_normalizes_deadline_to_published_date():
     )
 
     assert normalized["publishedAt"] == "2026-08-31T22:59:59+00:00"
+    assert normalized["publishedAtSource"] == "deadline_minus_30"
 
 
 def test_bamboohr_registry_rejects_empty_current_feed():

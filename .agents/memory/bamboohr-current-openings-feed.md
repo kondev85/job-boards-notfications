@@ -7,4 +7,4 @@ BambooHR’s `/careers/list` JSON feed is a current-openings feed. A valid respo
 
 **Why:** Confirmed active BambooHR boards return structured job summaries without `datePosted`, while stale or non-BambooHR slugs can return HTTP 200 HTML from the corporate site. Treating missing dates as invalid discarded active boards, while treating HTML as a feed caused inconclusive rows.
 
-**How to apply:** Preserve BambooHR feed metadata during registry validation, derive `published_at` as deadline minus 30 days only when a future feed supplies a deadline, and retain valid undated current openings in bounded imports and matching. Classify successful non-JSON HTML fallbacks as invalid rather than as active or inconclusive.
+**How to apply:** Preserve BambooHR feed metadata during registry validation, derive `published_at` as deadline minus 30 days only when a future feed supplies a deadline, and otherwise use the original job `first_seen` as `published_at` with an explicit first-seen source marker. Keep valid openings in bounded imports and matching; classify successful non-JSON HTML fallbacks as invalid.

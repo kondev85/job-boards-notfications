@@ -1,7 +1,7 @@
 export type JobStatus = "new" | "viewed" | "saved" | "applied" | "rejected";
 export interface LocationFacet { value:string; label:string; count:number }
 export interface Me { user_id:number; name:string; email:string; target_roles:string[]; target_industries:string[]; min_match_score:number|null }
-export interface MatchedJob { job_id:number; ats:string; external_id:string; company:string; title:string; location_raw:string; workplace_type:string; published_at:string; job_url:string; score:number|null; matched:boolean; status:JobStatus; viewed:boolean; viewed_at?:string|null }
+export interface MatchedJob { job_id:number; ats:string; external_id:string; company:string; title:string; location_raw:string; workplace_type:string; published_at:string|null; published_at_source:"provider"|"deadline_minus_30"|"first_seen"|string|null; job_url:string; score:number|null; matched:boolean; status:JobStatus; viewed:boolean; viewed_at?:string|null }
 export interface SearchRun { run_id:number; progress:number; status:"queued"|"running"|"completed"|"completed_with_warnings"|"failed"; cutoff:string; run_type:"manual"|"scheduled"; error?:string }
 export interface Profile {
   [key:string]: any;
@@ -19,7 +19,7 @@ export interface Recommendation {
   review_id?: number; job_id?: number;
   title?: string|null; company?: string|null; job_url?: string|null; ats?: string|null;
   external_id?: string|null; location_raw?: string|null; workplace_type?: string|null;
-  published_at?: string|null; description_text?: string|null;
+  published_at?: string|null; published_at_source?: "provider"|"deadline_minus_30"|"first_seen"|string|null; description_text?: string|null;
   final_fit_score?: number|null; final_recommendation?: string|null;
   final_strengths?: string[]|null; final_concerns?: string[]|null; final_rationale?: string|null;
   fit_score?: number|null; recommendation?: string|null; strengths?: string[]|null;

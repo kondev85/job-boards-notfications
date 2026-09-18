@@ -1789,6 +1789,7 @@ def normalize_bamboohr(job: dict) -> dict | None:
     published_at = _provider_datetime(
         _provider_value(job, "datePosted", "publishedAt", "createdAt")
     )
+    published_at_source = "provider" if published_at else ""
     if not published_at:
         deadline_at = _provider_datetime(
             _provider_value(
@@ -1807,6 +1808,7 @@ def normalize_bamboohr(job: dict) -> dict | None:
             published_at = (
                 datetime.fromisoformat(deadline_at) - timedelta(days=30)
             ).isoformat(timespec="seconds")
+            published_at_source = "deadline_minus_30"
     return {
         "id": posting_id,
         "title": title,
@@ -1818,6 +1820,7 @@ def normalize_bamboohr(job: dict) -> dict | None:
         "workplaceType": "remote" if remote else workplace,
         "address": {"location": job.get("location")} if job.get("location") is not None else None,
         "publishedAt": published_at,
+        "publishedAtSource": published_at_source,
         "jobUrl": _provider_value(job, "jobUrl", "url", "externalUrl"),
         "_description": _provider_value(job, "jobDescription", "description"),
         "_sourceUpdatedAt": _provider_value(job, "updatedAt", "dateUpdated"),
