@@ -16,3 +16,4 @@
 - [Pinpoint feed dates](pinpoint-public-feed.md) — the public postings feed may omit publication timestamps; without reliable dates, strict cutoff validation must exclude the board.
 - [BambooHR current-openings feed](bamboohr-current-openings-feed.md) — valid non-empty feeds prove active boards because BambooHR omits public posting dates; HTML fallbacks are invalid.
 - [Personio public job URLs](personio-public-job-urls.md) — XML feeds provide posting IDs but often omit URLs; derive the public `/job/{id}` link from the board host.
+- [Deferred Workday enrichment throughput](deferred-workday-enrichment.md) — large post-list detail backlogs need shell-visible progress and jobs-per-second metrics.
