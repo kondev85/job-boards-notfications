@@ -34,6 +34,7 @@ Examples:
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 from contextvars import copy_context
 import hashlib
 import json
@@ -53,7 +54,7 @@ from concurrent.futures import (
 from datetime import datetime, timedelta, timezone
 from html import unescape
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import psycopg
 from psycopg.types.json import Jsonb
@@ -1187,6 +1188,22 @@ def _heartbeat_daily_import(
         )
 
 
+@contextmanager
+def _daily_phase_heartbeat(
+    dsn: str,
+    import_run_id: int,
+    worker_id: str,
+):
+    """Provide a separate connection for long-running downstream heartbeats."""
+    with psycopg.connect(dsn) as conn:
+        _heartbeat_daily_import(conn, import_run_id, worker_id)
+
+        def heartbeat() -> None:
+            _heartbeat_daily_import(conn, import_run_id, worker_id)
+
+        yield heartbeat
+
+
 def _import_daily_board(
     dsn: str,
     item: tuple[int, int, str, str],
@@ -1764,6 +1781,31 @@ def _workday_enrichment_candidates(
     return candidates
 
 
+def _workday_enrichment_remaining(
+    conn: psycopg.Connection,
+    import_run_id: int,
+) -> int:
+    row = conn.execute(
+        """
+        SELECT count(*)
+        FROM jobs AS j
+        JOIN job_boards AS b ON b.board_id = j.board_id
+        JOIN daily_import_run_boards AS rb ON rb.board_id = j.board_id
+        JOIN daily_import_runs AS r ON r.import_run_id = rb.import_run_id
+        WHERE rb.import_run_id = %s
+          AND b.ats = 'workday'
+          AND rb.status = 'completed'
+          AND j.description_text IS NULL
+          AND j.job_url IS NOT NULL
+          AND j.closed_at IS NULL
+          AND j.last_seen >= r.started_at
+        """,
+        (import_run_id,),
+    ).fetchone()
+    conn.commit()
+    return int(row[0])
+
+
 def _fetch_workday_detail_candidate(
     job_id: int,
     job_url: str,
@@ -1850,7 +1892,7 @@ def _deferred_workday_enrichment(
     with psycopg.connect(dsn) as conn:
         candidates = _workday_enrichment_candidates(conn, import_run_id)
     if not candidates:
-        return {"candidates": 0, "enriched": 0, "failed": 0}
+        return {"candidates": 0, "enriched": 0, "failed": 0, "remaining": 0}
 
     attempted = sum(len(board["jobs"]) for board in candidates.values())
     enriched = 0
@@ -1968,10 +2010,13 @@ def _deferred_workday_enrichment(
                 import_run_id,
                 worker_id,
             )
+    with psycopg.connect(dsn) as conn:
+        remaining = _workday_enrichment_remaining(conn, import_run_id)
     return {
         "candidates": attempted,
         "enriched": enriched,
         "failed": failed,
+        "remaining": remaining,
     }
 
 
@@ -3138,6 +3183,7 @@ def run_matching(
     board_ids: tuple[int, ...] | None = None,
     model_name: str = MATCH_MODEL_NAME,
     model_version: str = MATCH_MODEL_VERSION,
+    heartbeat_callback: Callable[[], None] | None = None,
 ) -> dict[str, int]:
     """Evaluate open jobs against active profiles and upsert eligible matches.
 
@@ -3237,9 +3283,13 @@ def run_matching(
             "workplace_type", "industry", "category",
         )
         stats = {"evaluated": 0, "matched": 0, "rejected": 0, "skipped": 0}
+        processed = 0
         for user_row in users:
             user = dict(zip(user_columns, user_row))
             for job_row in jobs:
+                processed += 1
+                if heartbeat_callback and processed % 250 == 0:
+                    heartbeat_callback()
                 job = dict(zip(job_columns, job_row))
                 if not _workplace_matches(job, user):
                     conn.execute(
@@ -3308,6 +3358,8 @@ def run_matching(
                     ),
                 )
                 stats["matched"] += 1
+        if heartbeat_callback:
+            heartbeat_callback()
     return stats
 
 
@@ -3406,6 +3458,7 @@ def run_recommendations(
     max_gemini_candidates: int = RECOMMENDATION_MAX_GEMINI_CANDIDATES,
     pinned_final_floor: int = RECOMMENDATION_PINNED_FINAL_FLOOR,
     force: bool = False,
+    heartbeat_callback: Callable[[], None] | None = None,
 ) -> dict[str, int]:
     """Review score-floor candidates with Gemini and persist a top recommendation set."""
     if user_id is not None and user_email is not None:
@@ -3627,6 +3680,8 @@ def run_recommendations(
     conn.commit()
     run_at = now or datetime.now(timezone.utc)
     for start in range(0, len(pending), batch_size):
+        if heartbeat_callback:
+            heartbeat_callback()
         batch = pending[start : start + batch_size]
         reviews = _review_batch_with_split(profile, batch)
         reviews_by_id = {review["job_id"]: review for review in reviews}
@@ -3679,6 +3734,8 @@ def run_recommendations(
                     ),
                 )
                 job["batch_review"] = review
+        if heartbeat_callback:
+            heartbeat_callback()
 
     for job in candidates:
         if "batch_review" not in job:
@@ -4011,22 +4068,6 @@ def _run(args: argparse.Namespace) -> int:
             unchanged += parallel_stats["unchanged"]
             failed += parallel_stats["failed"]
             total_pruned += parallel_stats["pruned"]
-            daily_counts_after_scan = _daily_import_counts(
-                conn, daily_import_run_id
-            )
-            if daily_counts_after_scan["pending"] == 0:
-                enrichment_stats = _deferred_workday_enrichment(
-                    dsn,
-                    daily_import_run_id,
-                    worker_id,
-                )
-                if enrichment_stats["candidates"]:
-                    print(
-                        "Workday deferred enrichment complete: "
-                        f"{enrichment_stats['enriched']}/"
-                        f"{enrichment_stats['candidates']} jobs enriched; "
-                        f"{enrichment_stats['failed']} deferred for a later run"
-                    )
             # The parallel worker has consumed the entire immutable snapshot.
             # Leave the existing loop for explicitly scoped, non-daily imports.
             daily_scan_items = []
@@ -4222,11 +4263,76 @@ def _run(args: argparse.Namespace) -> int:
                     f"{daily_failed_boards}/{daily_board_count} failed boards "
                     f"(at least {DAILY_MIN_SUCCESS_PERCENT}% of boards succeeded)"
                 )
-        if match_requested:
+
+        selected_ats = tuple(_ats_list(args.ats))
+        non_workday_ats = tuple(ats for ats in selected_ats if ats != "workday")
+        if match_requested and daily_import_run_id is not None:
+            if non_workday_ats:
+                with _daily_phase_heartbeat(
+                    dsn,
+                    daily_import_run_id,
+                    worker_id,
+                ) as heartbeat:
+                    match_stats = run_matching(
+                        conn,
+                        published_after=published_after,
+                        ats=non_workday_ats,
+                        heartbeat_callback=heartbeat,
+                    )
+                print(
+                    "\nMatching complete for non-Workday ATS: "
+                    f"{match_stats['evaluated']} evaluated, "
+                    f"{match_stats['matched']} matched, "
+                    f"{match_stats['skipped']} excluded"
+                )
+
+        if daily_import_run_id is not None and "workday" in selected_ats:
+            enrichment_stats = _deferred_workday_enrichment(
+                dsn,
+                daily_import_run_id,
+                worker_id,
+            )
+            print(
+                "Workday deferred enrichment complete: "
+                f"{enrichment_stats['enriched']}/"
+                f"{enrichment_stats['candidates']} attempted; "
+                f"{enrichment_stats['remaining']} still missing descriptions; "
+                f"{enrichment_stats['failed']} deferred"
+            )
+            if enrichment_stats["remaining"]:
+                print(
+                    f"Daily import run {daily_import_run_id} remains resumable: "
+                    f"{enrichment_stats['remaining']} Workday jobs still need "
+                    "descriptions. Non-Workday matching is complete; "
+                    "Workday matching and Gemini recommendations will start "
+                    "after a later run finishes enrichment.",
+                    file=sys.stderr,
+                )
+                return 1
+
+            if match_requested:
+                with _daily_phase_heartbeat(
+                    dsn,
+                    daily_import_run_id,
+                    worker_id,
+                ) as heartbeat:
+                    match_stats = run_matching(
+                        conn,
+                        published_after=published_after,
+                        ats=("workday",),
+                        heartbeat_callback=heartbeat,
+                    )
+                print(
+                    "\nMatching complete for Workday: "
+                    f"{match_stats['evaluated']} evaluated, "
+                    f"{match_stats['matched']} matched, "
+                    f"{match_stats['skipped']} excluded"
+                )
+        elif match_requested:
             match_stats = run_matching(
                 conn,
                 published_after=published_after,
-                ats=tuple(_ats_list(args.ats)),
+                ats=selected_ats,
             )
             print(
                 "\nMatching complete: "
@@ -4236,12 +4342,26 @@ def _run(args: argparse.Namespace) -> int:
             )
         if recommend_requested:
             try:
-                recommendation_stats = run_recommendations(
-                    conn,
-                    published_after=published_after,
-                    ats=tuple(_ats_list(args.ats)),
-                    batch_size=args.recommend_batch_size,
-                )
+                if daily_import_run_id is not None:
+                    with _daily_phase_heartbeat(
+                        dsn,
+                        daily_import_run_id,
+                        worker_id,
+                    ) as heartbeat:
+                        recommendation_stats = run_recommendations(
+                            conn,
+                            published_after=published_after,
+                            ats=selected_ats,
+                            batch_size=args.recommend_batch_size,
+                            heartbeat_callback=heartbeat,
+                        )
+                else:
+                    recommendation_stats = run_recommendations(
+                        conn,
+                        published_after=published_after,
+                        ats=selected_ats,
+                        batch_size=args.recommend_batch_size,
+                    )
             except (ValueError, gemini_service.GeminiProfileError) as exc:
                 print(f"\nRecommendation generation failed: {exc}", file=sys.stderr)
                 failed += 1

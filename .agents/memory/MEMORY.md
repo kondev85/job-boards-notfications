@@ -17,3 +17,4 @@
 - [BambooHR current-openings feed](bamboohr-current-openings-feed.md) — valid non-empty feeds prove active boards because BambooHR omits public posting dates; HTML fallbacks are invalid.
 - [Personio public job URLs](personio-public-job-urls.md) — XML feeds provide posting IDs but often omit URLs; derive the public `/job/{id}` link from the board host.
 - [Deferred Workday enrichment throughput](deferred-workday-enrichment.md) — large post-list detail backlogs need shell-visible progress and jobs-per-second metrics.
+- [Daily downstream phase gates](daily-downstream-phase-gates.md) — non-Workday matching may start early; Workday matching and Gemini wait for complete detail coverage.
