@@ -957,7 +957,7 @@ def _prepare_daily_import_run(
         SELECT rb.position, rb.board_id, b.ats, b.slug
         FROM daily_import_run_boards AS rb
         JOIN job_boards AS b ON b.board_id = rb.board_id
-        WHERE rb.import_run_id = %s
+        WHERE rb.import_run_id = %s::BIGINT
           AND rb.status IN ('pending', 'failed')
           AND (
               rb.retry_after IS NULL
@@ -1759,7 +1759,7 @@ def _workday_enrichment_candidates(
         JOIN job_boards AS b ON b.board_id = j.board_id
         JOIN daily_import_run_boards AS rb ON rb.board_id = j.board_id
         JOIN daily_import_runs AS r ON r.import_run_id = rb.import_run_id
-        WHERE rb.import_run_id = %s
+        WHERE rb.import_run_id = %s::BIGINT
           AND b.ats = 'workday'
           AND rb.status = 'completed'
           AND j.description_text IS NULL
@@ -1968,11 +1968,13 @@ def _deferred_workday_enrichment(
                                 """
                                 UPDATE jobs
                                 SET published_at = CASE
-                                        WHEN %s IS NOT NULL THEN %s
+                                    WHEN %s::TIMESTAMPTZ IS NOT NULL
+                                        THEN %s::TIMESTAMPTZ
                                         ELSE published_at
                                     END,
                                     published_at_source = CASE
-                                        WHEN %s IS NOT NULL THEN 'provider'
+                                        WHEN %s::TIMESTAMPTZ IS NOT NULL
+                                            THEN 'provider'
                                         ELSE published_at_source
                                     END,
                                     location_raw = COALESCE(%s, location_raw),
