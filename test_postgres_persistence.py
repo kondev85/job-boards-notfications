@@ -373,25 +373,21 @@ def test_daily_failure_threshold_allows_at_least_98_percent_success():
     assert not persistence._daily_failures_allow_downstream(21, 1000)
 
 
-def test_daily_workday_workers_promote_after_other_ats_drain():
+def test_daily_workday_workers_are_available_from_the_start():
     queues = {
         "ashby": [("ashby", "board")],
         "workday": [("workday", "one"), ("workday", "two")],
     }
     active = {"ashby": 0, "workday": 1}
 
-    assert persistence._daily_workday_limit(queues, active) == 1
-
-    queues["ashby"].clear()
-    active["ashby"] = 1
-    assert persistence._daily_workday_limit(queues, active) == 1
-
-    active["ashby"] = 0
     assert persistence._daily_workday_limit(queues, active) == 2
     assert persistence._daily_workday_limit(
         {"workday": queues["workday"]},
         {"workday": 0},
-    ) == 1
+    ) == 2
+    assert persistence._daily_board_limit("ashby") == 3
+    assert persistence._daily_board_limit("bamboohr") == 3
+    assert persistence._daily_board_limit("personio") == 3
 
 
 def test_daily_resume_keeps_snapshot_and_separates_scope_and_cutoff():

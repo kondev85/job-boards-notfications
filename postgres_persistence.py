@@ -57,20 +57,23 @@ import job_boards
 
 ATS_NAMES = tuple(job_boards.SOURCES)
 DAILY_IMPORT_LEASE_SECONDS = 15 * 60
-DAILY_BOARD_WORKERS = 4
+DAILY_BOARD_WORKERS = 5
 DAILY_DETAIL_CONCURRENCY = 3
 DAILY_MIN_SUCCESS_PERCENT = 98
 DAILY_ATS_CONCURRENCY = {
-    "workday": 1,
-    "smartrecruiters": 1,
-    "recruitee": 2,
-    "teamtailor": 2,
-    "workable": 1,
-    "personio": 1,
-    "bamboohr": 1,
-    "pinpoint": 1,
-    "breezy": 1,
-    "rippling": 1,
+    "workday": 2,
+    "ashby": 3,
+    "greenhouse": 3,
+    "lever": 3,
+    "smartrecruiters": 3,
+    "recruitee": 3,
+    "teamtailor": 3,
+    "workable": 3,
+    "personio": 3,
+    "bamboohr": 3,
+    "pinpoint": 3,
+    "breezy": 3,
+    "rippling": 3,
 }
 
 
@@ -1142,16 +1145,8 @@ def _daily_workday_limit(
     queues: dict[str, deque[tuple[int, int, str, str]]],
     active_by_ats: dict[str, int],
 ) -> int:
-    """Promote Workday only after included non-Workday work has finished."""
-    if not any(ats != "workday" for ats in queues):
-        return 1
-    other_queued = any(
-        queue for ats, queue in queues.items() if ats != "workday"
-    )
-    other_active = any(
-        count for ats, count in active_by_ats.items() if ats != "workday"
-    )
-    return 1 if other_queued or other_active else 2
+    """Allow two Workday boards from the beginning of the daily run."""
+    return DAILY_ATS_CONCURRENCY["workday"]
 
 
 def _daily_board_limit(
@@ -1159,9 +1154,9 @@ def _daily_board_limit(
     queues: dict[str, deque[tuple[int, int, str, str]]] | None = None,
     active_by_ats: dict[str, int] | None = None,
 ) -> int:
-    if ats == "workday" and queues is not None and active_by_ats is not None:
-        return _daily_workday_limit(queues, active_by_ats)
-    return DAILY_ATS_CONCURRENCY.get(ats, DAILY_BOARD_WORKERS)
+    if ats == "workday":
+        return _daily_workday_limit(queues or {}, active_by_ats or {})
+    return DAILY_ATS_CONCURRENCY.get(ats, 3)
 
 
 def _heartbeat_daily_import(
@@ -1438,7 +1433,8 @@ def _run_daily_boards_parallel(
     }
     print(
         f"Daily import parallelism: {DAILY_BOARD_WORKERS} total board workers; "
-        f"Workday=1, SmartRecruiters=1; detail concurrency={DAILY_DETAIL_CONCURRENCY}",
+        "Workday=2, all other ATS=3; "
+        f"detail concurrency={DAILY_DETAIL_CONCURRENCY}",
         flush=True,
     )
 
@@ -1450,16 +1446,11 @@ def _run_daily_boards_parallel(
                     for offset in range(len(ats_order)):
                         index = (round_robin_index + offset) % len(ats_order)
                         ats = ats_order[index]
-                        workday_limit = _daily_workday_limit(
-                            queues,
-                            active_by_ats,
-                        )
+                        workday_limit = _daily_workday_limit(queues, active_by_ats)
                         if workday_limit != last_workday_limit:
                             print(
                                 f"Daily Workday board limit: {workday_limit} "
-                                "(promoted after non-Workday work drains)"
-                                if workday_limit == 2
-                                else "Daily Workday board limit: 1",
+                                "(fixed from the start)",
                                 flush=True,
                             )
                             last_workday_limit = workday_limit
