@@ -32,6 +32,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+from contextlib import contextmanager
+from contextvars import ContextVar, copy_context
 from email.utils import parsedate_to_datetime
 import gzip
 import http.client
@@ -118,6 +120,45 @@ class RateLimited(Exception):
     too high; a repeatedly-abusive IP can be blocked for 24 hours."""
 
 
+class BoardDeadlineExceeded(Exception):
+    """A board exceeded the importer wall-clock budget."""
+
+
+_BOARD_DEADLINE: ContextVar[float | None] = ContextVar(
+    "board_deadline", default=None
+)
+
+
+@contextmanager
+def board_deadline(seconds: float | None):
+    """Bound all HTTP work performed for one board, including nested detail work."""
+    if seconds is None:
+        yield
+        return
+    token = _BOARD_DEADLINE.set(time.monotonic() + seconds)
+    try:
+        yield
+    finally:
+        _BOARD_DEADLINE.reset(token)
+
+
+def _bounded_timeout(timeout: float) -> float:
+    deadline = _BOARD_DEADLINE.get()
+    if deadline is None:
+        return timeout
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise BoardDeadlineExceeded("board deadline reached")
+    return min(timeout, max(0.05, remaining))
+
+
+def _deadline_sleep(seconds: float) -> None:
+    deadline = _BOARD_DEADLINE.get()
+    if deadline is not None and deadline - time.monotonic() <= seconds:
+        raise BoardDeadlineExceeded("board deadline reached during retry backoff")
+    time.sleep(seconds)
+
+
 # Hosts whose connections are pooled. Only the posting APIs: they take one request
 # per board — over 13,000 in a full run — and a fresh TLS handshake for each was
 # measured at 102ms against 64ms on a reused connection. Everything else (the
@@ -165,7 +206,7 @@ def _wait_for_paced_host(netloc: str) -> None:
         wait = max(0.0, scheduled - now)
         _NEXT_REQUEST_AT[hostname] = max(now, scheduled) + interval
     if wait > 0:
-        time.sleep(wait)
+        _deadline_sleep(wait)
 
 
 def _lower_headers(items) -> dict:
@@ -203,9 +244,10 @@ def _pooled_request(
         conn = pool.get(parts.netloc)
         if conn is None:
             conn = pool[parts.netloc] = http.client.HTTPSConnection(
-                parts.netloc, timeout=timeout
+                parts.netloc, timeout=_bounded_timeout(timeout)
             )
         try:
+            conn.timeout = _bounded_timeout(timeout)
             _wait_for_paced_host(parts.netloc)
             if body is None:
                 conn.request(method, target, headers=headers)
@@ -236,7 +278,7 @@ def _single_request(
         return _pooled_request(url, method, timeout, headers)
     req = urllib.request.Request(url, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=_bounded_timeout(timeout)) as resp:
             return resp.status, _lower_headers(resp.headers), resp.read()
     except urllib.error.HTTPError as e:
         return e.code, _lower_headers(e.headers or {}), e.read()
@@ -306,12 +348,12 @@ def fetch(
                     if status == 503:
                         raise RateLimited(url)
                     raise urllib.error.HTTPError(url, status, "server error", None, None)
-                time.sleep(_retry_delay(headers.get("retry-after"), attempt))
+                _deadline_sleep(_retry_delay(headers.get("retry-after"), attempt))
                 continue
             if status in (429, 403):
                 if attempt == retries - 1:
                     raise urllib.error.HTTPError(url, status, "throttled", None, None)
-                time.sleep(_retry_delay(headers.get("retry-after"), attempt))
+                _deadline_sleep(_retry_delay(headers.get("retry-after"), attempt))
                 continue
             if status >= 400:
                 raise urllib.error.HTTPError(url, status, "client error", None, None)
@@ -321,7 +363,7 @@ def fetch(
         except (urllib.error.URLError, TimeoutError, http.client.HTTPException, OSError):
             if attempt == retries - 1:
                 raise
-            time.sleep(2**attempt)
+            _deadline_sleep(2**attempt)
     raise RuntimeError("unreachable")
 
 
@@ -624,14 +666,16 @@ def _workable_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
                             url, status, "Workable request failed",
                             response_headers, None,
                         )
-                    time.sleep(_retry_delay(response_headers.get("retry-after"), attempt))
+                    _deadline_sleep(_retry_delay(response_headers.get("retry-after"), attempt))
                     continue
                 result = json.loads(response_body)
             else:
                 request = urllib.request.Request(
                     url, data=body, headers=headers, method="POST"
                 )
-                with urllib.request.urlopen(request, timeout=timeout) as response:
+                with urllib.request.urlopen(
+                    request, timeout=_bounded_timeout(timeout)
+                ) as response:
                     result = json.loads(response.read())
             if not isinstance(result, dict):
                 raise ValueError("Workable response is not an object")
@@ -641,11 +685,11 @@ def _workable_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
                 raise NotFound(url) from exc
             if exc.code not in (429, 500, 502, 503, 504) or attempt == 3:
                 raise
-            time.sleep(_retry_delay(exc.headers.get("Retry-After"), attempt))
+            _deadline_sleep(_retry_delay(exc.headers.get("Retry-After"), attempt))
         except (urllib.error.URLError, TimeoutError, http.client.HTTPException, OSError):
             if attempt == 3:
                 raise
-            time.sleep(2**attempt)
+            _deadline_sleep(2**attempt)
     raise RuntimeError("unreachable")
 
 
@@ -669,12 +713,14 @@ def _workable_get_json(url: str, timeout: int = 30) -> dict:
                             url, status, "Workable request failed",
                             response_headers, None,
                         )
-                    time.sleep(_retry_delay(response_headers.get("retry-after"), attempt))
+                    _deadline_sleep(_retry_delay(response_headers.get("retry-after"), attempt))
                     continue
                 result = json.loads(response_body)
             else:
                 request = urllib.request.Request(url, headers=headers, method="GET")
-                with urllib.request.urlopen(request, timeout=timeout) as response:
+                with urllib.request.urlopen(
+                    request, timeout=_bounded_timeout(timeout)
+                ) as response:
                     result = json.loads(response.read())
             if not isinstance(result, dict):
                 raise ValueError("Workable response is not an object")
@@ -685,11 +731,11 @@ def _workable_get_json(url: str, timeout: int = 30) -> dict:
             if exc.code not in (429, 500, 502, 503, 504) or attempt == 3:
                 raise
             retry_after = exc.headers.get("retry-after") if exc.headers else None
-            time.sleep(_retry_delay(retry_after, attempt))
+            _deadline_sleep(_retry_delay(retry_after, attempt))
         except (urllib.error.URLError, TimeoutError, http.client.HTTPException, OSError):
             if attempt == 3:
                 raise
-            time.sleep(2**attempt)
+            _deadline_sleep(2**attempt)
     raise RuntimeError("unreachable")
 
 
@@ -1240,7 +1286,11 @@ def fetch_smartrecruiters_jobs(
     with ThreadPoolExecutor(
         max_workers=detail_concurrency or _SMARTRECRUITERS_DETAIL_CONCURRENCY
     ) as pool:
-        return list(pool.map(enrich, postings))
+        futures = [
+            pool.submit(copy_context().run, enrich, item)
+            for item in postings
+        ]
+        return [future.result() for future in futures]
 
 
 def smartrecruiters_board_exists(identifier: str) -> bool:
@@ -1404,7 +1454,7 @@ def _workday_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
                         raise urllib.error.HTTPError(
                             url, status, "server error", response_headers, None
                         )
-                    time.sleep(_retry_delay(retry_after, attempt))
+                    _deadline_sleep(_retry_delay(retry_after, attempt))
                     continue
                 result = json.loads(response_body)
                 if not isinstance(result, dict):
@@ -1413,7 +1463,9 @@ def _workday_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
             request = urllib.request.Request(
                 url, data=body, headers=headers, method="POST"
             )
-            with urllib.request.urlopen(request, timeout=timeout) as response:
+            with urllib.request.urlopen(
+                request, timeout=_bounded_timeout(timeout)
+            ) as response:
                 result = json.loads(response.read())
                 if not isinstance(result, dict):
                     raise ValueError("Workday response is not an object")
@@ -1423,11 +1475,11 @@ def _workday_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
                 raise NotFound(url) from exc
             if exc.code not in (429, 500, 502, 503, 504) or attempt == 3:
                 raise
-            time.sleep(_retry_delay(exc.headers.get("Retry-After"), attempt))
+            _deadline_sleep(_retry_delay(exc.headers.get("Retry-After"), attempt))
         except (urllib.error.URLError, TimeoutError, http.client.HTTPException, OSError):
             if attempt == 3:
                 raise
-            time.sleep(2**attempt)
+            _deadline_sleep(2**attempt)
     raise RuntimeError("unreachable")
 
 
@@ -1467,13 +1519,22 @@ def _workday_needs_details(
 def _enrich_workday_item(item: dict) -> dict:
     """Best-effort detail enrichment for one cutoff-eligible Workday posting."""
     try:
-        details = _workday_details(item["_jobUrl"])
+        item.update(workday_detail_fields(item["_jobUrl"]))
     except Exception:
         return item
+    return item
+
+
+def workday_detail_fields(url: str) -> dict:
+    """Fetch and normalize public Workday JSON-LD detail fields."""
+    details = _workday_details(url)
     if not details:
-        return item
-    item["postedAt"] = details.get("datePosted") or item.get("postedOn")
-    item["jobDescription"] = details.get("description") or ""
+        return {}
+    fields = {
+        "jobDescription": details.get("description") or "",
+    }
+    if details.get("datePosted"):
+        fields["postedAt"] = details["datePosted"]
     locations = details.get("jobLocation")
     if isinstance(locations, dict):
         locations = [locations]
@@ -1498,12 +1559,12 @@ def _enrich_workday_item(item: dict) -> dict:
             if label and label not in labels:
                 labels.append(label)
         if labels:
-            item["locationsText"] = "; ".join(labels)
-    if details.get("jobLocationType") and not item.get("remoteType"):
-        item["remoteType"] = details["jobLocationType"]
-    if details.get("employmentType") and not item.get("employmentType"):
-        item["employmentType"] = details["employmentType"]
-    return item
+            fields["locationsText"] = "; ".join(labels)
+    if details.get("jobLocationType"):
+        fields["remoteType"] = details["jobLocationType"]
+    if details.get("employmentType"):
+        fields["employmentType"] = details["employmentType"]
+    return fields
 
 
 def _workday_requisition_id(item: dict) -> str:
@@ -1531,6 +1592,7 @@ def fetch_workday_jobs(
     published_after: datetime | None = None,
     cached_jobs: dict[str, dict] | None = None,
     detail_concurrency: int | None = None,
+    enrich_details: bool | None = None,
 ) -> list[dict]:
     """Fetch paginated Workday postings, stopping at a known publication cutoff."""
     url = workday_board_url(identifier)
@@ -1538,9 +1600,10 @@ def fetch_workday_jobs(
     offset = 0
     all_jobs: list[dict] = []
     cached_jobs = cached_jobs or {}
-    enrich_details = published_after is not None or os.environ.get(
-        "WORKDAY_ENRICH_DETAILS"
-    ) == "1"
+    if enrich_details is None:
+        enrich_details = published_after is not None or os.environ.get(
+            "WORKDAY_ENRICH_DETAILS"
+        ) == "1"
     for _ in range(250):
         payload = _workday_post_json(
             url,
@@ -1580,7 +1643,12 @@ def fetch_workday_jobs(
             with ThreadPoolExecutor(
                 max_workers=detail_concurrency or _WORKDAY_DETAIL_CONCURRENCY
             ) as pool:
-                list(pool.map(_enrich_workday_item, detail_items))
+                futures = [
+                    pool.submit(copy_context().run, _enrich_workday_item, item)
+                    for item in detail_items
+                ]
+                for future in futures:
+                    future.result()
         all_jobs.extend(page_items)
         total = int(payload.get("total") or 0)
         if len(page) < limit or (total and len(all_jobs) >= total):

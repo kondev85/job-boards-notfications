@@ -34,6 +34,7 @@ Examples:
 from __future__ import annotations
 
 import argparse
+from contextvars import copy_context
 import hashlib
 import json
 import os
@@ -59,6 +60,7 @@ ATS_NAMES = tuple(job_boards.SOURCES)
 DAILY_IMPORT_LEASE_SECONDS = 15 * 60
 DAILY_BOARD_WORKERS = 5
 DAILY_DETAIL_CONCURRENCY = 3
+BOARD_FETCH_DEADLINE_SECONDS = 60
 DAILY_MIN_SUCCESS_PERCENT = 98
 DAILY_ATS_CONCURRENCY = {
     "workday": 2,
@@ -1219,16 +1221,18 @@ def _import_daily_board(
         # End the implicit read transaction before fetching and before the write
         # transaction. This keeps the board commit independently visible.
         connection.commit()
-        rows, skipped = _fetch_normalized(
-            ats,
-            slug,
-            published_after,
-            greenhouse_content=greenhouse_content,
-            etag=conditional_etag,
-            meta=fetch_meta,
-            cached_workday_jobs=cached_workday_jobs,
-            detail_concurrency=DAILY_DETAIL_CONCURRENCY,
-        )
+        with job_boards.board_deadline(BOARD_FETCH_DEADLINE_SECONDS):
+            rows, skipped = _fetch_normalized(
+                ats,
+                slug,
+                published_after,
+                greenhouse_content=greenhouse_content,
+                etag=conditional_etag,
+                meta=fetch_meta,
+                cached_workday_jobs=cached_workday_jobs,
+                detail_concurrency=DAILY_DETAIL_CONCURRENCY,
+                workday_enrich_details=False if ats == "workday" else None,
+            )
         empty_workable_board = (
             ats == "workable"
             and fetch_meta.get("workable_source_job_count") == 0
@@ -1434,7 +1438,8 @@ def _run_daily_boards_parallel(
     print(
         f"Daily import parallelism: {DAILY_BOARD_WORKERS} total board workers; "
         "Workday=2, all other ATS=3; "
-        f"detail concurrency={DAILY_DETAIL_CONCURRENCY}",
+        f"detail concurrency={DAILY_DETAIL_CONCURRENCY}; "
+        f"board deadline={BOARD_FETCH_DEADLINE_SECONDS}s",
         flush=True,
     )
 
@@ -1550,6 +1555,7 @@ def _fetch_normalized(
     meta: dict[str, Any] | None = None,
     cached_workday_jobs: dict[str, dict[str, Any]] | None = None,
     detail_concurrency: int | None = None,
+    workday_enrich_details: bool | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
     source = job_boards.SOURCES[ats]
     if source.get("fetch_jobs"):
@@ -1559,6 +1565,7 @@ def _fetch_normalized(
                 published_after,
                 cached_workday_jobs,
                 detail_concurrency,
+                workday_enrich_details,
             )
         elif ats == "smartrecruiters" and detail_concurrency is not None:
             raw_jobs = source["fetch_jobs"](
@@ -1715,6 +1722,167 @@ def _cached_workday_jobs(
             "employment_type": row[5],
         }
     return cached
+
+
+def _workday_enrichment_candidates(
+    conn: psycopg.Connection,
+    import_run_id: int,
+) -> dict[int, dict[str, Any]]:
+    """Find current-run Workday jobs whose optional detail is still missing."""
+    rows = conn.execute(
+        """
+        SELECT j.job_id, j.board_id, b.slug, j.job_url
+        FROM jobs AS j
+        JOIN job_boards AS b ON b.board_id = j.board_id
+        JOIN daily_import_run_boards AS rb ON rb.board_id = j.board_id
+        JOIN daily_import_runs AS r ON r.import_run_id = rb.import_run_id
+        WHERE rb.import_run_id = %s
+          AND b.ats = 'workday'
+          AND rb.status = 'completed'
+          AND j.description_text IS NULL
+          AND j.job_url IS NOT NULL
+          AND j.closed_at IS NULL
+          AND j.last_seen >= r.started_at
+        ORDER BY j.board_id, j.job_id
+        """,
+        (import_run_id,),
+    ).fetchall()
+    candidates: dict[int, dict[str, Any]] = {}
+    for job_id, board_id, slug, job_url in rows:
+        board = candidates.setdefault(
+            board_id,
+            {"slug": slug, "jobs": []},
+        )
+        board["jobs"].append((job_id, job_url))
+    conn.commit()
+    return candidates
+
+
+def _fetch_workday_detail_candidate(
+    job_id: int,
+    job_url: str,
+) -> tuple[int, dict[str, Any] | None]:
+    fields = job_boards.workday_detail_fields(job_url)
+    return job_id, fields or None
+
+
+def _enrich_workday_board(
+    board: dict[str, Any],
+) -> tuple[str, list[dict[str, Any]], int]:
+    """Fetch missing Workday details for one board within its own deadline."""
+    updates: list[dict[str, Any]] = []
+    failed = 0
+    with job_boards.board_deadline(BOARD_FETCH_DEADLINE_SECONDS):
+        with ThreadPoolExecutor(max_workers=DAILY_DETAIL_CONCURRENCY) as pool:
+            futures = [
+                pool.submit(
+                    copy_context().run,
+                    _fetch_workday_detail_candidate,
+                    job_id,
+                    job_url,
+                )
+                for job_id, job_url in board["jobs"]
+            ]
+            for future in futures:
+                try:
+                    job_id, fields = future.result()
+                except Exception:
+                    failed += 1
+                    continue
+                if fields:
+                    updates.append({"job_id": job_id, **fields})
+                else:
+                    failed += 1
+    return board["slug"], updates, failed
+
+
+def _deferred_workday_enrichment(
+    dsn: str,
+    import_run_id: int,
+) -> dict[str, int]:
+    """Enrich Workday only after every board has finished its list import.
+
+    The candidate query excludes jobs that already have descriptions, so a
+    successful list import followed by this phase does not duplicate detail
+    requests on later runs.
+    """
+    with psycopg.connect(dsn) as conn:
+        candidates = _workday_enrichment_candidates(conn, import_run_id)
+    if not candidates:
+        return {"candidates": 0, "enriched": 0, "failed": 0}
+
+    attempted = sum(len(board["jobs"]) for board in candidates.values())
+    enriched = 0
+    failed = 0
+    with ThreadPoolExecutor(max_workers=DAILY_ATS_CONCURRENCY["workday"]) as pool:
+        futures = [
+            pool.submit(_enrich_workday_board, board)
+            for board in candidates.values()
+        ]
+        with psycopg.connect(dsn) as conn:
+            for future in futures:
+                slug, updates, board_failed = future.result()
+                failed += board_failed
+                if not updates:
+                    print(
+                        f"Workday deferred enrichment {slug}: "
+                        f"no detail updates ({board_failed} deferred)",
+                        flush=True,
+                    )
+                    continue
+                with conn.transaction():
+                    for update in updates:
+                        description = _plain_description(
+                            "workday",
+                            {"_description": update.get("jobDescription")},
+                        )
+                        published_at = _timestamp(update.get("postedAt"))
+                        conn.execute(
+                            """
+                            UPDATE jobs
+                            SET published_at = CASE
+                                    WHEN %s IS NOT NULL THEN %s
+                                    ELSE published_at
+                                END,
+                                published_at_source = CASE
+                                    WHEN %s IS NOT NULL THEN 'provider'
+                                    ELSE published_at_source
+                                END,
+                                location_raw = COALESCE(%s, location_raw),
+                                employment_type = COALESCE(
+                                    %s, employment_type
+                                ),
+                                workplace_type = COALESCE(
+                                    %s, workplace_type
+                                ),
+                                description_text = COALESCE(
+                                    %s, description_text
+                                ),
+                                updated_at = now()
+                            WHERE job_id = %s
+                            """,
+                            (
+                                published_at,
+                                published_at,
+                                published_at,
+                                update.get("locationsText"),
+                                update.get("employmentType"),
+                                update.get("remoteType"),
+                                description,
+                                update["job_id"],
+                            ),
+                        )
+                enriched += len(updates)
+                print(
+                    f"Workday deferred enrichment {slug}: "
+                    f"{len(updates)} enriched, {board_failed} deferred",
+                    flush=True,
+                )
+    return {
+        "candidates": attempted,
+        "enriched": enriched,
+        "failed": failed,
+    }
 
 
 def _etag_covers(
@@ -3753,6 +3921,21 @@ def _run(args: argparse.Namespace) -> int:
             unchanged += parallel_stats["unchanged"]
             failed += parallel_stats["failed"]
             total_pruned += parallel_stats["pruned"]
+            daily_counts_after_scan = _daily_import_counts(
+                conn, daily_import_run_id
+            )
+            if daily_counts_after_scan["pending"] == 0:
+                enrichment_stats = _deferred_workday_enrichment(
+                    dsn,
+                    daily_import_run_id,
+                )
+                if enrichment_stats["candidates"]:
+                    print(
+                        "Workday deferred enrichment complete: "
+                        f"{enrichment_stats['enriched']}/"
+                        f"{enrichment_stats['candidates']} jobs enriched; "
+                        f"{enrichment_stats['failed']} deferred for a later run"
+                    )
             # The parallel worker has consumed the entire immutable snapshot.
             # Leave the existing loop for explicitly scoped, non-daily imports.
             daily_scan_items = []
@@ -3783,15 +3966,16 @@ def _run(args: argparse.Namespace) -> int:
                 # savepoint and every board remains uncommitted until the full run
                 # reaches matching/recommendations.
                 conn.commit()
-                rows, skipped = _fetch_normalized(
-                    ats,
-                    slug,
-                    published_after,
-                    greenhouse_content=greenhouse_content,
-                    etag=conditional_etag,
-                    meta=fetch_meta,
-                    cached_workday_jobs=cached_workday_jobs,
-                )
+                with job_boards.board_deadline(BOARD_FETCH_DEADLINE_SECONDS):
+                    rows, skipped = _fetch_normalized(
+                        ats,
+                        slug,
+                        published_after,
+                        greenhouse_content=greenhouse_content,
+                        etag=conditional_etag,
+                        meta=fetch_meta,
+                        cached_workday_jobs=cached_workday_jobs,
+                    )
                 with conn.transaction():
                     with conn.cursor() as cur:
                         seen_at = datetime.now(timezone.utc)
