@@ -41,9 +41,15 @@ import os
 import re
 import socket
 import sys
+import time
 import unicodedata
 from collections import deque
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from concurrent.futures import (
+    FIRST_COMPLETED,
+    ThreadPoolExecutor,
+    as_completed,
+    wait,
+)
 from datetime import datetime, timedelta, timezone
 from html import unescape
 from pathlib import Path
@@ -1772,6 +1778,15 @@ def _enrich_workday_board(
     """Fetch missing Workday details for one board within its own deadline."""
     updates: list[dict[str, Any]] = []
     failed = 0
+    total = len(board["jobs"])
+    completed = 0
+    started_at = time.monotonic()
+    last_report_at = started_at
+    print(
+        f"Workday deferred enrichment {board['slug']}: "
+        f"starting {total} detail requests",
+        flush=True,
+    )
     with job_boards.board_deadline(BOARD_FETCH_DEADLINE_SECONDS):
         with ThreadPoolExecutor(max_workers=DAILY_DETAIL_CONCURRENCY) as pool:
             futures = [
@@ -1783,16 +1798,41 @@ def _enrich_workday_board(
                 )
                 for job_id, job_url in board["jobs"]
             ]
-            for future in futures:
+            for future in as_completed(futures):
                 try:
                     job_id, fields = future.result()
                 except Exception:
                     failed += 1
-                    continue
-                if fields:
-                    updates.append({"job_id": job_id, **fields})
                 else:
-                    failed += 1
+                    if fields:
+                        updates.append({"job_id": job_id, **fields})
+                    else:
+                        failed += 1
+                completed += 1
+                now = time.monotonic()
+                if (
+                    completed == total
+                    or completed == 1
+                    or completed % 25 == 0
+                    or now - last_report_at >= 10
+                ):
+                    elapsed = max(now - started_at, 0.001)
+                    rate = completed / elapsed
+                    print(
+                        f"Workday deferred enrichment {board['slug']}: "
+                        f"{completed}/{total} detail requests done; "
+                        f"{len(updates)} enriched, {failed} deferred; "
+                        f"{rate:.2f} jobs/s; elapsed={elapsed:.1f}s",
+                        flush=True,
+                    )
+                    last_report_at = now
+    elapsed = max(time.monotonic() - started_at, 0.001)
+    print(
+        f"Workday deferred enrichment {board['slug']}: finished "
+        f"{completed}/{total}; {len(updates)} enriched, {failed} deferred; "
+        f"{completed / elapsed:.2f} jobs/s; elapsed={elapsed:.1f}s",
+        flush=True,
+    )
     return board["slug"], updates, failed
 
 
