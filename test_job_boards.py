@@ -258,6 +258,32 @@ def test_pooled_request_retries_once_on_a_dead_connection():
     assert len(attempts) == 2, "a dead pooled connection must be replaced and retried once"
 
 
+def test_fetch_follows_redirects_from_pooled_hosts():
+    import job_boards as jb
+
+    calls = []
+
+    def fake_request(url, method, timeout, etag=None):
+        calls.append(url)
+        if len(calls) == 1:
+            return 302, {"location": "https://current.recruitee.com/api/offers/"}, b""
+        return 200, {"content-type": "application/json"}, b'{"offers":[]}'
+
+    original = jb._single_request
+    jb._single_request = fake_request
+    try:
+        assert jb.fetch("https://legacy.recruitee.com/api/offers/") == (
+            b'{"offers":[]}'
+        )
+    finally:
+        jb._single_request = original
+
+    assert calls == [
+        "https://legacy.recruitee.com/api/offers/",
+        "https://current.recruitee.com/api/offers/",
+    ]
+
+
 def test_board_exists_uses_head_and_maps_404_to_false():
     """Validation must not download board payloads — thousands of GETs would be GBs."""
     import job_boards

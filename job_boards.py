@@ -334,29 +334,63 @@ def fetch(
     over the exponential delay when the server sends it, since that is the server
     telling us exactly how long it wants.
     """
-    for attempt in range(retries):
+    request_url = url
+    redirects = 0
+    attempt = 0
+    while attempt < retries:
         try:
-            status, headers, body = _single_request(url, method, timeout, etag)
+            status, headers, body = _single_request(
+                request_url, method, timeout, etag
+            )
             if meta is not None:
                 meta["etag"] = headers.get("etag")
             if status == 304:
-                raise NotModified(url)
+                raise NotModified(request_url)
             if status == 404:
-                raise NotFound(url)
+                raise NotFound(request_url)
+            if status in (301, 302, 303, 307, 308):
+                location = headers.get("location")
+                if not location:
+                    raise urllib.error.HTTPError(
+                        request_url,
+                        status,
+                        "redirect without Location header",
+                        None,
+                        None,
+                    )
+                redirects += 1
+                if redirects > 5:
+                    raise urllib.error.HTTPError(
+                        request_url,
+                        status,
+                        "too many redirects",
+                        None,
+                        None,
+                    )
+                request_url = urllib.parse.urljoin(request_url, location)
+                continue
             if status >= 500:
                 if attempt == retries - 1:
                     if status == 503:
-                        raise RateLimited(url)
-                    raise urllib.error.HTTPError(url, status, "server error", None, None)
+                        raise RateLimited(request_url)
+                    raise urllib.error.HTTPError(
+                        request_url, status, "server error", None, None
+                    )
                 _deadline_sleep(_retry_delay(headers.get("retry-after"), attempt))
+                attempt += 1
                 continue
             if status in (429, 403):
                 if attempt == retries - 1:
-                    raise urllib.error.HTTPError(url, status, "throttled", None, None)
+                    raise urllib.error.HTTPError(
+                        request_url, status, "throttled", None, None
+                    )
                 _deadline_sleep(_retry_delay(headers.get("retry-after"), attempt))
+                attempt += 1
                 continue
             if status >= 400:
-                raise urllib.error.HTTPError(url, status, "client error", None, None)
+                raise urllib.error.HTTPError(
+                    request_url, status, "client error", None, None
+                )
             if headers.get("content-encoding") == "gzip":
                 body = gzip.decompress(body)
             return body
@@ -364,6 +398,7 @@ def fetch(
             if attempt == retries - 1:
                 raise
             _deadline_sleep(2**attempt)
+            attempt += 1
     raise RuntimeError("unreachable")
 
 
