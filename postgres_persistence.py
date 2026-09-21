@@ -1839,6 +1839,7 @@ def _enrich_workday_board(
 def _deferred_workday_enrichment(
     dsn: str,
     import_run_id: int,
+    worker_id: str,
 ) -> dict[str, int]:
     """Enrich Workday only after every board has finished its list import.
 
@@ -1859,65 +1860,114 @@ def _deferred_workday_enrichment(
             pool.submit(_enrich_workday_board, board)
             for board in candidates.values()
         ]
-        with psycopg.connect(dsn) as conn:
-            for future in futures:
-                slug, updates, board_failed = future.result()
-                failed += board_failed
-                if not updates:
+        pending = set(futures)
+        completed_boards = 0
+        started_at = time.monotonic()
+        with (
+            psycopg.connect(dsn) as heartbeat_connection,
+            psycopg.connect(dsn) as conn,
+        ):
+            while pending:
+                completed_futures, pending = wait(
+                    pending,
+                    timeout=10,
+                    return_when=FIRST_COMPLETED,
+                )
+                if not completed_futures:
+                    _heartbeat_daily_import(
+                        heartbeat_connection,
+                        import_run_id,
+                        worker_id,
+                    )
+                    elapsed = max(time.monotonic() - started_at, 0.001)
                     print(
-                        f"Workday deferred enrichment {slug}: "
-                        f"no detail updates ({board_failed} deferred)",
+                        "Workday deferred enrichment heartbeat: "
+                        f"{completed_boards}/{len(futures)} boards complete; "
+                        f"{enriched}/{attempted} jobs enriched; "
+                        f"{enriched / elapsed:.2f} jobs/s; "
+                        f"remaining detail candidates are still being processed",
                         flush=True,
                     )
                     continue
-                with conn.transaction():
-                    for update in updates:
-                        description = _plain_description(
-                            "workday",
-                            {"_description": update.get("jobDescription")},
-                        )
-                        published_at = _timestamp(update.get("postedAt"))
-                        conn.execute(
-                            """
-                            UPDATE jobs
-                            SET published_at = CASE
-                                    WHEN %s IS NOT NULL THEN %s
-                                    ELSE published_at
-                                END,
-                                published_at_source = CASE
-                                    WHEN %s IS NOT NULL THEN 'provider'
-                                    ELSE published_at_source
-                                END,
-                                location_raw = COALESCE(%s, location_raw),
-                                employment_type = COALESCE(
-                                    %s, employment_type
-                                ),
-                                workplace_type = COALESCE(
-                                    %s, workplace_type
-                                ),
-                                description_text = COALESCE(
-                                    %s, description_text
-                                ),
-                                updated_at = now()
-                            WHERE job_id = %s
-                            """,
-                            (
-                                published_at,
-                                published_at,
-                                published_at,
-                                update.get("locationsText"),
-                                update.get("employmentType"),
-                                update.get("remoteType"),
-                                description,
-                                update["job_id"],
-                            ),
-                        )
-                enriched += len(updates)
-                print(
-                    f"Workday deferred enrichment {slug}: "
-                    f"{len(updates)} enriched, {board_failed} deferred",
-                    flush=True,
+                _heartbeat_daily_import(
+                    heartbeat_connection,
+                    import_run_id,
+                    worker_id,
                 )
+                for future in completed_futures:
+                    completed_boards += 1
+                    try:
+                        slug, updates, board_failed = future.result()
+                    except Exception as exc:
+                        failed += 1
+                        print(
+                            "Workday deferred enrichment board failed: "
+                            f"{type(exc).__name__}: {exc}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                        continue
+                    failed += board_failed
+                    if not updates:
+                        print(
+                            f"Workday deferred enrichment {slug}: "
+                            f"no detail updates ({board_failed} deferred)",
+                            flush=True,
+                        )
+                        continue
+                    with conn.transaction():
+                        for update in updates:
+                            description = _plain_description(
+                                "workday",
+                                {"_description": update.get("jobDescription")},
+                            )
+                            published_at = _timestamp(update.get("postedAt"))
+                            conn.execute(
+                                """
+                                UPDATE jobs
+                                SET published_at = CASE
+                                        WHEN %s IS NOT NULL THEN %s
+                                        ELSE published_at
+                                    END,
+                                    published_at_source = CASE
+                                        WHEN %s IS NOT NULL THEN 'provider'
+                                        ELSE published_at_source
+                                    END,
+                                    location_raw = COALESCE(%s, location_raw),
+                                    employment_type = COALESCE(
+                                        %s, employment_type
+                                    ),
+                                    workplace_type = COALESCE(
+                                        %s, workplace_type
+                                    ),
+                                    description_text = COALESCE(
+                                        %s, description_text
+                                    ),
+                                    updated_at = now()
+                                WHERE job_id = %s
+                                """,
+                                (
+                                    published_at,
+                                    published_at,
+                                    published_at,
+                                    update.get("locationsText"),
+                                    update.get("employmentType"),
+                                    update.get("remoteType"),
+                                    description,
+                                    update["job_id"],
+                                ),
+                            )
+                    enriched += len(updates)
+                    print(
+                        f"Workday deferred enrichment {slug}: "
+                        f"{len(updates)} enriched, {board_failed} deferred",
+                        flush=True,
+                    )
+            _heartbeat_daily_import(
+                heartbeat_connection,
+                import_run_id,
+                worker_id,
+            )
     return {
         "candidates": attempted,
         "enriched": enriched,
@@ -3968,6 +4018,7 @@ def _run(args: argparse.Namespace) -> int:
                 enrichment_stats = _deferred_workday_enrichment(
                     dsn,
                     daily_import_run_id,
+                    worker_id,
                 )
                 if enrichment_stats["candidates"]:
                     print(
