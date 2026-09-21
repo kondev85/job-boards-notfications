@@ -18,3 +18,4 @@
 - [Personio public job URLs](personio-public-job-urls.md) — XML feeds provide posting IDs but often omit URLs; derive the public `/job/{id}` link from the board host.
 - [Deferred Workday enrichment throughput](deferred-workday-enrichment.md) — large post-list detail backlogs need shell-visible progress and jobs-per-second metrics.
 - [Daily downstream phase gates](daily-downstream-phase-gates.md) — non-Workday matching may start early; Workday matching and Gemini wait for complete detail coverage.
+- [Psycopg nullable parameter casts](psycopg-null-parameter-casts.md) — cast nullable placeholders used in standalone SQL predicates to avoid PostgreSQL indeterminate datatype errors.
