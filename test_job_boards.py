@@ -2381,6 +2381,40 @@ def test_retry_after_beats_the_exponential_delay_but_is_capped():
     assert _retry_delay("3600", 0) == 30.0, "an absurd Retry-After is capped"
 
 
+def test_workday_detail_fields_reads_calypso_api_response():
+    import job_boards
+
+    original_fetch = job_boards.fetch
+    calls = []
+
+    def fake_fetch(url, **kwargs):
+        calls.append((url, kwargs))
+        if "/wday/calypso/cxs/jobdetails/" in url:
+            return json.dumps({
+                "jobPostingInfo": {
+                    "jobDescription": "<p>Lead delivery across teams.</p>",
+                    "postedOn": "2026-09-20",
+                    "locationsText": "Madrid, Spain",
+                    "timeType": "Full time",
+                    "remoteType": "Hybrid",
+                }
+            }).encode()
+        return b'<html><script>token: "csrf-token"</script></html>'
+
+    job_boards.fetch = fake_fetch
+    try:
+        fields = job_boards.workday_detail_fields(
+            "https://acme.wd5.myworkdayjobs.com/en-US/Careers/"
+            "job/Madrid/Lead_Delivery_R-123"
+        )
+    finally:
+        job_boards.fetch = original_fetch
+    assert fields["jobDescription"] == "<p>Lead delivery across teams.</p>"
+    assert fields["postedAt"] == "2026-09-20"
+    assert fields["locationsText"] == "Madrid, Spain"
+    assert calls[1][1]["headers"]["X-CALYPSO-CSRF-TOKEN"] == "csrf-token"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

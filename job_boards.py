@@ -268,15 +268,29 @@ def _pooled_request(
 
 
 def _single_request(
-    url: str, method: str, timeout: int, etag: str | None = None
+    url: str,
+    method: str,
+    timeout: int,
+    etag: str | None = None,
+    headers: dict | None = None,
+    body: bytes | None = None,
 ) -> tuple[int, dict, bytes]:
     """One request, pooled where that is safe and via urlopen everywhere else."""
-    headers = {"User-Agent": UA, "Accept-Encoding": "gzip"}
+    request_headers = {"User-Agent": UA, "Accept-Encoding": "gzip"}
+    if headers:
+        request_headers.update(headers)
     if etag:
-        headers["If-None-Match"] = etag
+        request_headers["If-None-Match"] = etag
     if _is_pooled_host(urllib.parse.urlsplit(url).netloc):
-        return _pooled_request(url, method, timeout, headers)
-    req = urllib.request.Request(url, headers=headers, method=method)
+        if body is None:
+            return _pooled_request(url, method, timeout, request_headers)
+        return _pooled_request(url, method, timeout, request_headers, body)
+    req = urllib.request.Request(
+        url,
+        headers=request_headers,
+        method=method,
+        data=body,
+    )
     try:
         with urllib.request.urlopen(req, timeout=_bounded_timeout(timeout)) as resp:
             return resp.status, _lower_headers(resp.headers), resp.read()
@@ -322,6 +336,8 @@ def fetch(
     method: str = "GET",
     etag: str | None = None,
     meta: dict | None = None,
+    headers: dict | None = None,
+    body: bytes | None = None,
 ) -> bytes:
     """GET a URL, transparently gunzipping. Raises NotFound on 404.
 
@@ -339,17 +355,30 @@ def fetch(
     attempt = 0
     while attempt < retries:
         try:
-            status, headers, body = _single_request(
-                request_url, method, timeout, etag
-            )
+            if headers is None and body is None:
+                status, response_headers, response_body = _single_request(
+                    request_url,
+                    method,
+                    timeout,
+                    etag,
+                )
+            else:
+                status, response_headers, response_body = _single_request(
+                    request_url,
+                    method,
+                    timeout,
+                    etag,
+                    headers=headers,
+                    body=body,
+                )
             if meta is not None:
-                meta["etag"] = headers.get("etag")
+                meta["etag"] = response_headers.get("etag")
             if status == 304:
                 raise NotModified(request_url)
             if status == 404:
                 raise NotFound(request_url)
             if status in (301, 302, 303, 307, 308):
-                location = headers.get("location")
+                location = response_headers.get("location")
                 if not location:
                     raise urllib.error.HTTPError(
                         request_url,
@@ -376,7 +405,9 @@ def fetch(
                     raise urllib.error.HTTPError(
                         request_url, status, "server error", None, None
                     )
-                _deadline_sleep(_retry_delay(headers.get("retry-after"), attempt))
+                _deadline_sleep(
+                    _retry_delay(response_headers.get("retry-after"), attempt)
+                )
                 attempt += 1
                 continue
             if status in (429, 403):
@@ -384,16 +415,18 @@ def fetch(
                     raise urllib.error.HTTPError(
                         request_url, status, "throttled", None, None
                     )
-                _deadline_sleep(_retry_delay(headers.get("retry-after"), attempt))
+                _deadline_sleep(
+                    _retry_delay(response_headers.get("retry-after"), attempt)
+                )
                 attempt += 1
                 continue
             if status >= 400:
                 raise urllib.error.HTTPError(
                     request_url, status, "client error", None, None
                 )
-            if headers.get("content-encoding") == "gzip":
-                body = gzip.decompress(body)
-            return body
+            if response_headers.get("content-encoding") == "gzip":
+                response_body = gzip.decompress(response_body)
+            return response_body
         except (urllib.error.URLError, TimeoutError, http.client.HTTPException, OSError):
             if attempt == retries - 1:
                 raise
@@ -1519,8 +1552,50 @@ def _workday_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
 
 
 def _workday_details(url: str) -> dict:
-    """Read the public JobPosting JSON-LD embedded in a Workday detail page."""
+    """Read Workday's public detail API, with JSON-LD as a fallback.
+
+    Most current Workday career pages are an empty SPA shell. The posting data is
+    loaded by the browser from the Calypso ``jobdetails`` endpoint, so parsing
+    only the HTML shell silently turns every detail request into a deferred job.
+    """
     html = fetch(url, timeout=20, retries=2).decode("utf-8", "replace")
+    page = urllib.parse.urlsplit(url)
+    segments = [part for part in page.path.split("/") if part]
+    try:
+        job_index = segments.index("job")
+        site_id = segments[1]
+        external_path = "/".join(segments[job_index + 1 :])
+        tenant = page.hostname.split(".")[0]
+    except (ValueError, IndexError, AttributeError):
+        site_id = ""
+        external_path = ""
+        tenant = ""
+
+    token_match = re.search(r"\btoken\s*:\s*[\"']([^\"']+)", html)
+    if tenant and site_id and external_path and token_match:
+        api_url = (
+            f"{page.scheme}://{page.netloc}/wday/calypso/cxs/jobdetails/"
+            f"{tenant}/{site_id}/job/{external_path}"
+        )
+        try:
+            payload = json.loads(
+                fetch(
+                    api_url,
+                    timeout=20,
+                    retries=2,
+                    headers={
+                        "Accept": "application/json",
+                        "Accept-Language": segments[0],
+                        "Referer": url,
+                        "X-CALYPSO-CSRF-TOKEN": token_match.group(1),
+                    },
+                ).decode("utf-8", "replace")
+            )
+            if isinstance(payload, dict):
+                return payload
+        except (OSError, ValueError, urllib.error.HTTPError):
+            pass
+
     match = re.search(
         r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
         html,
@@ -1565,12 +1640,22 @@ def workday_detail_fields(url: str) -> dict:
     details = _workday_details(url)
     if not details:
         return {}
+    info = details.get("jobPostingInfo")
+    if not isinstance(info, dict):
+        info = details
     fields = {
-        "jobDescription": details.get("description") or "",
+        "jobDescription": (
+            info.get("jobDescription")
+            or info.get("description")
+            or ""
+        ),
     }
-    if details.get("datePosted"):
-        fields["postedAt"] = details["datePosted"]
-    locations = details.get("jobLocation")
+    posted_at = info.get("postedOn") or info.get("datePosted")
+    if posted_at:
+        fields["postedAt"] = posted_at
+    if info.get("locationsText"):
+        fields["locationsText"] = info["locationsText"]
+    locations = info.get("jobLocation")
     if isinstance(locations, dict):
         locations = [locations]
     if isinstance(locations, list):
@@ -1595,10 +1680,10 @@ def workday_detail_fields(url: str) -> dict:
                 labels.append(label)
         if labels:
             fields["locationsText"] = "; ".join(labels)
-    if details.get("jobLocationType"):
-        fields["remoteType"] = details["jobLocationType"]
-    if details.get("employmentType"):
-        fields["employmentType"] = details["employmentType"]
+    if info.get("remoteType") or info.get("jobLocationType"):
+        fields["remoteType"] = info.get("remoteType") or info["jobLocationType"]
+    if info.get("timeType") or info.get("employmentType"):
+        fields["employmentType"] = info.get("timeType") or info["employmentType"]
     return fields
 
 

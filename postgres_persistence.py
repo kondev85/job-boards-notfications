@@ -66,7 +66,8 @@ import job_boards
 ATS_NAMES = tuple(job_boards.SOURCES)
 DAILY_IMPORT_LEASE_SECONDS = 15 * 60
 DAILY_BOARD_WORKERS = 5
-DAILY_DETAIL_CONCURRENCY = 3
+DAILY_DETAIL_CONCURRENCY = 8
+WORKDAY_DETAIL_MAX_ATTEMPTS = 3
 BOARD_FETCH_DEADLINE_SECONDS = 60
 DAILY_MIN_SUCCESS_PERCENT = 98
 DAILY_ATS_CONCURRENCY = {
@@ -245,12 +246,19 @@ CREATE TABLE IF NOT EXISTS jobs (
     closed_at          TIMESTAMPTZ,
     created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    workday_detail_attempts INTEGER NOT NULL DEFAULT 0,
+    workday_detail_retry_after TIMESTAMPTZ,
+    workday_detail_error TEXT,
     UNIQUE (ats, external_id)
 );
 
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS company TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS address JSONB;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS published_at_source TEXT;
+ALTER TABLE jobs
+    ADD COLUMN IF NOT EXISTS workday_detail_attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS workday_detail_retry_after TIMESTAMPTZ;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS workday_detail_error TEXT;
 ALTER TABLE job_boards ADD COLUMN IF NOT EXISTS etag TEXT;
 ALTER TABLE job_boards ADD COLUMN IF NOT EXISTS etag_seen_at TIMESTAMPTZ;
 ALTER TABLE job_boards ADD COLUMN IF NOT EXISTS etag_published_after TIMESTAMPTZ;
@@ -340,6 +348,9 @@ CREATE INDEX IF NOT EXISTS jobs_title_lower_idx
     ON jobs (lower(title));
 CREATE INDEX IF NOT EXISTS jobs_company_idx
     ON jobs (company);
+CREATE INDEX IF NOT EXISTS jobs_workday_detail_retry_idx
+    ON jobs (workday_detail_retry_after)
+    WHERE ats = 'workday' AND description_text IS NULL;
 CREATE INDEX IF NOT EXISTS job_boards_company_id_idx
     ON job_boards (company_id);
 CREATE INDEX IF NOT EXISTS job_boards_ats_idx
@@ -358,6 +369,7 @@ CREATE TABLE IF NOT EXISTS daily_import_runs (
     heartbeat_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
     lease_expires_at           TIMESTAMPTZ,
     worker_id                  TEXT,
+    phase                      TEXT NOT NULL DEFAULT 'board_import',
     completed_at               TIMESTAMPTZ,
     board_count                INTEGER NOT NULL,
     failed_board_count         INTEGER NOT NULL DEFAULT 0
@@ -369,6 +381,14 @@ ALTER TABLE daily_import_runs
     ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ;
 ALTER TABLE daily_import_runs
     ADD COLUMN IF NOT EXISTS worker_id TEXT;
+ALTER TABLE daily_import_runs
+    ADD COLUMN IF NOT EXISTS phase TEXT NOT NULL DEFAULT 'board_import';
+ALTER TABLE daily_import_runs DROP CONSTRAINT IF EXISTS daily_import_runs_phase_check;
+ALTER TABLE daily_import_runs ADD CONSTRAINT daily_import_runs_phase_check
+    CHECK (phase IN (
+        'board_import', 'non_workday_matching', 'workday_enrichment',
+        'workday_matching', 'recommendations', 'completed'
+    ));
 CREATE INDEX IF NOT EXISTS daily_import_runs_resume_idx
     ON daily_import_runs (ats_scope, started_at)
     WHERE status = 'running';
@@ -1138,6 +1158,7 @@ def _finish_daily_import_run(
                 """
                 UPDATE daily_import_runs
                 SET status = %s,
+                    phase = 'completed',
                     failed_board_count = %s,
                     updated_at = now(),
                     heartbeat_at = now(),
@@ -1148,6 +1169,83 @@ def _finish_daily_import_run(
                 """,
                 (status, failed_boards, import_run_id),
             )
+
+
+def _daily_run_phase(
+    conn: psycopg.Connection,
+    import_run_id: int,
+) -> str:
+    """Return the resumable phase, inferring legacy runs once when possible."""
+    row = conn.execute(
+        """
+        SELECT phase, started_at, ats_scope
+        FROM daily_import_runs
+        WHERE import_run_id = %s
+        """,
+        (import_run_id,),
+    ).fetchone()
+    if row is None:
+        raise ValueError(f"daily import run {import_run_id} does not exist")
+    phase, started_at, ats_scope = row
+    if phase == "board_import":
+        # Runs created before phase checkpoints were added may already have
+        # completed non-Workday matching. Do not send them back through board
+        # fetching just because their Workday details remain incomplete.
+        matched = conn.execute(
+            """
+            SELECT EXISTS(
+                SELECT 1
+                FROM job_matches AS jm
+                JOIN jobs AS j ON j.job_id = jm.job_id
+                WHERE j.ats <> 'workday'
+                  AND jm.updated_at >= %s
+            )
+            """,
+            (started_at,),
+        ).fetchone()[0]
+        pending_boards = conn.execute(
+            """
+            SELECT count(*)
+            FROM daily_import_run_boards
+            WHERE import_run_id = %s
+              AND status IN ('pending', 'failed')
+            """,
+            (import_run_id,),
+        ).fetchone()[0]
+        if matched or pending_boards == 0:
+            phase = (
+                "workday_enrichment"
+                if matched or not any(ats != "workday" for ats in ats_scope)
+                else "non_workday_matching"
+            )
+            with conn.transaction():
+                conn.execute(
+                    """
+                    UPDATE daily_import_runs
+                    SET phase = %s, updated_at = now(), heartbeat_at = now()
+                    WHERE import_run_id = %s AND phase = 'board_import'
+                    """,
+                    (phase, import_run_id),
+                )
+    conn.commit()
+    return phase
+
+
+def _set_daily_run_phase(
+    conn: psycopg.Connection,
+    import_run_id: int,
+    phase: str,
+) -> None:
+    with conn.transaction():
+        conn.execute(
+            """
+            UPDATE daily_import_runs
+            SET phase = %s, updated_at = now(), heartbeat_at = now(),
+                lease_expires_at = now() + make_interval(secs => %s)
+            WHERE import_run_id = %s AND status = 'running'
+            """,
+            (phase, DAILY_IMPORT_LEASE_SECONDS, import_run_id),
+        )
 
 
 def _daily_workday_limit(
@@ -1751,7 +1849,7 @@ def _workday_enrichment_candidates(
     conn: psycopg.Connection,
     import_run_id: int,
 ) -> dict[int, dict[str, Any]]:
-    """Find current-run Workday jobs whose optional detail is still missing."""
+    """Find current-run Workday jobs due for another detail attempt."""
     rows = conn.execute(
         """
         SELECT j.job_id, j.board_id, b.slug, j.job_url
@@ -1766,9 +1864,10 @@ def _workday_enrichment_candidates(
           AND j.job_url IS NOT NULL
           AND j.closed_at IS NULL
           AND j.last_seen >= r.started_at
+          AND j.workday_detail_attempts < %s
         ORDER BY j.board_id, j.job_id
         """,
-        (import_run_id,),
+        (import_run_id, WORKDAY_DETAIL_MAX_ATTEMPTS),
     ).fetchall()
     candidates: dict[int, dict[str, Any]] = {}
     for job_id, board_id, slug, job_url in rows:
@@ -1799,8 +1898,9 @@ def _workday_enrichment_remaining(
           AND j.job_url IS NOT NULL
           AND j.closed_at IS NULL
           AND j.last_seen >= r.started_at
+          AND j.workday_detail_attempts < %s
         """,
-        (import_run_id,),
+        (import_run_id, WORKDAY_DETAIL_MAX_ATTEMPTS),
     ).fetchone()
     conn.commit()
     return int(row[0])
@@ -1811,15 +1911,20 @@ def _fetch_workday_detail_candidate(
     job_url: str,
 ) -> tuple[int, dict[str, Any] | None]:
     fields = job_boards.workday_detail_fields(job_url)
-    return job_id, fields or None
+    description = _plain_description(
+        "workday",
+        {"_description": (fields or {}).get("jobDescription")},
+    )
+    return job_id, fields if description else None
 
 
 def _enrich_workday_board(
     board: dict[str, Any],
-) -> tuple[str, list[dict[str, Any]], int]:
+) -> tuple[str, list[dict[str, Any]], int, list[int]]:
     """Fetch missing Workday details for one board within its own deadline."""
     updates: list[dict[str, Any]] = []
     failed = 0
+    failed_job_ids: list[int] = []
     total = len(board["jobs"])
     completed = 0
     started_at = time.monotonic()
@@ -1831,25 +1936,28 @@ def _enrich_workday_board(
     )
     with job_boards.board_deadline(BOARD_FETCH_DEADLINE_SECONDS):
         with ThreadPoolExecutor(max_workers=DAILY_DETAIL_CONCURRENCY) as pool:
-            futures = [
+            future_jobs = {
                 pool.submit(
                     copy_context().run,
                     _fetch_workday_detail_candidate,
                     job_id,
                     job_url,
-                )
+                ): job_id
                 for job_id, job_url in board["jobs"]
-            ]
+            }
+            futures = list(future_jobs)
             for future in as_completed(futures):
                 try:
                     job_id, fields = future.result()
                 except Exception:
                     failed += 1
+                    failed_job_ids.append(future_jobs[future])
                 else:
                     if fields:
                         updates.append({"job_id": job_id, **fields})
                     else:
                         failed += 1
+                        failed_job_ids.append(job_id)
                 completed += 1
                 now = time.monotonic()
                 if (
@@ -1875,7 +1983,7 @@ def _enrich_workday_board(
         f"{completed / elapsed:.2f} jobs/s; elapsed={elapsed:.1f}s",
         flush=True,
     )
-    return board["slug"], updates, failed
+    return board["slug"], updates, failed, failed_job_ids
 
 
 def _deferred_workday_enrichment(
@@ -1898,10 +2006,11 @@ def _deferred_workday_enrichment(
     enriched = 0
     failed = 0
     with ThreadPoolExecutor(max_workers=DAILY_ATS_CONCURRENCY["workday"]) as pool:
-        futures = [
-            pool.submit(_enrich_workday_board, board)
+        future_boards = {
+            pool.submit(_enrich_workday_board, board): board
             for board in candidates.values()
-        ]
+        }
+        futures = list(future_boards)
         pending = set(futures)
         completed_boards = 0
         started_at = time.monotonic()
@@ -1939,9 +2048,35 @@ def _deferred_workday_enrichment(
                 for future in completed_futures:
                     completed_boards += 1
                     try:
-                        slug, updates, board_failed = future.result()
+                        slug, updates, board_failed, failed_job_ids = future.result()
                     except Exception as exc:
                         failed += 1
+                        failed_job_ids = [
+                            job_id for job_id, _ in future_boards[future]["jobs"]
+                        ]
+                        with conn.transaction():
+                            conn.execute(
+                                """
+                                UPDATE jobs
+                                SET workday_detail_attempts =
+                                        workday_detail_attempts + 1,
+                                    workday_detail_retry_after = now()
+                                        + make_interval(
+                                            secs => LEAST(
+                                                86400,
+                                                60 * power(
+                                                    5, workday_detail_attempts
+                                                )
+                                            )
+                                        ),
+                                    workday_detail_error = %s
+                                WHERE job_id = ANY(%s)
+                                """,
+                                (
+                                    f"{type(exc).__name__}: {exc}",
+                                    failed_job_ids,
+                                ),
+                            )
                         print(
                             "Workday deferred enrichment board failed: "
                             f"{type(exc).__name__}: {exc}",
@@ -1950,6 +2085,27 @@ def _deferred_workday_enrichment(
                         )
                         continue
                     failed += board_failed
+                    with conn.transaction():
+                        for job_id in failed_job_ids:
+                            conn.execute(
+                                """
+                                UPDATE jobs
+                                SET workday_detail_attempts =
+                                        workday_detail_attempts + 1,
+                                    workday_detail_retry_after = now()
+                                        + make_interval(
+                                            secs => LEAST(
+                                                86400,
+                                                60 * power(
+                                                    5, workday_detail_attempts
+                                                )
+                                            )
+                                        ),
+                                    workday_detail_error = 'detail_unavailable'
+                                WHERE job_id = %s
+                                """,
+                                (job_id,),
+                            )
                     if not updates:
                         print(
                             f"Workday deferred enrichment {slug}: "
@@ -1987,6 +2143,9 @@ def _deferred_workday_enrichment(
                                     description_text = COALESCE(
                                         %s, description_text
                                     ),
+                                    workday_detail_attempts = 0,
+                                    workday_detail_retry_after = NULL,
+                                    workday_detail_error = NULL,
                                     updated_at = now()
                                 WHERE job_id = %s
                                 """,
@@ -3984,6 +4143,7 @@ def _run(args: argparse.Namespace) -> int:
     daily_import_run_id: int | None = None
     daily_failed_boards = 0
     daily_board_count = 0
+    daily_phase = "board_import"
     worker_id = _daily_worker_id()
 
     with psycopg.connect(dsn) as conn:
@@ -4024,6 +4184,15 @@ def _run(args: argparse.Namespace) -> int:
                 worker_id=worker_id,
             )
             published_after = effective_published_after
+            daily_phase = _daily_run_phase(conn, daily_import_run_id)
+            pending_board_count = len(daily_scan_items)
+            if daily_phase != "board_import":
+                daily_scan_items = []
+                print(
+                    f"Daily import run {daily_import_run_id}: resuming phase "
+                    f"{daily_phase}; skipping board fetch for "
+                    f"{pending_board_count} previously failed/pending boards"
+                )
             completed_before = daily_board_count - len(daily_scan_items)
             action = "resuming" if resumed else "started"
             print(
@@ -4052,7 +4221,9 @@ def _run(args: argparse.Namespace) -> int:
             )
             return 0
 
-        if daily_import_run_id is not None:
+        selected_ats = tuple(_ats_list(args.ats))
+        non_workday_ats = tuple(ats for ats in selected_ats if ats != "workday")
+        if daily_import_run_id is not None and daily_phase == "board_import":
             parallel_stats = _run_daily_boards_parallel(
                 dsn,
                 daily_scan_items,
@@ -4270,11 +4441,18 @@ def _run(args: argparse.Namespace) -> int:
                     f"{daily_failed_boards}/{daily_board_count} failed boards "
                     f"(at least {DAILY_MIN_SUCCESS_PERCENT}% of boards succeeded)"
                 )
+            if daily_phase == "board_import" and match_requested and non_workday_ats:
+                _set_daily_run_phase(conn, daily_import_run_id, "non_workday_matching")
+                daily_phase = "non_workday_matching"
+            elif daily_phase == "board_import" and "workday" in selected_ats:
+                _set_daily_run_phase(conn, daily_import_run_id, "workday_enrichment")
+                daily_phase = "workday_enrichment"
 
-        selected_ats = tuple(_ats_list(args.ats))
-        non_workday_ats = tuple(ats for ats in selected_ats if ats != "workday")
         if match_requested and daily_import_run_id is not None:
-            if non_workday_ats:
+            if non_workday_ats and daily_phase in (
+                "board_import",
+                "non_workday_matching",
+            ):
                 with _daily_phase_heartbeat(
                     dsn,
                     daily_import_run_id,
@@ -4292,8 +4470,35 @@ def _run(args: argparse.Namespace) -> int:
                     f"{match_stats['matched']} matched, "
                     f"{match_stats['skipped']} excluded"
                 )
+                _set_daily_run_phase(
+                    conn,
+                    daily_import_run_id,
+                    "workday_enrichment"
+                    if "workday" in selected_ats
+                    else "recommendations",
+                )
+                daily_phase = (
+                    "workday_enrichment"
+                    if "workday" in selected_ats
+                    else "recommendations"
+                )
 
-        if daily_import_run_id is not None and "workday" in selected_ats:
+        if (
+            daily_import_run_id is not None
+            and "workday" in selected_ats
+            and daily_phase in (
+                "board_import",
+                "non_workday_matching",
+                "workday_enrichment",
+            )
+        ):
+            if daily_phase != "workday_enrichment":
+                _set_daily_run_phase(
+                    conn,
+                    daily_import_run_id,
+                    "workday_enrichment",
+                )
+                daily_phase = "workday_enrichment"
             enrichment_stats = _deferred_workday_enrichment(
                 dsn,
                 daily_import_run_id,
@@ -4318,6 +4523,8 @@ def _run(args: argparse.Namespace) -> int:
                 return 1
 
             if match_requested:
+                _set_daily_run_phase(conn, daily_import_run_id, "workday_matching")
+                daily_phase = "workday_matching"
                 with _daily_phase_heartbeat(
                     dsn,
                     daily_import_run_id,
@@ -4335,7 +4542,32 @@ def _run(args: argparse.Namespace) -> int:
                     f"{match_stats['matched']} matched, "
                     f"{match_stats['skipped']} excluded"
                 )
-        elif match_requested:
+        elif (
+            daily_import_run_id is not None
+            and "workday" in selected_ats
+            and match_requested
+            and daily_phase == "workday_matching"
+        ):
+            with _daily_phase_heartbeat(
+                dsn,
+                daily_import_run_id,
+                worker_id,
+            ) as heartbeat:
+                match_stats = run_matching(
+                    conn,
+                    published_after=published_after,
+                    ats=("workday",),
+                    heartbeat_callback=heartbeat,
+                )
+            print(
+                "\nMatching complete for Workday: "
+                f"{match_stats['evaluated']} evaluated, "
+                f"{match_stats['matched']} matched, "
+                f"{match_stats['skipped']} excluded"
+            )
+        elif match_requested and (
+            daily_import_run_id is None or "workday" not in selected_ats
+        ):
             match_stats = run_matching(
                 conn,
                 published_after=published_after,
@@ -4348,6 +4580,9 @@ def _run(args: argparse.Namespace) -> int:
                 f"{match_stats['skipped']} excluded"
             )
         if recommend_requested:
+            if daily_import_run_id is not None:
+                _set_daily_run_phase(conn, daily_import_run_id, "recommendations")
+                daily_phase = "recommendations"
             try:
                 if daily_import_run_id is not None:
                     with _daily_phase_heartbeat(

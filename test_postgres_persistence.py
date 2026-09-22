@@ -291,6 +291,86 @@ def test_daily_run_automatically_resumes_same_scope_and_cutoff():
             assert board_rows == [(1, "completed", 1), (2, "completed", 1)]
 
 
+def test_legacy_daily_run_with_matching_evidence_skips_board_phase():
+    with _temporary_postgres() as dsn:
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            conn.commit()
+            company_id = conn.execute(
+                """
+                INSERT INTO companies (display_name)
+                VALUES ('Acme')
+                RETURNING company_id
+                """
+            ).fetchone()[0]
+            ashby_board = conn.execute(
+                """
+                INSERT INTO job_boards (company_id, ats, slug, source_url)
+                VALUES (%s, 'ashby', 'acme', 'https://jobs.example.test/acme')
+                RETURNING board_id
+                """,
+                (company_id,),
+            ).fetchone()[0]
+            workday_board = conn.execute(
+                """
+                INSERT INTO job_boards (company_id, ats, slug, source_url)
+                VALUES (%s, 'workday', 'acme.wd1/Careers',
+                        'https://acme.wd1.myworkdayjobs.com/Careers')
+                RETURNING board_id
+                """,
+                (company_id,),
+            ).fetchone()[0]
+            run_id = conn.execute(
+                """
+                INSERT INTO daily_import_runs (
+                    ats_scope, published_after, started_at, board_count
+                ) VALUES (%s, %s, now() - interval '1 day', 2)
+                RETURNING import_run_id
+                """,
+                (["ashby", "workday"], datetime(2026, 8, 26, tzinfo=timezone.utc)),
+            ).fetchone()[0]
+            conn.execute(
+                """
+                INSERT INTO daily_import_run_boards
+                    (import_run_id, board_id, position, status)
+                VALUES (%s, %s, 1, 'failed'), (%s, %s, 2, 'completed')
+                """,
+                (run_id, ashby_board, run_id, workday_board),
+            )
+            job_id = conn.execute(
+                """
+                INSERT INTO jobs (
+                    board_id, ats, external_id, title, job_url
+                ) VALUES (%s, 'ashby', 'acme:role-1', 'Project Manager',
+                          'https://jobs.example.test/role-1')
+                RETURNING job_id
+                """,
+                (ashby_board,),
+            ).fetchone()[0]
+            user_id = conn.execute(
+                """
+                INSERT INTO users (name, email)
+                VALUES ('Test User', 'test@example.test')
+                RETURNING user_id
+                """
+            ).fetchone()[0]
+            conn.execute(
+                """
+                INSERT INTO job_matches
+                    (user_id, job_id, score, match_status)
+                VALUES (%s, %s, 80, 'matched')
+                """,
+                (user_id, job_id),
+            )
+            conn.commit()
+
+            assert persistence._daily_run_phase(conn, run_id) == "workday_enrichment"
+            assert conn.execute(
+                "SELECT phase FROM daily_import_runs WHERE import_run_id = %s",
+                (run_id,),
+            ).fetchone()[0] == "workday_enrichment"
+
+
 def test_daily_run_retries_only_failed_boards_before_completion():
     with _temporary_postgres() as dsn:
         args = argparse.Namespace(
