@@ -1,0 +1,516 @@
+~/workspace$ uv run postgres_persistence.py \
+  --daily \
+  --published-after 2026-09-17
+22464 boards (ashby 3869, greenhouse 4066, lever 2659, smartrecruiters 832, workday 4111, recruitee 711, teamtailor 896, workable 2115, personio 633, bamboohr 1479, pinpoint 140, breezy 0, rippling 953)
+  note: no breezy boards cached; run --refresh-boards
+Daily board registry: 25401 active PostgreSQL boards (ashby=3831, greenhouse=7059, lever=2648, smartrecruiters=832, workday=4104, recruitee=711, teamtailor=896, workable=2115, personio=633, bamboohr=1479, pinpoint=140, breezy=0, rippling=953)
+Daily import run 47: resuming phase workday_enrichment; skipping board fetch for 109 previously failed/pending boards
+Daily import run 47: resuming; 25416/25416 boards already accounted for, 0 pending/retry
+Daily import board accounting: 25416 total = 18124 completed + 7183 empty + 109 failed + 0 pending
+Daily failed-board report: reports/daily_import_failures.csv and reports/daily_import_failures.json
+Daily cutoff-specific failure report: reports/daily_import_failures_after_2026-09-17_run_47.csv and reports/daily_import_failures_after_2026-09-17_run_47.json
+Daily import run 47: continuing with 109/25416 failed boards because downstream continuation uses job-level enrichment coverage
+Workday deferred enrichment massgeneralbrigham.wd1/PhysicianOrganization: starting 1 detail requests
+Workday deferred enrichment mastercorp.wd1/MC: starting 1 detail requests
+Workday deferred enrichment mastercorp.wd1/MC: 1/1 detail requests done; 0 enriched, 1 deferred; 2.43 jobs/s; elapsed=0.4s
+Workday deferred enrichment mastercorp.wd1/MC: finished 1/1; 0 enriched, 1 deferred; 2.42 jobs/s; elapsed=0.4s
+Workday deferred enrichment mercy.wd1/mercycareers: starting 15 detail requests
+Workday deferred enrichment mastercorp.wd1/MC: no detail updates (1 deferred)
+Workday deferred enrichment mercy.wd1/mercycareers: 1/15 detail requests done; 0 enriched, 1 deferred; 2.62 jobs/s; elapsed=0.4s
+Workday deferred enrichment mercy.wd1/mercycareers: 15/15 detail requests done; 0 enriched, 15 deferred; 18.55 jobs/s; elapsed=0.8s
+Workday deferred enrichment mercy.wd1/mercycareers: finished 15/15; 0 enriched, 15 deferred; 18.31 jobs/s; elapsed=0.8s
+Workday deferred enrichment nike.wd1/nke: starting 1 detail requests
+Workday deferred enrichment mercy.wd1/mercycareers: no detail updates (15 deferred)
+Workday deferred enrichment massgeneralbrigham.wd1/PhysicianOrganization: 1/1 detail requests done; 0 enriched, 1 deferred; 0.67 jobs/s; elapsed=1.5s
+Workday deferred enrichment massgeneralbrigham.wd1/PhysicianOrganization: finished 1/1; 0 enriched, 1 deferred; 0.67 jobs/s; elapsed=1.5s
+Workday deferred enrichment onehealthineers.wd3/SHSJB: starting 1 detail requests
+Workday deferred enrichment massgeneralbrigham.wd1/PhysicianOrganization: no detail updates (1 deferred)
+Workday deferred enrichment nike.wd1/nke: 1/1 detail requests done; 0 enriched, 1 deferred; 2.41 jobs/s; elapsed=0.4s
+Workday deferred enrichment nike.wd1/nke: finished 1/1; 0 enriched, 1 deferred; 2.40 jobs/s; elapsed=0.4s
+Workday deferred enrichment phsorg.wd1/Careers: starting 1 detail requests
+Workday deferred enrichment nike.wd1/nke: no detail updates (1 deferred)
+Workday deferred enrichment phsorg.wd1/Careers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.80 jobs/s; elapsed=0.4s
+Workday deferred enrichment phsorg.wd1/Careers: finished 1/1; 0 enriched, 1 deferred; 2.79 jobs/s; elapsed=0.4s
+Workday deferred enrichment revelyst.wd1/EXTERNAL_REVELYST: starting 1 detail requests
+Workday deferred enrichment phsorg.wd1/Careers: no detail updates (1 deferred)
+Workday deferred enrichment onehealthineers.wd3/SHSJB: 1/1 detail requests done; 0 enriched, 1 deferred; 1.47 jobs/s; elapsed=0.7s
+Workday deferred enrichment onehealthineers.wd3/SHSJB: finished 1/1; 0 enriched, 1 deferred; 1.47 jobs/s; elapsed=0.7s
+Workday deferred enrichment riotinto.wd3/RioTinto_Careers: starting 1 detail requests
+Workday deferred enrichment onehealthineers.wd3/SHSJB: no detail updates (1 deferred)
+Workday deferred enrichment revelyst.wd1/EXTERNAL_REVELYST: 1/1 detail requests done; 0 enriched, 1 deferred; 2.65 jobs/s; elapsed=0.4s
+Workday deferred enrichment revelyst.wd1/EXTERNAL_REVELYST: finished 1/1; 0 enriched, 1 deferred; 2.64 jobs/s; elapsed=0.4s
+Workday deferred enrichment rsm.wd1/RSMCareers: starting 1 detail requests
+Workday deferred enrichment revelyst.wd1/EXTERNAL_REVELYST: no detail updates (1 deferred)
+Workday deferred enrichment rsm.wd1/RSMCareers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.68 jobs/s; elapsed=0.4s
+Workday deferred enrichment rsm.wd1/RSMCareers: finished 1/1; 0 enriched, 1 deferred; 2.67 jobs/s; elapsed=0.4s
+Workday deferred enrichment sbdinc.wd1/Stanley_Black_Decker_Career_Site: starting 1 detail requests
+Workday deferred enrichment rsm.wd1/RSMCareers: no detail updates (1 deferred)
+Workday deferred enrichment sbdinc.wd1/Stanley_Black_Decker_Career_Site: 1/1 detail requests done; 0 enriched, 1 deferred; 2.69 jobs/s; elapsed=0.4s
+Workday deferred enrichment sbdinc.wd1/Stanley_Black_Decker_Career_Site: finished 1/1; 0 enriched, 1 deferred; 2.68 jobs/s; elapsed=0.4s
+Workday deferred enrichment seaworldentertainment.wd1/SEA: starting 1 detail requests
+Workday deferred enrichment riotinto.wd3/RioTinto_Careers: 1/1 detail requests done; 0 enriched, 1 deferred; 1.03 jobs/s; elapsed=1.0s
+Workday deferred enrichment riotinto.wd3/RioTinto_Careers: finished 1/1; 0 enriched, 1 deferred; 1.03 jobs/s; elapsed=1.0s
+Workday deferred enrichment sees.wd1/Sees_Candies: starting 1 detail requests
+Workday deferred enrichment sbdinc.wd1/Stanley_Black_Decker_Career_Site: no detail updates (1 deferred)
+Workday deferred enrichment riotinto.wd3/RioTinto_Careers: no detail updates (1 deferred)
+Workday deferred enrichment seaworldentertainment.wd1/SEA: 1/1 detail requests done; 0 enriched, 1 deferred; 2.91 jobs/s; elapsed=0.3s
+Workday deferred enrichment seaworldentertainment.wd1/SEA: finished 1/1; 0 enriched, 1 deferred; 2.90 jobs/s; elapsed=0.3s
+Workday deferred enrichment summitbhc.wd1/Summit_BHC: starting 1 detail requests
+Workday deferred enrichment seaworldentertainment.wd1/SEA: no detail updates (1 deferred)
+Workday deferred enrichment sees.wd1/Sees_Candies: 1/1 detail requests done; 0 enriched, 1 deferred; 2.77 jobs/s; elapsed=0.4s
+Workday deferred enrichment sees.wd1/Sees_Candies: finished 1/1; 0 enriched, 1 deferred; 2.76 jobs/s; elapsed=0.4s
+Workday deferred enrichment theirc.wd1/External_Careers: starting 1 detail requests
+Workday deferred enrichment sees.wd1/Sees_Candies: no detail updates (1 deferred)
+Workday deferred enrichment summitbhc.wd1/Summit_BHC: 1/1 detail requests done; 0 enriched, 1 deferred; 2.83 jobs/s; elapsed=0.4s
+Workday deferred enrichment summitbhc.wd1/Summit_BHC: finished 1/1; 0 enriched, 1 deferred; 2.82 jobs/s; elapsed=0.4s
+Workday deferred enrichment truist.wd1/Careers: starting 2 detail requests
+Workday deferred enrichment summitbhc.wd1/Summit_BHC: no detail updates (1 deferred)
+Workday deferred enrichment theirc.wd1/External_Careers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.46 jobs/s; elapsed=0.4s
+Workday deferred enrichment theirc.wd1/External_Careers: finished 1/1; 0 enriched, 1 deferred; 2.46 jobs/s; elapsed=0.4s
+Workday deferred enrichment tuftsmedicine.wd1/Jobs: starting 2 detail requests
+Workday deferred enrichment theirc.wd1/External_Careers: no detail updates (1 deferred)
+Workday deferred enrichment truist.wd1/Careers: 1/2 detail requests done; 0 enriched, 1 deferred; 2.12 jobs/s; elapsed=0.5s
+Workday deferred enrichment tuftsmedicine.wd1/Jobs: 1/2 detail requests done; 1 enriched, 0 deferred; 2.54 jobs/s; elapsed=0.4s
+Workday deferred enrichment tuftsmedicine.wd1/Jobs: 2/2 detail requests done; 2 enriched, 0 deferred; 4.97 jobs/s; elapsed=0.4s
+Workday deferred enrichment tuftsmedicine.wd1/Jobs: finished 2/2; 2 enriched, 0 deferred; 4.94 jobs/s; elapsed=0.4s
+Workday deferred enrichment valeo.wd3/valeo_jobs: starting 1 detail requests
+Workday deferred enrichment truist.wd1/Careers: 2/2 detail requests done; 0 enriched, 2 deferred; 4.03 jobs/s; elapsed=0.5s
+Workday deferred enrichment truist.wd1/Careers: finished 2/2; 0 enriched, 2 deferred; 4.00 jobs/s; elapsed=0.5s
+Workday deferred enrichment verawholehealth.wd1/External: starting 1 detail requests
+Workday deferred enrichment tuftsmedicine.wd1/Jobs: 2 enriched, 0 deferred
+Workday deferred enrichment truist.wd1/Careers: no detail updates (2 deferred)
+Workday deferred enrichment verawholehealth.wd1/External: 1/1 detail requests done; 0 enriched, 1 deferred; 2.59 jobs/s; elapsed=0.4s
+Workday deferred enrichment verawholehealth.wd1/External: finished 1/1; 0 enriched, 1 deferred; 2.58 jobs/s; elapsed=0.4s
+Workday deferred enrichment wfp.wd3/extprivateposting: starting 2 detail requests
+Workday deferred enrichment verawholehealth.wd1/External: no detail updates (1 deferred)
+Workday deferred enrichment valeo.wd3/valeo_jobs: 1/1 detail requests done; 0 enriched, 1 deferred; 1.32 jobs/s; elapsed=0.8s
+Workday deferred enrichment valeo.wd3/valeo_jobs: finished 1/1; 0 enriched, 1 deferred; 1.32 jobs/s; elapsed=0.8s
+Workday deferred enrichment xcelenergy.wd1/External: starting 1 detail requests
+Workday deferred enrichment valeo.wd3/valeo_jobs: no detail updates (1 deferred)
+Workday deferred enrichment xcelenergy.wd1/External: 1/1 detail requests done; 0 enriched, 1 deferred; 3.01 jobs/s; elapsed=0.3s
+Workday deferred enrichment xcelenergy.wd1/External: finished 1/1; 0 enriched, 1 deferred; 3.00 jobs/s; elapsed=0.3s
+Workday deferred enrichment my7elevenhr.wd12/Careers: starting 1 detail requests
+Workday deferred enrichment xcelenergy.wd1/External: no detail updates (1 deferred)
+Workday deferred enrichment my7elevenhr.wd12/Careers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.98 jobs/s; elapsed=0.3s
+Workday deferred enrichment my7elevenhr.wd12/Careers: finished 1/1; 0 enriched, 1 deferred; 2.97 jobs/s; elapsed=0.3s
+Workday deferred enrichment nationwidechildrens.wd5/NCHCareers: starting 1 detail requests
+Workday deferred enrichment my7elevenhr.wd12/Careers: no detail updates (1 deferred)
+Workday deferred enrichment nationwidechildrens.wd5/NCHCareers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.31 jobs/s; elapsed=0.4s
+Workday deferred enrichment nationwidechildrens.wd5/NCHCareers: finished 1/1; 0 enriched, 1 deferred; 2.30 jobs/s; elapsed=0.4s
+Workday deferred enrichment o9solutions.wd5/o9SolutionsExternal: starting 1 detail requests
+Workday deferred enrichment nationwidechildrens.wd5/NCHCareers: no detail updates (1 deferred)
+Workday deferred enrichment o9solutions.wd5/o9SolutionsExternal: 1/1 detail requests done; 0 enriched, 1 deferred; 2.31 jobs/s; elapsed=0.4s
+Workday deferred enrichment o9solutions.wd5/o9SolutionsExternal: finished 1/1; 0 enriched, 1 deferred; 2.31 jobs/s; elapsed=0.4s
+Workday deferred enrichment parklandhospital.wd12/parkland_careers: starting 2 detail requests
+Workday deferred enrichment o9solutions.wd5/o9SolutionsExternal: no detail updates (1 deferred)
+Workday deferred enrichment parklandhospital.wd12/parkland_careers: 1/2 detail requests done; 0 enriched, 1 deferred; 3.11 jobs/s; elapsed=0.3s
+Workday deferred enrichment wfp.wd3/extprivateposting: 1/2 detail requests done; 0 enriched, 1 deferred; 0.43 jobs/s; elapsed=2.3s
+Workday deferred enrichment wfp.wd3/extprivateposting: 2/2 detail requests done; 0 enriched, 2 deferred; 0.82 jobs/s; elapsed=2.4s
+Workday deferred enrichment wfp.wd3/extprivateposting: finished 2/2; 0 enriched, 2 deferred; 0.82 jobs/s; elapsed=2.4s
+Workday deferred enrichment point32health.wd5/thp: starting 1 detail requests
+Workday deferred enrichment wfp.wd3/extprivateposting: no detail updates (2 deferred)
+Workday deferred enrichment parklandhospital.wd12/parkland_careers: 2/2 detail requests done; 0 enriched, 2 deferred; 2.05 jobs/s; elapsed=1.0s
+Workday deferred enrichment parklandhospital.wd12/parkland_careers: finished 2/2; 0 enriched, 2 deferred; 2.04 jobs/s; elapsed=1.0s
+Workday deferred enrichment promedica.wd12/external_careers: starting 1 detail requests
+Workday deferred enrichment parklandhospital.wd12/parkland_careers: no detail updates (2 deferred)
+Workday deferred enrichment promedica.wd12/external_careers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.69 jobs/s; elapsed=0.4s
+Workday deferred enrichment promedica.wd12/external_careers: finished 1/1; 0 enriched, 1 deferred; 2.69 jobs/s; elapsed=0.4s
+Workday deferred enrichment sbasite.wd5/SBA_Communications_Careers: starting 1 detail requests
+Workday deferred enrichment promedica.wd12/external_careers: no detail updates (1 deferred)
+Workday deferred enrichment sbasite.wd5/SBA_Communications_Careers: 1/1 detail requests done; 0 enriched, 1 deferred; 1.94 jobs/s; elapsed=0.5s
+Workday deferred enrichment sbasite.wd5/SBA_Communications_Careers: finished 1/1; 0 enriched, 1 deferred; 1.93 jobs/s; elapsed=0.5s
+Workday deferred enrichment sgadental.wd5/Careers: starting 1 detail requests
+Workday deferred enrichment sbasite.wd5/SBA_Communications_Careers: no detail updates (1 deferred)
+Workday deferred enrichment sgadental.wd5/Careers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.61 jobs/s; elapsed=0.4s
+Workday deferred enrichment sgadental.wd5/Careers: finished 1/1; 0 enriched, 1 deferred; 2.60 jobs/s; elapsed=0.4s
+Workday deferred enrichment stoneridge.wd5/Careers: starting 1 detail requests
+Workday deferred enrichment sgadental.wd5/Careers: no detail updates (1 deferred)
+Workday deferred enrichment point32health.wd5/thp: 1/1 detail requests done; 0 enriched, 1 deferred; 0.57 jobs/s; elapsed=1.8s
+Workday deferred enrichment point32health.wd5/thp: finished 1/1; 0 enriched, 1 deferred; 0.57 jobs/s; elapsed=1.8s
+Workday deferred enrichment sunriseseniorliving.wd12/SUNRISE_EXT_CAREERS: starting 1 detail requests
+Workday deferred enrichment point32health.wd5/thp: no detail updates (1 deferred)
+Workday deferred enrichment stoneridge.wd5/Careers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.95 jobs/s; elapsed=0.3s
+Workday deferred enrichment stoneridge.wd5/Careers: finished 1/1; 0 enriched, 1 deferred; 2.94 jobs/s; elapsed=0.3s
+Workday deferred enrichment thriveworks.wd5/Thriveworks: starting 1 detail requests
+Workday deferred enrichment stoneridge.wd5/Careers: no detail updates (1 deferred)
+Workday deferred enrichment sunriseseniorliving.wd12/SUNRISE_EXT_CAREERS: 1/1 detail requests done; 0 enriched, 1 deferred; 3.05 jobs/s; elapsed=0.3s
+Workday deferred enrichment sunriseseniorliving.wd12/SUNRISE_EXT_CAREERS: finished 1/1; 0 enriched, 1 deferred; 3.04 jobs/s; elapsed=0.3s
+Workday deferred enrichment tranetechnologies.wd12/Trane_Technologies_Careers: starting 6 detail requests
+Workday deferred enrichment sunriseseniorliving.wd12/SUNRISE_EXT_CAREERS: no detail updates (1 deferred)
+Workday deferred enrichment tranetechnologies.wd12/Trane_Technologies_Careers: 1/6 detail requests done; 0 enriched, 1 deferred; 3.15 jobs/s; elapsed=0.3s
+Workday deferred enrichment thriveworks.wd5/Thriveworks: 1/1 detail requests done; 0 enriched, 1 deferred; 2.34 jobs/s; elapsed=0.4s
+Workday deferred enrichment thriveworks.wd5/Thriveworks: finished 1/1; 0 enriched, 1 deferred; 2.33 jobs/s; elapsed=0.4s
+Workday deferred enrichment verizon.wd12/verizon-careers: starting 1 detail requests
+Workday deferred enrichment thriveworks.wd5/Thriveworks: no detail updates (1 deferred)
+Workday deferred enrichment tranetechnologies.wd12/Trane_Technologies_Careers: 6/6 detail requests done; 0 enriched, 6 deferred; 11.88 jobs/s; elapsed=0.5s
+Workday deferred enrichment tranetechnologies.wd12/Trane_Technologies_Careers: finished 6/6; 0 enriched, 6 deferred; 11.71 jobs/s; elapsed=0.5s
+Workday deferred enrichment waukeshacounty.wd12/Careers: starting 1 detail requests
+Workday deferred enrichment tranetechnologies.wd12/Trane_Technologies_Careers: no detail updates (6 deferred)
+Workday deferred enrichment verizon.wd12/verizon-careers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.85 jobs/s; elapsed=0.4s
+Workday deferred enrichment verizon.wd12/verizon-careers: finished 1/1; 0 enriched, 1 deferred; 2.84 jobs/s; elapsed=0.4s
+Workday deferred enrichment labcorp.wd1/external: starting 1 detail requests
+Workday deferred enrichment waukeshacounty.wd12/Careers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.61 jobs/s; elapsed=0.4s
+Workday deferred enrichment waukeshacounty.wd12/Careers: finished 1/1; 0 enriched, 1 deferred; 2.60 jobs/s; elapsed=0.4s
+Workday deferred enrichment lego.wd103/lego_external: starting 1 detail requests
+Workday deferred enrichment verizon.wd12/verizon-careers: no detail updates (1 deferred)
+Workday deferred enrichment waukeshacounty.wd12/Careers: no detail updates (1 deferred)
+Workday deferred enrichment labcorp.wd1/external: 1/1 detail requests done; 0 enriched, 1 deferred; 2.73 jobs/s; elapsed=0.4s
+Workday deferred enrichment labcorp.wd1/external: finished 1/1; 0 enriched, 1 deferred; 2.72 jobs/s; elapsed=0.4s
+Workday deferred enrichment levistraussandco.wd5/external: starting 2 detail requests
+Workday deferred enrichment labcorp.wd1/external: no detail updates (1 deferred)
+Workday deferred enrichment lego.wd103/lego_external: 1/1 detail requests done; 0 enriched, 1 deferred; 1.56 jobs/s; elapsed=0.6s
+Workday deferred enrichment lego.wd103/lego_external: finished 1/1; 0 enriched, 1 deferred; 1.56 jobs/s; elapsed=0.6s
+Workday deferred enrichment lifetime.wd1/lifetime: starting 1 detail requests
+Workday deferred enrichment lego.wd103/lego_external: no detail updates (1 deferred)
+Workday deferred enrichment levistraussandco.wd5/external: 1/2 detail requests done; 0 enriched, 1 deferred; 1.96 jobs/s; elapsed=0.5s
+Workday deferred enrichment levistraussandco.wd5/external: 2/2 detail requests done; 0 enriched, 2 deferred; 2.48 jobs/s; elapsed=0.8s
+Workday deferred enrichment levistraussandco.wd5/external: finished 2/2; 0 enriched, 2 deferred; 2.46 jobs/s; elapsed=0.8s
+Workday deferred enrichment magna.wd3/magna: starting 2 detail requests
+Workday deferred enrichment levistraussandco.wd5/external: no detail updates (2 deferred)
+Workday deferred enrichment lifetime.wd1/lifetime: 1/1 detail requests done; 0 enriched, 1 deferred; 2.20 jobs/s; elapsed=0.5s
+Workday deferred enrichment lifetime.wd1/lifetime: finished 1/1; 0 enriched, 1 deferred; 2.19 jobs/s; elapsed=0.5s
+Workday deferred enrichment mastercard.wd1/corporatecareers: starting 1 detail requests
+Workday deferred enrichment lifetime.wd1/lifetime: no detail updates (1 deferred)
+Workday deferred enrichment mastercard.wd1/corporatecareers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.71 jobs/s; elapsed=0.4s
+Workday deferred enrichment mastercard.wd1/corporatecareers: finished 1/1; 0 enriched, 1 deferred; 2.70 jobs/s; elapsed=0.4s
+Workday deferred enrichment mattressfirm.wd1/mattressfirmcareers: starting 1 detail requests
+Workday deferred enrichment mastercard.wd1/corporatecareers: no detail updates (1 deferred)
+Workday deferred enrichment magna.wd3/magna: 1/2 detail requests done; 0 enriched, 1 deferred; 1.43 jobs/s; elapsed=0.7s
+Workday deferred enrichment magna.wd3/magna: 2/2 detail requests done; 0 enriched, 2 deferred; 2.73 jobs/s; elapsed=0.7s
+Workday deferred enrichment magna.wd3/magna: finished 2/2; 0 enriched, 2 deferred; 2.72 jobs/s; elapsed=0.7s
+Workday deferred enrichment mckesson.wd3/external_careers: starting 1 detail requests
+Workday deferred enrichment magna.wd3/magna: no detail updates (2 deferred)
+Workday deferred enrichment mattressfirm.wd1/mattressfirmcareers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.53 jobs/s; elapsed=0.4s
+Workday deferred enrichment mattressfirm.wd1/mattressfirmcareers: finished 1/1; 0 enriched, 1 deferred; 2.52 jobs/s; elapsed=0.4s
+Workday deferred enrichment meijer.wd5/meijer_stores_hourly: starting 9 detail requests
+Workday deferred enrichment mattressfirm.wd1/mattressfirmcareers: no detail updates (1 deferred)
+Workday deferred enrichment meijer.wd5/meijer_stores_hourly: 1/9 detail requests done; 1 enriched, 0 deferred; 2.03 jobs/s; elapsed=0.5s
+Workday deferred enrichment mckesson.wd3/external_careers: 1/1 detail requests done; 0 enriched, 1 deferred; 1.37 jobs/s; elapsed=0.7s
+Workday deferred enrichment mckesson.wd3/external_careers: finished 1/1; 0 enriched, 1 deferred; 1.36 jobs/s; elapsed=0.7s
+Workday deferred enrichment memorialhermann.wd5/external: starting 1 detail requests
+Workday deferred enrichment mckesson.wd3/external_careers: no detail updates (1 deferred)
+Workday deferred enrichment meijer.wd5/meijer_stores_hourly: 9/9 detail requests done; 9 enriched, 0 deferred; 9.34 jobs/s; elapsed=1.0s
+Workday deferred enrichment meijer.wd5/meijer_stores_hourly: finished 9/9; 9 enriched, 0 deferred; 9.24 jobs/s; elapsed=1.0s
+Workday deferred enrichment microchiphr.wd5/external: starting 1 detail requests
+Workday deferred enrichment memorialhermann.wd5/external: 1/1 detail requests done; 0 enriched, 1 deferred; 2.23 jobs/s; elapsed=0.4s
+Workday deferred enrichment memorialhermann.wd5/external: finished 1/1; 0 enriched, 1 deferred; 2.22 jobs/s; elapsed=0.4s
+Workday deferred enrichment micron.wd1/external: starting 4 detail requests
+Workday deferred enrichment meijer.wd5/meijer_stores_hourly: 9 enriched, 0 deferred
+Workday deferred enrichment memorialhermann.wd5/external: no detail updates (1 deferred)
+Workday deferred enrichment microchiphr.wd5/external: 1/1 detail requests done; 0 enriched, 1 deferred; 2.69 jobs/s; elapsed=0.4s
+Workday deferred enrichment microchiphr.wd5/external: finished 1/1; 0 enriched, 1 deferred; 2.68 jobs/s; elapsed=0.4s
+Workday deferred enrichment mizuho.wd1/mizuhoamericas: starting 1 detail requests
+Workday deferred enrichment microchiphr.wd5/external: no detail updates (1 deferred)
+Workday deferred enrichment micron.wd1/external: 1/4 detail requests done; 0 enriched, 1 deferred; 2.18 jobs/s; elapsed=0.5s
+Workday deferred enrichment micron.wd1/external: 4/4 detail requests done; 0 enriched, 4 deferred; 7.33 jobs/s; elapsed=0.5s
+Workday deferred enrichment micron.wd1/external: finished 4/4; 0 enriched, 4 deferred; 7.26 jobs/s; elapsed=0.6s
+Workday deferred enrichment mksinst.wd1/mkscareersamericas: starting 1 detail requests
+Workday deferred enrichment micron.wd1/external: no detail updates (4 deferred)
+Workday deferred enrichment mizuho.wd1/mizuhoamericas: 1/1 detail requests done; 0 enriched, 1 deferred; 2.62 jobs/s; elapsed=0.4s
+Workday deferred enrichment mizuho.wd1/mizuhoamericas: finished 1/1; 0 enriched, 1 deferred; 2.61 jobs/s; elapsed=0.4s
+Workday deferred enrichment mydpr.wd5/11212017: starting 1 detail requests
+Workday deferred enrichment mizuho.wd1/mizuhoamericas: no detail updates (1 deferred)
+Workday deferred enrichment mksinst.wd1/mkscareersamericas: 1/1 detail requests done; 0 enriched, 1 deferred; 2.80 jobs/s; elapsed=0.4s
+Workday deferred enrichment mksinst.wd1/mkscareersamericas: finished 1/1; 0 enriched, 1 deferred; 2.79 jobs/s; elapsed=0.4s
+Workday deferred enrichment myhrabc.wd5/distribution: starting 1 detail requests
+Workday deferred enrichment mksinst.wd1/mkscareersamericas: no detail updates (1 deferred)
+Workday deferred enrichment mydpr.wd5/11212017: 1/1 detail requests done; 0 enriched, 1 deferred; 2.43 jobs/s; elapsed=0.4s
+Workday deferred enrichment mydpr.wd5/11212017: finished 1/1; 0 enriched, 1 deferred; 2.42 jobs/s; elapsed=0.4s
+Workday deferred enrichment mymvw.wd5/mvw: starting 1 detail requests
+Workday deferred enrichment mydpr.wd5/11212017: no detail updates (1 deferred)
+Workday deferred enrichment myhrabc.wd5/distribution: 1/1 detail requests done; 0 enriched, 1 deferred; 2.02 jobs/s; elapsed=0.5s
+Workday deferred enrichment myhrabc.wd5/distribution: finished 1/1; 0 enriched, 1 deferred; 2.02 jobs/s; elapsed=0.5s
+Workday deferred enrichment neurocrine.wd5/neurocrinecareers: starting 1 detail requests
+Workday deferred enrichment myhrabc.wd5/distribution: no detail updates (1 deferred)
+Workday deferred enrichment mymvw.wd5/mvw: 1/1 detail requests done; 0 enriched, 1 deferred; 1.77 jobs/s; elapsed=0.6s
+Workday deferred enrichment mymvw.wd5/mvw: finished 1/1; 0 enriched, 1 deferred; 1.77 jobs/s; elapsed=0.6s
+Workday deferred enrichment newbalance.wd1/careers: starting 1 detail requests
+Workday deferred enrichment mymvw.wd5/mvw: no detail updates (1 deferred)
+Workday deferred enrichment newbalance.wd1/careers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.81 jobs/s; elapsed=0.4s
+Workday deferred enrichment newbalance.wd1/careers: finished 1/1; 0 enriched, 1 deferred; 2.80 jobs/s; elapsed=0.4s
+Workday deferred enrichment ngc.wd1/northrop_grumman_external_site: starting 4 detail requests
+Workday deferred enrichment newbalance.wd1/careers: no detail updates (1 deferred)
+Workday deferred enrichment ngc.wd1/northrop_grumman_external_site: 1/4 detail requests done; 0 enriched, 1 deferred; 2.74 jobs/s; elapsed=0.4s
+Workday deferred enrichment ngc.wd1/northrop_grumman_external_site: 4/4 detail requests done; 0 enriched, 4 deferred; 9.50 jobs/s; elapsed=0.4s
+Workday deferred enrichment ngc.wd1/northrop_grumman_external_site: finished 4/4; 0 enriched, 4 deferred; 9.39 jobs/s; elapsed=0.4s
+Workday deferred enrichment niagarawater.wd5/Niagara: starting 2 detail requests
+Workday deferred enrichment ngc.wd1/northrop_grumman_external_site: no detail updates (4 deferred)
+Workday deferred enrichment neurocrine.wd5/neurocrinecareers: 1/1 detail requests done; 0 enriched, 1 deferred; 0.85 jobs/s; elapsed=1.2s
+Workday deferred enrichment neurocrine.wd5/neurocrinecareers: finished 1/1; 0 enriched, 1 deferred; 0.85 jobs/s; elapsed=1.2s
+Workday deferred enrichment nordstrom.wd501/nordstrom_careers: starting 8 detail requests
+Workday deferred enrichment neurocrine.wd5/neurocrinecareers: no detail updates (1 deferred)
+Workday deferred enrichment niagarawater.wd5/Niagara: 1/2 detail requests done; 0 enriched, 1 deferred; 2.86 jobs/s; elapsed=0.3s
+Workday deferred enrichment niagarawater.wd5/Niagara: 2/2 detail requests done; 0 enriched, 2 deferred; 5.34 jobs/s; elapsed=0.4s
+Workday deferred enrichment niagarawater.wd5/Niagara: finished 2/2; 0 enriched, 2 deferred; 5.31 jobs/s; elapsed=0.4s
+Workday deferred enrichment novanta.wd5/novanta-careers: starting 1 detail requests
+Workday deferred enrichment niagarawater.wd5/Niagara: no detail updates (2 deferred)
+Workday deferred enrichment nordstrom.wd501/nordstrom_careers: 1/8 detail requests done; 0 enriched, 1 deferred; 2.84 jobs/s; elapsed=0.4s
+Workday deferred enrichment nordstrom.wd501/nordstrom_careers: 8/8 detail requests done; 0 enriched, 8 deferred; 19.03 jobs/s; elapsed=0.4s
+Workday deferred enrichment nordstrom.wd501/nordstrom_careers: finished 8/8; 0 enriched, 8 deferred; 18.62 jobs/s; elapsed=0.4s
+Workday deferred enrichment nvidia.wd5/nvidiaexternalcareersite: starting 1 detail requests
+Workday deferred enrichment nordstrom.wd501/nordstrom_careers: no detail updates (8 deferred)
+Workday deferred enrichment novanta.wd5/novanta-careers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.99 jobs/s; elapsed=0.3s
+Workday deferred enrichment novanta.wd5/novanta-careers: finished 1/1; 0 enriched, 1 deferred; 2.98 jobs/s; elapsed=0.3s
+Workday deferred enrichment oldmutual.wd3/old_mutual_careers: starting 3 detail requests
+Workday deferred enrichment novanta.wd5/novanta-careers: no detail updates (1 deferred)
+Workday deferred enrichment nvidia.wd5/nvidiaexternalcareersite: 1/1 detail requests done; 0 enriched, 1 deferred; 2.49 jobs/s; elapsed=0.4s
+Workday deferred enrichment nvidia.wd5/nvidiaexternalcareersite: finished 1/1; 0 enriched, 1 deferred; 2.48 jobs/s; elapsed=0.4s
+Workday deferred enrichment osu.wd1/osucareers: starting 1 detail requests
+Workday deferred enrichment nvidia.wd5/nvidiaexternalcareersite: no detail updates (1 deferred)
+Workday deferred enrichment osu.wd1/osucareers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.60 jobs/s; elapsed=0.4s
+Workday deferred enrichment osu.wd1/osucareers: finished 1/1; 0 enriched, 1 deferred; 2.59 jobs/s; elapsed=0.4s
+Workday deferred enrichment paloaltonetworks.wd5/panwexternalcareers: starting 1 detail requests
+Workday deferred enrichment osu.wd1/osucareers: no detail updates (1 deferred)
+Workday deferred enrichment oldmutual.wd3/old_mutual_careers: 1/3 detail requests done; 0 enriched, 1 deferred; 1.42 jobs/s; elapsed=0.7s
+Workday deferred enrichment oldmutual.wd3/old_mutual_careers: 3/3 detail requests done; 0 enriched, 3 deferred; 4.16 jobs/s; elapsed=0.7s
+Workday deferred enrichment oldmutual.wd3/old_mutual_careers: finished 3/3; 0 enriched, 3 deferred; 4.13 jobs/s; elapsed=0.7s
+Workday deferred enrichment pfizer.wd1/internaljobs: starting 1 detail requests
+Workday deferred enrichment oldmutual.wd3/old_mutual_careers: no detail updates (3 deferred)
+Workday deferred enrichment paloaltonetworks.wd5/panwexternalcareers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.63 jobs/s; elapsed=0.4s
+Workday deferred enrichment paloaltonetworks.wd5/panwexternalcareers: finished 1/1; 0 enriched, 1 deferred; 2.62 jobs/s; elapsed=0.4s
+Workday deferred enrichment pfizer.wd1/pfizercareers: starting 1 detail requests
+Workday deferred enrichment paloaltonetworks.wd5/panwexternalcareers: no detail updates (1 deferred)
+Workday deferred enrichment pfizer.wd1/internaljobs: 1/1 detail requests done; 0 enriched, 1 deferred; 2.77 jobs/s; elapsed=0.4s
+Workday deferred enrichment pfizer.wd1/internaljobs: finished 1/1; 0 enriched, 1 deferred; 2.75 jobs/s; elapsed=0.4s
+Workday deferred enrichment pillsburylaw.wd5/external: starting 1 detail requests
+Workday deferred enrichment pfizer.wd1/internaljobs: no detail updates (1 deferred)
+Workday deferred enrichment pfizer.wd1/pfizercareers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.50 jobs/s; elapsed=0.4s
+Workday deferred enrichment pfizer.wd1/pfizercareers: finished 1/1; 0 enriched, 1 deferred; 2.49 jobs/s; elapsed=0.4s
+Workday deferred enrichment pimco.wd1/pimco-careers: starting 1 detail requests
+Workday deferred enrichment pfizer.wd1/pfizercareers: no detail updates (1 deferred)
+Workday deferred enrichment pimco.wd1/pimco-careers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.60 jobs/s; elapsed=0.4s
+Workday deferred enrichment pimco.wd1/pimco-careers: finished 1/1; 0 enriched, 1 deferred; 2.59 jobs/s; elapsed=0.4s
+Workday deferred enrichment prismahealth.wd5/prismahealthcorporate: starting 1 detail requests
+Workday deferred enrichment pimco.wd1/pimco-careers: no detail updates (1 deferred)
+Workday deferred enrichment prismahealth.wd5/prismahealthcorporate: 1/1 detail requests done; 0 enriched, 1 deferred; 2.17 jobs/s; elapsed=0.5s
+Workday deferred enrichment prismahealth.wd5/prismahealthcorporate: finished 1/1; 0 enriched, 1 deferred; 2.17 jobs/s; elapsed=0.5s
+Workday deferred enrichment pwc.wd3/crm_experienced_careers_site: starting 1 detail requests
+Workday deferred enrichment prismahealth.wd5/prismahealthcorporate: no detail updates (1 deferred)
+Workday deferred enrichment pillsburylaw.wd5/external: 1/1 detail requests done; 0 enriched, 1 deferred; 0.74 jobs/s; elapsed=1.4s
+Workday deferred enrichment pillsburylaw.wd5/external: finished 1/1; 0 enriched, 1 deferred; 0.73 jobs/s; elapsed=1.4s
+Workday deferred enrichment pwc.wd3/global_experienced_careers: starting 1 detail requests
+Workday deferred enrichment pillsburylaw.wd5/external: no detail updates (1 deferred)
+Workday deferred enrichment pwc.wd3/crm_experienced_careers_site: 1/1 detail requests done; 0 enriched, 1 deferred; 1.47 jobs/s; elapsed=0.7s
+Workday deferred enrichment pwc.wd3/crm_experienced_careers_site: finished 1/1; 0 enriched, 1 deferred; 1.47 jobs/s; elapsed=0.7s
+Workday deferred enrichment pwc.wd3/nonpublic_postings: starting 2 detail requests
+Workday deferred enrichment pwc.wd3/crm_experienced_careers_site: no detail updates (1 deferred)
+Workday deferred enrichment pwc.wd3/global_experienced_careers: 1/1 detail requests done; 0 enriched, 1 deferred; 1.32 jobs/s; elapsed=0.8s
+Workday deferred enrichment pwc.wd3/global_experienced_careers: finished 1/1; 0 enriched, 1 deferred; 1.31 jobs/s; elapsed=0.8s
+Workday deferred enrichment pwc.wd3/us_experienced_careers: starting 1 detail requests
+Workday deferred enrichment pwc.wd3/global_experienced_careers: no detail updates (1 deferred)
+Workday deferred enrichment pwc.wd3/nonpublic_postings: 1/2 detail requests done; 0 enriched, 1 deferred; 1.44 jobs/s; elapsed=0.7s
+Workday deferred enrichment pwc.wd3/nonpublic_postings: 2/2 detail requests done; 0 enriched, 2 deferred; 2.84 jobs/s; elapsed=0.7s
+Workday deferred enrichment pwc.wd3/nonpublic_postings: finished 2/2; 0 enriched, 2 deferred; 2.83 jobs/s; elapsed=0.7s
+Workday deferred enrichment ratp.wd3/ratp_externe: starting 2 detail requests
+Workday deferred enrichment pwc.wd3/nonpublic_postings: no detail updates (2 deferred)
+Workday deferred enrichment ratp.wd3/ratp_externe: 1/2 detail requests done; 0 enriched, 1 deferred; 62.03 jobs/s; elapsed=0.0s
+Workday deferred enrichment ratp.wd3/ratp_externe: 2/2 detail requests done; 0 enriched, 2 deferred; 104.16 jobs/s; elapsed=0.0s
+Workday deferred enrichment ratp.wd3/ratp_externe: finished 2/2; 0 enriched, 2 deferred; 102.71 jobs/s; elapsed=0.0s
+Workday deferred enrichment repsol.wd3/ref_ext: starting 1 detail requests
+Workday deferred enrichment ratp.wd3/ratp_externe: no detail updates (2 deferred)
+Workday deferred enrichment pwc.wd3/us_experienced_careers: 1/1 detail requests done; 0 enriched, 1 deferred; 1.57 jobs/s; elapsed=0.6s
+Workday deferred enrichment pwc.wd3/us_experienced_careers: finished 1/1; 0 enriched, 1 deferred; 1.57 jobs/s; elapsed=0.6s
+Workday deferred enrichment republic.wd5/republic: starting 1 detail requests
+Workday deferred enrichment pwc.wd3/us_experienced_careers: no detail updates (1 deferred)
+Workday deferred enrichment republic.wd5/republic: 1/1 detail requests done; 0 enriched, 1 deferred; 2.41 jobs/s; elapsed=0.4s
+Workday deferred enrichment republic.wd5/republic: finished 1/1; 0 enriched, 1 deferred; 2.40 jobs/s; elapsed=0.4s
+Workday deferred enrichment roberthalf.wd1/protivitiexperiencedcareers: starting 1 detail requests
+Workday deferred enrichment republic.wd5/republic: no detail updates (1 deferred)
+Workday deferred enrichment roberthalf.wd1/protivitiexperiencedcareers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.39 jobs/s; elapsed=0.4s
+Workday deferred enrichment roberthalf.wd1/protivitiexperiencedcareers: finished 1/1; 0 enriched, 1 deferred; 2.38 jobs/s; elapsed=0.4s
+Workday deferred enrichment roberthalf.wd1/protivitina: starting 1 detail requests
+Workday deferred enrichment roberthalf.wd1/protivitiexperiencedcareers: no detail updates (1 deferred)
+Workday deferred enrichment roberthalf.wd1/protivitina: 1/1 detail requests done; 0 enriched, 1 deferred; 2.81 jobs/s; elapsed=0.4s
+Workday deferred enrichment roberthalf.wd1/protivitina: finished 1/1; 0 enriched, 1 deferred; 2.80 jobs/s; elapsed=0.4s
+Workday deferred enrichment sanford.wd5/sanfordhealth: starting 3 detail requests
+Workday deferred enrichment roberthalf.wd1/protivitina: no detail updates (1 deferred)
+Workday deferred enrichment sanford.wd5/sanfordhealth: 1/3 detail requests done; 0 enriched, 1 deferred; 2.61 jobs/s; elapsed=0.4s
+Workday deferred enrichment sanford.wd5/sanfordhealth: 3/3 detail requests done; 0 enriched, 3 deferred; 6.23 jobs/s; elapsed=0.5s
+Workday deferred enrichment sanford.wd5/sanfordhealth: finished 3/3; 0 enriched, 3 deferred; 6.17 jobs/s; elapsed=0.5s
+Workday deferred enrichment sbcos.wd1/sbcos2: starting 1 detail requests
+Workday deferred enrichment repsol.wd3/ref_ext: 1/1 detail requests done; 0 enriched, 1 deferred; 0.55 jobs/s; elapsed=1.8s
+Workday deferred enrichment repsol.wd3/ref_ext: finished 1/1; 0 enriched, 1 deferred; 0.55 jobs/s; elapsed=1.8s
+Workday deferred enrichment sci.wd5/sci: starting 1 detail requests
+Workday deferred enrichment sanford.wd5/sanfordhealth: no detail updates (3 deferred)
+Workday deferred enrichment repsol.wd3/ref_ext: no detail updates (1 deferred)
+Workday deferred enrichment sci.wd5/sci: 1/1 detail requests done; 0 enriched, 1 deferred; 2.46 jobs/s; elapsed=0.4s
+Workday deferred enrichment sci.wd5/sci: finished 1/1; 0 enriched, 1 deferred; 2.45 jobs/s; elapsed=0.4s
+Workday deferred enrichment sedgwick.wd1/sedgwick: starting 1 detail requests
+Workday deferred enrichment sci.wd5/sci: no detail updates (1 deferred)
+Workday deferred enrichment sbcos.wd1/sbcos2: 1/1 detail requests done; 0 enriched, 1 deferred; 1.81 jobs/s; elapsed=0.6s
+Workday deferred enrichment sbcos.wd1/sbcos2: finished 1/1; 0 enriched, 1 deferred; 1.81 jobs/s; elapsed=0.6s
+Workday deferred enrichment sekologistics.wd503/seko_logistics: starting 1 detail requests
+Workday deferred enrichment sbcos.wd1/sbcos2: no detail updates (1 deferred)
+Workday deferred enrichment sekologistics.wd503/seko_logistics: 1/1 detail requests done; 0 enriched, 1 deferred; 3.25 jobs/s; elapsed=0.3s
+Workday deferred enrichment sekologistics.wd503/seko_logistics: finished 1/1; 0 enriched, 1 deferred; 3.23 jobs/s; elapsed=0.3s
+Workday deferred enrichment serviceexperts.wd108/SE: starting 3 detail requests
+Workday deferred enrichment sekologistics.wd503/seko_logistics: no detail updates (1 deferred)
+Workday deferred enrichment sedgwick.wd1/sedgwick: 1/1 detail requests done; 0 enriched, 1 deferred; 2.13 jobs/s; elapsed=0.5s
+Workday deferred enrichment sedgwick.wd1/sedgwick: finished 1/1; 0 enriched, 1 deferred; 2.13 jobs/s; elapsed=0.5s
+Workday deferred enrichment signetjewelers.wd1/Banter: starting 1 detail requests
+Workday deferred enrichment sedgwick.wd1/sedgwick: no detail updates (1 deferred)
+Workday deferred enrichment serviceexperts.wd108/SE: 1/3 detail requests done; 0 enriched, 1 deferred; 3.83 jobs/s; elapsed=0.3s
+Workday deferred enrichment serviceexperts.wd108/SE: 3/3 detail requests done; 0 enriched, 3 deferred; 10.25 jobs/s; elapsed=0.3s
+Workday deferred enrichment serviceexperts.wd108/SE: finished 3/3; 0 enriched, 3 deferred; 10.13 jobs/s; elapsed=0.3s
+Workday deferred enrichment simcorp.wd3/simcorp_private: starting 1 detail requests
+Workday deferred enrichment serviceexperts.wd108/SE: no detail updates (3 deferred)
+Workday deferred enrichment signetjewelers.wd1/Banter: 1/1 detail requests done; 0 enriched, 1 deferred; 2.31 jobs/s; elapsed=0.4s
+Workday deferred enrichment signetjewelers.wd1/Banter: finished 1/1; 0 enriched, 1 deferred; 2.30 jobs/s; elapsed=0.4s
+Workday deferred enrichment simmonsbank.wd5/simmonscareers: starting 1 detail requests
+Workday deferred enrichment signetjewelers.wd1/Banter: no detail updates (1 deferred)
+Workday deferred enrichment simmonsbank.wd5/simmonscareers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.10 jobs/s; elapsed=0.5s
+Workday deferred enrichment simmonsbank.wd5/simmonscareers: finished 1/1; 0 enriched, 1 deferred; 2.09 jobs/s; elapsed=0.5s
+Workday deferred enrichment sonaca.wd103/sonaca_careers: starting 1 detail requests
+Workday deferred enrichment simmonsbank.wd5/simmonscareers: no detail updates (1 deferred)
+Workday deferred enrichment sonaca.wd103/sonaca_careers: 1/1 detail requests done; 0 enriched, 1 deferred; 1.63 jobs/s; elapsed=0.6s
+Workday deferred enrichment sonaca.wd103/sonaca_careers: finished 1/1; 0 enriched, 1 deferred; 1.63 jobs/s; elapsed=0.6s
+Workday deferred enrichment sonyglobal.wd1/sonyglobalcareers: starting 1 detail requests
+Workday deferred enrichment sonaca.wd103/sonaca_careers: no detail updates (1 deferred)
+Workday deferred enrichment sonyglobal.wd1/sonyglobalcareers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.64 jobs/s; elapsed=0.4s
+Workday deferred enrichment sonyglobal.wd1/sonyglobalcareers: finished 1/1; 0 enriched, 1 deferred; 2.63 jobs/s; elapsed=0.4s
+Workday deferred enrichment spartannash.wd1/spartannash_careers: starting 1 detail requests
+Workday deferred enrichment sonyglobal.wd1/sonyglobalcareers: no detail updates (1 deferred)
+Workday deferred enrichment spartannash.wd1/spartannash_careers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.56 jobs/s; elapsed=0.4s
+Workday deferred enrichment spartannash.wd1/spartannash_careers: finished 1/1; 0 enriched, 1 deferred; 2.55 jobs/s; elapsed=0.4s
+Workday deferred enrichment spinmaster.wd3/sagomini_careers: starting 1 detail requests
+Workday deferred enrichment spartannash.wd1/spartannash_careers: no detail updates (1 deferred)
+Workday deferred enrichment simcorp.wd3/simcorp_private: 1/1 detail requests done; 0 enriched, 1 deferred; 0.42 jobs/s; elapsed=2.4s
+Workday deferred enrichment simcorp.wd3/simcorp_private: finished 1/1; 0 enriched, 1 deferred; 0.42 jobs/s; elapsed=2.4s
+Workday deferred enrichment stars.wd1/search: starting 1 detail requests
+Workday deferred enrichment simcorp.wd3/simcorp_private: no detail updates (1 deferred)
+Workday deferred enrichment stars.wd1/search: 1/1 detail requests done; 0 enriched, 1 deferred; 0.74 jobs/s; elapsed=1.3s
+Workday deferred enrichment stars.wd1/search: finished 1/1; 0 enriched, 1 deferred; 0.74 jobs/s; elapsed=1.3s
+Workday deferred enrichment statestreet.wd1/global: starting 1 detail requests
+Workday deferred enrichment spinmaster.wd3/sagomini_careers: 1/1 detail requests done; 0 enriched, 1 deferred; 0.59 jobs/s; elapsed=1.7s
+Workday deferred enrichment spinmaster.wd3/sagomini_careers: finished 1/1; 0 enriched, 1 deferred; 0.59 jobs/s; elapsed=1.7s
+Workday deferred enrichment stryker.wd1/strykercareers: starting 5 detail requests
+Workday deferred enrichment stars.wd1/search: no detail updates (1 deferred)
+Workday deferred enrichment spinmaster.wd3/sagomini_careers: no detail updates (1 deferred)
+Workday deferred enrichment statestreet.wd1/global: 1/1 detail requests done; 0 enriched, 1 deferred; 2.92 jobs/s; elapsed=0.3s
+Workday deferred enrichment statestreet.wd1/global: finished 1/1; 0 enriched, 1 deferred; 2.90 jobs/s; elapsed=0.3s
+Workday deferred enrichment sysco.wd5/syscocareers: starting 1 detail requests
+Workday deferred enrichment statestreet.wd1/global: no detail updates (1 deferred)
+Workday deferred enrichment stryker.wd1/strykercareers: 1/5 detail requests done; 0 enriched, 1 deferred; 2.51 jobs/s; elapsed=0.4s
+Workday deferred enrichment stryker.wd1/strykercareers: 5/5 detail requests done; 0 enriched, 5 deferred; 8.40 jobs/s; elapsed=0.6s
+Workday deferred enrichment stryker.wd1/strykercareers: finished 5/5; 0 enriched, 5 deferred; 8.30 jobs/s; elapsed=0.6s
+Workday deferred enrichment tamus.wd1/agrilife_research_external: starting 1 detail requests
+Workday deferred enrichment stryker.wd1/strykercareers: no detail updates (5 deferred)
+Workday deferred enrichment sysco.wd5/syscocareers: 1/1 detail requests done; 0 enriched, 1 deferred; 1.96 jobs/s; elapsed=0.5s
+Workday deferred enrichment sysco.wd5/syscocareers: finished 1/1; 0 enriched, 1 deferred; 1.95 jobs/s; elapsed=0.5s
+Workday deferred enrichment tamus.wd1/system-wide_external: starting 1 detail requests
+Workday deferred enrichment sysco.wd5/syscocareers: no detail updates (1 deferred)
+Workday deferred enrichment tamus.wd1/system-wide_external: 1/1 detail requests done; 0 enriched, 1 deferred; 2.58 jobs/s; elapsed=0.4s
+Workday deferred enrichment tamus.wd1/system-wide_external: finished 1/1; 0 enriched, 1 deferred; 2.57 jobs/s; elapsed=0.4s
+Workday deferred enrichment tapestry.wd108/Tapestry_Careers: starting 1 detail requests
+Workday deferred enrichment tamus.wd1/system-wide_external: no detail updates (1 deferred)
+Workday deferred enrichment tapestry.wd108/Tapestry_Careers: 1/1 detail requests done; 0 enriched, 1 deferred; 3.58 jobs/s; elapsed=0.3s
+Workday deferred enrichment tapestry.wd108/Tapestry_Careers: finished 1/1; 0 enriched, 1 deferred; 3.56 jobs/s; elapsed=0.3s
+Workday deferred enrichment tbkbank.wd1/tfin: starting 1 detail requests
+Workday deferred enrichment tapestry.wd108/Tapestry_Careers: no detail updates (1 deferred)
+Workday deferred enrichment tbkbank.wd1/tfin: 1/1 detail requests done; 0 enriched, 1 deferred; 2.49 jobs/s; elapsed=0.4s
+Workday deferred enrichment tbkbank.wd1/tfin: finished 1/1; 0 enriched, 1 deferred; 2.48 jobs/s; elapsed=0.4s
+Workday deferred enrichment thehartford.wd5/careers_external: starting 1 detail requests
+Workday deferred enrichment tbkbank.wd1/tfin: no detail updates (1 deferred)
+Workday deferred enrichment tamus.wd1/agrilife_research_external: 1/1 detail requests done; 0 enriched, 1 deferred; 0.67 jobs/s; elapsed=1.5s
+Workday deferred enrichment tamus.wd1/agrilife_research_external: finished 1/1; 0 enriched, 1 deferred; 0.67 jobs/s; elapsed=1.5s
+Workday deferred enrichment thehartford.wd5/careers_restricted: starting 1 detail requests
+Workday deferred enrichment tamus.wd1/agrilife_research_external: no detail updates (1 deferred)
+Workday deferred enrichment thehartford.wd5/careers_external: 1/1 detail requests done; 0 enriched, 1 deferred; 2.68 jobs/s; elapsed=0.4s
+Workday deferred enrichment thehartford.wd5/careers_external: finished 1/1; 0 enriched, 1 deferred; 2.67 jobs/s; elapsed=0.4s
+Workday deferred enrichment toryburch.wd1/toryburchcareers: starting 4 detail requests
+Workday deferred enrichment thehartford.wd5/careers_external: no detail updates (1 deferred)
+Workday deferred enrichment thehartford.wd5/careers_restricted: 1/1 detail requests done; 0 enriched, 1 deferred; 2.66 jobs/s; elapsed=0.4s
+Workday deferred enrichment thehartford.wd5/careers_restricted: finished 1/1; 0 enriched, 1 deferred; 2.65 jobs/s; elapsed=0.4s
+Workday deferred enrichment totalwine.wd1/twm: starting 2 detail requests
+Workday deferred enrichment thehartford.wd5/careers_restricted: no detail updates (1 deferred)
+Workday deferred enrichment toryburch.wd1/toryburchcareers: 1/4 detail requests done; 0 enriched, 1 deferred; 2.55 jobs/s; elapsed=0.4s
+Workday deferred enrichment toryburch.wd1/toryburchcareers: 4/4 detail requests done; 0 enriched, 4 deferred; 9.62 jobs/s; elapsed=0.4s
+Workday deferred enrichment toryburch.wd1/toryburchcareers: finished 4/4; 0 enriched, 4 deferred; 9.50 jobs/s; elapsed=0.4s
+Workday deferred enrichment toyota.wd503/tmna: starting 1 detail requests
+Workday deferred enrichment toryburch.wd1/toryburchcareers: no detail updates (4 deferred)
+Workday deferred enrichment totalwine.wd1/twm: 1/2 detail requests done; 0 enriched, 1 deferred; 2.71 jobs/s; elapsed=0.4s
+Workday deferred enrichment totalwine.wd1/twm: 2/2 detail requests done; 0 enriched, 2 deferred; 5.17 jobs/s; elapsed=0.4s
+Workday deferred enrichment totalwine.wd1/twm: finished 2/2; 0 enriched, 2 deferred; 5.14 jobs/s; elapsed=0.4s
+Workday deferred enrichment travelhrportal.wd1/jobs: starting 1 detail requests
+Workday deferred enrichment totalwine.wd1/twm: no detail updates (2 deferred)
+Workday deferred enrichment toyota.wd503/tmna: 1/1 detail requests done; 0 enriched, 1 deferred; 3.61 jobs/s; elapsed=0.3s
+Workday deferred enrichment toyota.wd503/tmna: finished 1/1; 0 enriched, 1 deferred; 3.59 jobs/s; elapsed=0.3s
+Workday deferred enrichment ttmtech.wd5/jobs: starting 1 detail requests
+Workday deferred enrichment toyota.wd503/tmna: no detail updates (1 deferred)
+Workday deferred enrichment travelhrportal.wd1/jobs: 1/1 detail requests done; 0 enriched, 1 deferred; 2.46 jobs/s; elapsed=0.4s
+Workday deferred enrichment travelhrportal.wd1/jobs: finished 1/1; 0 enriched, 1 deferred; 2.45 jobs/s; elapsed=0.4s
+Workday deferred enrichment tysonfoods.wd5/tsn: starting 2 detail requests
+Workday deferred enrichment travelhrportal.wd1/jobs: no detail updates (1 deferred)
+Workday deferred enrichment ttmtech.wd5/jobs: 1/1 detail requests done; 0 enriched, 1 deferred; 2.60 jobs/s; elapsed=0.4s
+Workday deferred enrichment ttmtech.wd5/jobs: finished 1/1; 0 enriched, 1 deferred; 2.59 jobs/s; elapsed=0.4s
+Workday deferred enrichment tysonfoods.wd5/TSN5: starting 1 detail requests
+Workday deferred enrichment ttmtech.wd5/jobs: no detail updates (1 deferred)
+Workday deferred enrichment tysonfoods.wd5/tsn: 1/2 detail requests done; 0 enriched, 1 deferred; 2.51 jobs/s; elapsed=0.4s
+Workday deferred enrichment tysonfoods.wd5/TSN5: 1/1 detail requests done; 0 enriched, 1 deferred; 2.57 jobs/s; elapsed=0.4s
+Workday deferred enrichment tysonfoods.wd5/TSN5: finished 1/1; 0 enriched, 1 deferred; 2.56 jobs/s; elapsed=0.4s
+Workday deferred enrichment uhaul.wd1/uhauljobs: starting 3 detail requests
+Workday deferred enrichment tysonfoods.wd5/TSN5: no detail updates (1 deferred)
+Workday deferred enrichment tysonfoods.wd5/tsn: 2/2 detail requests done; 0 enriched, 2 deferred; 3.03 jobs/s; elapsed=0.7s
+Workday deferred enrichment tysonfoods.wd5/tsn: finished 2/2; 0 enriched, 2 deferred; 3.01 jobs/s; elapsed=0.7s
+Workday deferred enrichment ummc.wd5/umccareers: starting 1 detail requests
+Workday deferred enrichment tysonfoods.wd5/tsn: no detail updates (2 deferred)
+Workday deferred enrichment uhaul.wd1/uhauljobs: 1/3 detail requests done; 0 enriched, 1 deferred; 2.87 jobs/s; elapsed=0.3s
+Workday deferred enrichment uhaul.wd1/uhauljobs: 3/3 detail requests done; 0 enriched, 3 deferred; 8.24 jobs/s; elapsed=0.4s
+Workday deferred enrichment uhaul.wd1/uhauljobs: finished 3/3; 0 enriched, 3 deferred; 8.16 jobs/s; elapsed=0.4s
+Workday deferred enrichment unilever.wd3/UK_TemporaryWorkersite: starting 1 detail requests
+Workday deferred enrichment uhaul.wd1/uhauljobs: no detail updates (3 deferred)
+Workday deferred enrichment ummc.wd5/umccareers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.15 jobs/s; elapsed=0.5s
+Workday deferred enrichment ummc.wd5/umccareers: finished 1/1; 0 enriched, 1 deferred; 2.15 jobs/s; elapsed=0.5s
+Workday deferred enrichment unilever.wd3/unilever_experienced_professionals: starting 1 detail requests
+Workday deferred enrichment ummc.wd5/umccareers: no detail updates (1 deferred)
+Workday deferred enrichment unilever.wd3/unilever_experienced_professionals: 1/1 detail requests done; 0 enriched, 1 deferred; 1.32 jobs/s; elapsed=0.8s
+Workday deferred enrichment unilever.wd3/unilever_experienced_professionals: finished 1/1; 0 enriched, 1 deferred; 1.32 jobs/s; elapsed=0.8s
+Workday deferred enrichment usbank.wd1/us_bank_careers: starting 1 detail requests
+Workday deferred enrichment unilever.wd3/unilever_experienced_professionals: no detail updates (1 deferred)
+Workday deferred enrichment usbank.wd1/us_bank_careers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.68 jobs/s; elapsed=0.4s
+Workday deferred enrichment usbank.wd1/us_bank_careers: finished 1/1; 0 enriched, 1 deferred; 2.67 jobs/s; elapsed=0.4s
+Workday deferred enrichment usfoods.wd1/usfoodscareersexternal: starting 2 detail requests
+Workday deferred enrichment usbank.wd1/us_bank_careers: no detail updates (1 deferred)
+Workday deferred enrichment usfoods.wd1/usfoodscareersexternal: 1/2 detail requests done; 0 enriched, 1 deferred; 2.77 jobs/s; elapsed=0.4s
+Workday deferred enrichment usfoods.wd1/usfoodscareersexternal: 2/2 detail requests done; 0 enriched, 2 deferred; 5.21 jobs/s; elapsed=0.4s
+Workday deferred enrichment usfoods.wd1/usfoodscareersexternal: finished 2/2; 0 enriched, 2 deferred; 5.17 jobs/s; elapsed=0.4s
+Workday deferred enrichment valmet.wd103/external: starting 1 detail requests
+Workday deferred enrichment usfoods.wd1/usfoodscareersexternal: no detail updates (2 deferred)
+Workday deferred enrichment valmet.wd103/external: 1/1 detail requests done; 0 enriched, 1 deferred; 1.57 jobs/s; elapsed=0.6s
+Workday deferred enrichment valmet.wd103/external: finished 1/1; 0 enriched, 1 deferred; 1.56 jobs/s; elapsed=0.6s
+Workday deferred enrichment vst.wd5/vistra_careers: starting 1 detail requests
+Workday deferred enrichment valmet.wd103/external: no detail updates (1 deferred)
+Workday deferred enrichment unilever.wd3/UK_TemporaryWorkersite: 1/1 detail requests done; 0 enriched, 1 deferred; 0.36 jobs/s; elapsed=2.8s
+Workday deferred enrichment unilever.wd3/UK_TemporaryWorkersite: finished 1/1; 0 enriched, 1 deferred; 0.36 jobs/s; elapsed=2.8s
+Workday deferred enrichment vwr.wd1/avantorjobs: starting 2 detail requests
+Workday deferred enrichment unilever.wd3/UK_TemporaryWorkersite: no detail updates (1 deferred)
+Workday deferred enrichment vst.wd5/vistra_careers: 1/1 detail requests done; 0 enriched, 1 deferred; 2.17 jobs/s; elapsed=0.5s
+Workday deferred enrichment vst.wd5/vistra_careers: finished 1/1; 0 enriched, 1 deferred; 2.16 jobs/s; elapsed=0.5s
+Workday deferred enrichment wf.wd1/wellsfargojobs: starting 67 detail requests
+Workday deferred enrichment vst.wd5/vistra_careers: no detail updates (1 deferred)
+Workday deferred enrichment vwr.wd1/avantorjobs: 1/2 detail requests done; 0 enriched, 1 deferred; 2.69 jobs/s; elapsed=0.4s
+Workday deferred enrichment vwr.wd1/avantorjobs: 2/2 detail requests done; 0 enriched, 2 deferred; 4.73 jobs/s; elapsed=0.4s
+Workday deferred enrichment vwr.wd1/avantorjobs: finished 2/2; 0 enriched, 2 deferred; 4.69 jobs/s; elapsed=0.4s
+Workday deferred enrichment worldvision.wd1/worldvisioninternational: starting 1 detail requests
+Workday deferred enrichment wf.wd1/wellsfargojobs: 1/67 detail requests done; 0 enriched, 1 deferred; 2.79 jobs/s; elapsed=0.4s
+Workday deferred enrichment vwr.wd1/avantorjobs: no detail updates (2 deferred)
+Workday deferred enrichment worldvision.wd1/worldvisioninternational: 1/1 detail requests done; 0 enriched, 1 deferred; 2.31 jobs/s; elapsed=0.4s
+Workday deferred enrichment worldvision.wd1/worldvisioninternational: finished 1/1; 0 enriched, 1 deferred; 2.31 jobs/s; elapsed=0.4s
+Workday deferred enrichment wwecorp.wd5/IMG: starting 1 detail requests
+Workday deferred enrichment worldvision.wd1/worldvisioninternational: no detail updates (1 deferred)
+Workday deferred enrichment wwecorp.wd5/IMG: 1/1 detail requests done; 0 enriched, 1 deferred; 2.43 jobs/s; elapsed=0.4s
+Workday deferred enrichment wwecorp.wd5/IMG: finished 1/1; 0 enriched, 1 deferred; 2.42 jobs/s; elapsed=0.4s
+Workday deferred enrichment wynd.wd5/external: starting 1 detail requests
+Workday deferred enrichment wf.wd1/wellsfargojobs: 25/67 detail requests done; 14 enriched, 11 deferred; 18.80 jobs/s; elapsed=1.3s
+Workday deferred enrichment wwecorp.wd5/IMG: no detail updates (1 deferred)
+Workday deferred enrichment wynd.wd5/external: 1/1 detail requests done; 0 enriched, 1 deferred; 2.07 jobs/s; elapsed=0.5s
+Workday deferred enrichment wynd.wd5/external: finished 1/1; 0 enriched, 1 deferred; 2.07 jobs/s; elapsed=0.5s
+Workday deferred enrichment wynd.wd5/external: no detail updates (1 deferred)
+Workday deferred enrichment wf.wd1/wellsfargojobs: 50/67 detail requests done; 38 enriched, 12 deferred; 20.90 jobs/s; elapsed=2.4s
+Workday deferred enrichment wf.wd1/wellsfargojobs: 67/67 detail requests done; 50 enriched, 17 deferred; 21.53 jobs/s; elapsed=3.1s
+Workday deferred enrichment wf.wd1/wellsfargojobs: finished 67/67; 50 enriched, 17 deferred; 21.45 jobs/s; elapsed=3.1s
+Workday deferred enrichment wf.wd1/wellsfargojobs: 50 enriched, 17 deferred
+Workday deferred enrichment complete: 61/252 attempted; 191 still missing descriptions; 191 deferred
+Daily import run 47: 191 Workday jobs still need descriptions; active-job coverage will determine whether downstream processing can continue.
+Daily enrichment coverage: 131721/153325 eligible active-board jobs enriched (85.91%), 21604 missing
+Daily import run 47 remains resumable: enrichment coverage is 85.91%, below the required 98%. Matching and Gemini recommendations were not started.
