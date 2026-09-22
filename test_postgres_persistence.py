@@ -371,11 +371,11 @@ def test_legacy_daily_run_with_matching_evidence_skips_board_phase():
             ).fetchone()[0] == "workday_enrichment"
 
 
-def test_daily_run_retries_only_failed_boards_before_completion():
+def test_daily_failed_board_does_not_block_job_level_downstream():
     with _temporary_postgres() as dsn:
         args = argparse.Namespace(
             ats="workday", board=None, boards_from=None, daily=True,
-            daily_all_ats=False, resume=False, match=False, recommend=False,
+            daily_all_ats=False, resume=False, match=True, recommend=False,
             generate_profile=False, export_report=False,
             export_recommendations=False, published_after="2026-08-26",
             greenhouse_content=False, workday_bruteforce=False,
@@ -405,23 +405,25 @@ def test_daily_run_retries_only_failed_boards_before_completion():
         with patch.dict(persistence.os.environ, {"DATABASE_URL": dsn}), patch.object(
             persistence, "_board_specs", return_value=specs
         ), patch.object(persistence, "_fetch_normalized", side_effect=fetch):
-            assert persistence.run(args) == 1
+            assert persistence.run(args) == 0
             assert persistence.run(args) == 0
 
-        assert calls.count("first.wd1/Careers") == 1
+        assert calls.count("first.wd1/Careers") == 2
         assert calls.count("flaky.wd1/Careers") == 2
         with psycopg.connect(dsn) as observer:
             assert observer.execute(
-                "SELECT status FROM daily_import_runs"
-            ).fetchone()[0] == "completed"
+                "SELECT status FROM daily_import_runs ORDER BY import_run_id"
+            ).fetchall() == [("completed_with_errors",), ("completed",)]
             assert observer.execute(
                 """
                 SELECT attempts, status
                 FROM daily_import_run_boards AS rb
                 JOIN job_boards AS b ON b.board_id = rb.board_id
                 WHERE b.slug = 'flaky.wd1/Careers'
+                ORDER BY rb.import_run_id DESC
+                LIMIT 1
                 """
-            ).fetchone() == (2, "completed")
+            ).fetchone() == (1, "completed")
 
 
 def test_daily_run_refuses_a_concurrent_daily_process():
@@ -447,6 +449,13 @@ def test_daily_failure_threshold_allows_at_least_98_percent_success():
     assert persistence._daily_failures_allow_downstream(2, 100)
     assert persistence._daily_failures_allow_downstream(20, 1000)
     assert not persistence._daily_failures_allow_downstream(21, 1000)
+
+
+def test_daily_enrichment_threshold_allows_at_least_98_percent_jobs():
+    assert persistence._daily_enrichment_allows_downstream(0, 0)
+    assert persistence._daily_enrichment_allows_downstream(98, 100)
+    assert persistence._daily_enrichment_allows_downstream(196, 200)
+    assert not persistence._daily_enrichment_allows_downstream(97, 100)
 
 
 def test_daily_workday_workers_are_available_from_the_start():

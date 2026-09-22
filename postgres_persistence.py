@@ -1140,6 +1140,53 @@ def _daily_failures_allow_downstream(failed_boards: int, board_count: int) -> bo
     )
 
 
+def _daily_enrichment_stats(
+    conn: psycopg.Connection,
+    import_run_id: int,
+) -> dict[str, int | float]:
+    """Measure description coverage for eligible jobs on active run boards."""
+    row = conn.execute(
+        """
+        SELECT
+            count(*)::int,
+            count(*) FILTER (
+                WHERE NULLIF(BTRIM(j.description_text), '') IS NOT NULL
+            )::int
+        FROM jobs AS j
+        JOIN job_boards AS b ON b.board_id = j.board_id
+        JOIN daily_import_run_boards AS rb ON rb.board_id = j.board_id
+        JOIN daily_import_runs AS r ON r.import_run_id = rb.import_run_id
+        WHERE rb.import_run_id = %s
+          AND b.active IS TRUE
+          AND j.closed_at IS NULL
+          AND (
+              r.published_after IS NULL
+              OR j.published_at >= r.published_after
+              OR (b.ats = 'bamboohr' AND j.published_at IS NULL)
+          )
+        """,
+        (import_run_id,),
+    ).fetchone()
+    conn.commit()
+    total, enriched = (int(row[0]), int(row[1]))
+    missing = total - enriched
+    coverage = (enriched * 100 / total) if total else 100.0
+    return {
+        "total_jobs": total,
+        "enriched_jobs": enriched,
+        "missing_jobs": missing,
+        "coverage_percent": coverage,
+    }
+
+
+def _daily_enrichment_allows_downstream(
+    enriched_jobs: int,
+    total_jobs: int,
+) -> bool:
+    """Allow matching and Gemini when at least 98% of eligible jobs are enriched."""
+    return total_jobs == 0 or enriched_jobs * 100 >= total_jobs * DAILY_MIN_SUCCESS_PERCENT
+
+
 def _finish_daily_import_run(
     dsn: str,
     import_run_id: int,
@@ -4418,72 +4465,27 @@ def _run(args: argparse.Namespace) -> int:
                     f"{type(exc).__name__}: {exc}",
                     file=sys.stderr,
                 )
-            failures_allowed = _daily_failures_allow_downstream(
-                daily_failed_boards, daily_board_count
-            )
-            if daily_counts["pending"] or not failures_allowed:
-                failure_rate = (
-                    daily_failed_boards * 100 / daily_board_count
-                    if daily_board_count
-                    else 0
-                )
+            if daily_counts["pending"]:
                 print(
-                    f"Daily import run {daily_import_run_id} remains incomplete; "
-                    f"failed boards are {failure_rate:.2f}% of the snapshot "
-                    f"(the continuation threshold is at least "
-                    f"{DAILY_MIN_SUCCESS_PERCENT}% successful). "
-                    "Rerun the same command to retry only failed/pending boards. "
-                    "Matching, recommendations, and reports were not started.",
+                    f"Daily import run {daily_import_run_id}: "
+                    f"{daily_counts['pending']} board(s) remain pending; "
+                    "job-level enrichment coverage will determine whether "
+                    "downstream processing can continue.",
                     file=sys.stderr,
                 )
-                return 1
             if daily_failed_boards:
                 print(
                     f"Daily import run {daily_import_run_id}: continuing with "
                     f"{daily_failed_boards}/{daily_board_count} failed boards "
-                    f"(at least {DAILY_MIN_SUCCESS_PERCENT}% of boards succeeded)"
+                    "because downstream continuation uses job-level enrichment "
+                    "coverage"
                 )
-            if daily_phase == "board_import" and match_requested and non_workday_ats:
-                _set_daily_run_phase(conn, daily_import_run_id, "non_workday_matching")
-                daily_phase = "non_workday_matching"
-            elif daily_phase == "board_import" and "workday" in selected_ats:
+            if daily_phase == "board_import" and "workday" in selected_ats:
                 _set_daily_run_phase(conn, daily_import_run_id, "workday_enrichment")
                 daily_phase = "workday_enrichment"
-
-        if match_requested and daily_import_run_id is not None:
-            if non_workday_ats and daily_phase in (
-                "board_import",
-                "non_workday_matching",
-            ):
-                with _daily_phase_heartbeat(
-                    dsn,
-                    daily_import_run_id,
-                    worker_id,
-                ) as heartbeat:
-                    match_stats = run_matching(
-                        conn,
-                        published_after=published_after,
-                        ats=non_workday_ats,
-                        heartbeat_callback=heartbeat,
-                    )
-                print(
-                    "\nMatching complete for non-Workday ATS: "
-                    f"{match_stats['evaluated']} evaluated, "
-                    f"{match_stats['matched']} matched, "
-                    f"{match_stats['skipped']} excluded"
-                )
-                _set_daily_run_phase(
-                    conn,
-                    daily_import_run_id,
-                    "workday_enrichment"
-                    if "workday" in selected_ats
-                    else "recommendations",
-                )
-                daily_phase = (
-                    "workday_enrichment"
-                    if "workday" in selected_ats
-                    else "recommendations"
-                )
+            elif daily_phase == "board_import" and match_requested and non_workday_ats:
+                _set_daily_run_phase(conn, daily_import_run_id, "non_workday_matching")
+                daily_phase = "non_workday_matching"
 
         if (
             daily_import_run_id is not None
@@ -4515,41 +4517,60 @@ def _run(args: argparse.Namespace) -> int:
             )
             if enrichment_stats["remaining"]:
                 print(
-                    f"Daily import run {daily_import_run_id} remains resumable: "
+                    f"Daily import run {daily_import_run_id}: "
                     f"{enrichment_stats['remaining']} Workday jobs still need "
-                    "descriptions. Non-Workday matching is complete; "
-                    "Workday matching and Gemini recommendations will start "
-                    "after a later run finishes enrichment.",
+                    "descriptions; active-job coverage will determine whether "
+                    "downstream processing can continue.",
+                    file=sys.stderr,
+                )
+
+        if (
+            daily_import_run_id is not None
+            and match_requested
+            and daily_phase in (
+                "board_import",
+                "non_workday_matching",
+                "workday_enrichment",
+                "workday_matching",
+            )
+        ):
+            coverage = _daily_enrichment_stats(conn, daily_import_run_id)
+            print(
+                "Daily enrichment coverage: "
+                f"{coverage['enriched_jobs']}/{coverage['total_jobs']} eligible "
+                f"active-board jobs enriched "
+                f"({coverage['coverage_percent']:.2f}%), "
+                f"{coverage['missing_jobs']} missing"
+            )
+            if not _daily_enrichment_allows_downstream(
+                int(coverage["enriched_jobs"]),
+                int(coverage["total_jobs"]),
+            ):
+                print(
+                    f"Daily import run {daily_import_run_id} remains resumable: "
+                    f"enrichment coverage is {coverage['coverage_percent']:.2f}%, "
+                    f"below the required {DAILY_MIN_SUCCESS_PERCENT}%. "
+                    "Matching and Gemini recommendations were not started.",
                     file=sys.stderr,
                 )
                 return 1
-
-            if match_requested:
-                _set_daily_run_phase(conn, daily_import_run_id, "workday_matching")
-                daily_phase = "workday_matching"
-                with _daily_phase_heartbeat(
-                    dsn,
-                    daily_import_run_id,
-                    worker_id,
-                ) as heartbeat:
-                    match_stats = run_matching(
-                        conn,
-                        published_after=published_after,
-                        ats=("workday",),
-                        heartbeat_callback=heartbeat,
-                    )
-                print(
-                    "\nMatching complete for Workday: "
-                    f"{match_stats['evaluated']} evaluated, "
-                    f"{match_stats['matched']} matched, "
-                    f"{match_stats['skipped']} excluded"
-                )
-        elif (
-            daily_import_run_id is not None
-            and "workday" in selected_ats
-            and match_requested
-            and daily_phase == "workday_matching"
-        ):
+            print(
+                f"Daily import run {daily_import_run_id}: enrichment coverage "
+                f"meets the {DAILY_MIN_SUCCESS_PERCENT}% threshold; "
+                "continuing to matching."
+            )
+            _set_daily_run_phase(
+                conn,
+                daily_import_run_id,
+                "workday_matching"
+                if "workday" in selected_ats
+                else "non_workday_matching",
+            )
+            daily_phase = (
+                "workday_matching"
+                if "workday" in selected_ats
+                else "non_workday_matching"
+            )
             with _daily_phase_heartbeat(
                 dsn,
                 daily_import_run_id,
@@ -4558,11 +4579,11 @@ def _run(args: argparse.Namespace) -> int:
                 match_stats = run_matching(
                     conn,
                     published_after=published_after,
-                    ats=("workday",),
+                    ats=selected_ats,
                     heartbeat_callback=heartbeat,
                 )
             print(
-                "\nMatching complete for Workday: "
+                "\nMatching complete for selected ATS: "
                 f"{match_stats['evaluated']} evaluated, "
                 f"{match_stats['matched']} matched, "
                 f"{match_stats['skipped']} excluded"
