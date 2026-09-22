@@ -112,3 +112,31 @@ mtime_ms = 1788439714847
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:b17893c0-756e-48f3-9c59-d0c65ca48ee2/a1cc814e-839f-4bcd-ac20-0b1e64e36c8e/2731582a-97eb-4025-9592-45c7c2ceb73c"
 storage_version_token = "1788439794113558"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "B_o24xutT_Ri6H9OMMflx"
+uri = "file://reports/workday_run_47_missing_descriptions.csv"
+type = "table"
+title = "Run 47 Workday boards missing descriptions"
+description = "All Workday boards with at least one real current-run job missing a description, including board ID, company ID, slug, volume, and missing counts."
+logical_id = "56758d28-7f02-42f7-b424-04aea2c11cc9"
+content_hash = "sha256:8b58cdda0770439aed84816dd607247ac25111dc7f4f9d978b66736015eb860d"
+size = 10815
+mtime_ms = 1790062574107
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:bcdd2077-1b25-4baf-822f-dcbb74772d86/56758d28-7f02-42f7-b424-04aea2c11cc9/574ae481-3638-4006-8e72-5efdc399fb95"
+storage_version_token = "1790062574778557"
+content_type = "text/csv"
+
+[[outputs]]
+id = "MRwRyomRe98-r5xvypPu5"
+uri = "file://reports/workday_run_47_high_volume_300_plus.csv"
+type = "table"
+title = "Run 47 high-volume Workday boards"
+description = "Workday boards with at least 300 current-run jobs, sorted by job volume, including board ID, company ID, slug, and missing-description counts."
+logical_id = "1ae9d898-79d7-4750-9aae-9d6972373e6a"
+content_hash = "sha256:2117a76d06825349d8ba2208a74bd99b0e24716186e4bbcf36bfaf9ad17eebaf"
+size = 3372
+mtime_ms = 1790062574243
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:bcdd2077-1b25-4baf-822f-dcbb74772d86/1ae9d898-79d7-4750-9aae-9d6972373e6a/685d8efd-2c34-4077-9b85-dff669702f40"
+storage_version_token = "1790062575342209"
+content_type = "text/csv"

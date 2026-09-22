@@ -1552,50 +1552,8 @@ def _workday_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
 
 
 def _workday_details(url: str) -> dict:
-    """Read Workday's public detail API, with JSON-LD as a fallback.
-
-    Most current Workday career pages are an empty SPA shell. The posting data is
-    loaded by the browser from the Calypso ``jobdetails`` endpoint, so parsing
-    only the HTML shell silently turns every detail request into a deferred job.
-    """
+    """Read the public JobPosting JSON-LD embedded in a Workday detail page."""
     html = fetch(url, timeout=20, retries=2).decode("utf-8", "replace")
-    page = urllib.parse.urlsplit(url)
-    segments = [part for part in page.path.split("/") if part]
-    try:
-        job_index = segments.index("job")
-        site_id = segments[1]
-        external_path = "/".join(segments[job_index + 1 :])
-        tenant = page.hostname.split(".")[0]
-    except (ValueError, IndexError, AttributeError):
-        site_id = ""
-        external_path = ""
-        tenant = ""
-
-    token_match = re.search(r"\btoken\s*:\s*[\"']([^\"']+)", html)
-    if tenant and site_id and external_path and token_match:
-        api_url = (
-            f"{page.scheme}://{page.netloc}/wday/calypso/cxs/jobdetails/"
-            f"{tenant}/{site_id}/job/{external_path}"
-        )
-        try:
-            payload = json.loads(
-                fetch(
-                    api_url,
-                    timeout=20,
-                    retries=2,
-                    headers={
-                        "Accept": "application/json",
-                        "Accept-Language": segments[0],
-                        "Referer": url,
-                        "X-CALYPSO-CSRF-TOKEN": token_match.group(1),
-                    },
-                ).decode("utf-8", "replace")
-            )
-            if isinstance(payload, dict):
-                return payload
-        except (OSError, ValueError, urllib.error.HTTPError):
-            pass
-
     match = re.search(
         r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
         html,
