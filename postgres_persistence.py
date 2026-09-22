@@ -559,7 +559,7 @@ KONSTANTIN_RELOCATION_CITIES = ("Madrid", "Málaga")
 KONSTANTIN_RELOCATION_COUNTRIES = ("Spain", "Portugal")
 
 MATCH_MODEL_NAME = "deterministic-preferences"
-MATCH_MODEL_VERSION = "v3-concrete-location"
+MATCH_MODEL_VERSION = "v4-bamboohr-title-only"
 RECOMMENDATION_MODEL_NAME = "gemini-profile-reranker"
 RECOMMENDATION_MODEL_VERSION = gemini_service.JOB_REVIEW_VERSION
 DEFAULT_RECOMMENDATION_FLOOR = 55
@@ -3256,41 +3256,67 @@ def evaluate_job_match(
     if not _workplace_matches(job, user):
         return None
 
-    role_text = " ".join(
-        str(job.get(field) or "")
-        for field in ("title", "department", "team")
-    )
-    industry_text = " ".join(
-        str(job.get(field) or "")
-        for field in (
-            "industry",
-            "category",
-            "company",
-            "title",
-            "department",
-            "team",
-            "description_text",
+    bamboohr_title_only = job.get("ats") == "bamboohr"
+    if bamboohr_title_only:
+        # BambooHR's public current-openings feed does not provide a usable
+        # description. Do not let unrelated company/category fields or a
+        # missing description affect the role score for those jobs.
+        role_text = str(job.get("title") or "")
+        industry_text = role_text
+        metadata_text = ""
+    else:
+        role_text = " ".join(
+            str(job.get(field) or "")
+            for field in ("title", "department", "team")
         )
-    )
-    metadata_text = " ".join(
-        str(job.get(field) or "")
-        for field in ("industry", "category")
-    )
+        industry_text = " ".join(
+            str(job.get(field) or "")
+            for field in (
+                "industry",
+                "category",
+                "company",
+                "title",
+                "department",
+                "team",
+                "description_text",
+            )
+        )
+        metadata_text = " ".join(
+            str(job.get(field) or "")
+            for field in ("industry", "category")
+        )
     location_configured = _location_is_configured(user)
     location_match = not location_configured or _location_matches(job, user)
     if not location_match:
         return None
 
     role_fit = _role_fit(user, job, role_text)
-    industry_fit = _industry_fit(user, job, metadata_text, industry_text)
     profile = user.get("profile_json")
-    if isinstance(profile, dict):
+    if bamboohr_title_only:
+        # With no description, absence of industry/capability evidence is
+        # unknown rather than a negative signal. Role and seniority still come
+        # entirely from the title, while location/workplace remain hard gates.
+        industry_fit = 1.0
+        capability_fit = 1.0
+        seniority_fit = _seniority_fit(user, role_text) if isinstance(
+            profile, dict
+        ) else 1.0
+        if not isinstance(profile, dict):
+            target_roles = _preference_values(user.get("target_roles"))
+            role_fit = (
+                1.0
+                if not target_roles
+                else _best_text_similarity(target_roles, role_text)
+            )
+    elif isinstance(profile, dict):
+        industry_fit = _industry_fit(user, job, metadata_text, industry_text)
         capability_fit = _capability_fit(user, industry_text + " " + role_text)
         seniority_fit = _seniority_fit(user, role_text)
     else:
         # Preserve the old preference-only behavior for users whose profile has
         # not been generated yet: role and industry remain binary, while the
         # unavailable profile dimensions are neutral.
+        industry_fit = _industry_fit(user, job, metadata_text, industry_text)
         target_roles = _preference_values(user.get("target_roles"))
         target_industries = _preference_values(user.get("target_industries"))
         role_fit = (
@@ -3450,7 +3476,7 @@ def run_matching(
             job_params = (*job_params, list(board_ids))
         jobs = conn.execute(
             f"""
-            SELECT j.job_id, j.title, j.department, j.team, j.company,
+            SELECT j.job_id, b.ats, j.title, j.department, j.team, j.company,
                    j.description_text, j.location_raw, j.address, j.is_remote,
                    j.workplace_type, c.industry, c.category
             FROM jobs AS j
@@ -3488,7 +3514,7 @@ def run_matching(
             "relocation_countries", "min_match_score", "profile_json",
         )
         job_columns = (
-            "job_id", "title", "department", "team", "company",
+            "job_id", "ats", "title", "department", "team", "company",
             "description_text", "location_raw", "address", "is_remote",
             "workplace_type", "industry", "category",
         )

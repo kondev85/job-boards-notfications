@@ -1501,6 +1501,73 @@ def test_matching_normalizes_british_programme_spelling():
     ) == 1.0
 
 
+def test_bamboohr_matching_uses_title_only_but_keeps_location_hard_filter():
+    user = {
+        "target_roles": ["Project Manager", "Product Manager"],
+        "target_industries": ["Fintech"],
+        "base_city": "Estepona",
+        "base_country": "Spain",
+        "remote_allowed": True,
+        "onsite_allowed": True,
+        "hybrid_allowed": True,
+        "willing_to_relocate": True,
+        "relocation_cities": ["Madrid"],
+        "relocation_countries": ["Spain"],
+        "min_match_score": 75,
+    }
+    matching_job = {
+        "ats": "bamboohr",
+        "title": "Product Manager",
+        "department": "Unrelated Department",
+        "team": "Unrelated Team",
+        "company": "Unrelated Company",
+        "description_text": None,
+        "location_raw": "Madrid, Spain",
+        "is_remote": False,
+        "workplace_type": "onsite",
+        "industry": "Unrelated Industry",
+        "category": "Unrelated Category",
+    }
+    result = persistence.evaluate_job_match(user, matching_job)
+    assert result is not None
+    assert result["role_match"] is True
+    assert result["score_parts"] == {
+        "role": 40,
+        "industry": 25,
+        "capabilities": 20,
+        "seniority": 15,
+    }
+    assert result["score"] == 100
+
+    remote_spain_job = matching_job | {
+        "location_raw": "Remote - Spain",
+        "is_remote": True,
+        "workplace_type": "remote",
+    }
+    assert persistence.evaluate_job_match(user, remote_spain_job) is not None
+    assert persistence.evaluate_job_match(
+        user,
+        remote_spain_job | {"location_raw": "Remote - US"},
+    ) is None
+
+    # A title mismatch is not rescued by department or description text.
+    nonmatching_job = matching_job | {
+        "title": "Accountant",
+        "department": "Product Management",
+        "description_text": "Product Manager role in fintech.",
+    }
+    nonmatching_result = persistence.evaluate_job_match(user, nonmatching_job)
+    assert nonmatching_result is not None
+    assert nonmatching_result["role_match"] is False
+    assert nonmatching_result["score_parts"]["role"] == 0
+
+    # Title-only scoring must not weaken the existing location hard filter.
+    assert persistence.evaluate_job_match(
+        user,
+        matching_job | {"location_raw": "Berlin, Germany"},
+    ) is None
+
+
 def test_remote_location_evidence_is_user_specific_and_conservative():
     europe_user = {
         "base_city": "Estepona",

@@ -169,8 +169,11 @@ updates a `matched` row, regardless of `min_match_score`. The deterministic
 score is retained so reports can be reviewed and a useful threshold can be
 chosen later. Closed or excluded jobs are skipped and do not create or alter
 match rows. Matching writes `model_name = 'deterministic-preferences'` and
-`model_version = 'v3-concrete-location'` because those values identify this
-scoring workflow. Rerunning the command updates the same `(user_id, job_id)` row
+`model_version = 'v4-bamboohr-title-only'` because those values identify this
+scoring workflow. BambooHR jobs use title-only role and seniority scoring
+because the public feed does not provide descriptions; workplace and concrete
+location filters still apply unchanged. Rerunning the command updates the same
+`(user_id, job_id)` row
 and does not create duplicates. The matched-role CSV and JSON reports order
 roles by score descending and include a recalculated per-report rank. This
 workflow does not call an AI model, send notifications, or schedule notification
