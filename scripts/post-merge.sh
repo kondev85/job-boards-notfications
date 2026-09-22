@@ -8,6 +8,7 @@ if [[ -n "${DATABASE_URL:-}" ]]; then
     psql "$DATABASE_URL" --set ON_ERROR_STOP=1 --file migrations/001_authenticated_app.sql
     psql "$DATABASE_URL" --set ON_ERROR_STOP=1 --file migrations/002_bamboohr_published_at_source.sql
     psql "$DATABASE_URL" --set ON_ERROR_STOP=1 --file migrations/003_recommendation_history.sql
+    psql "$DATABASE_URL" --set ON_ERROR_STOP=1 --file migrations/004_backfill_recommendation_history.sql
   else
     echo "DATABASE_URL is set but psql is unavailable; skipped development schema setup" >&2
   fi
