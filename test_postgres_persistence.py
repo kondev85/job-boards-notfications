@@ -939,6 +939,148 @@ def test_bamboohr_unknown_date_uses_original_first_seen_timestamp():
             )
 
 
+def test_greenhouse_deferred_enrichment_uses_content_payload():
+    payload_rows = [
+        {
+            "external_id": "greenhouse-1",
+            "description_text": "A full Greenhouse description.",
+        },
+        {
+            "external_id": "greenhouse-2",
+            "description_text": None,
+        },
+    ]
+    with patch.object(
+        persistence,
+        "_fetch_normalized",
+        return_value=(payload_rows, 0),
+    ) as fetch:
+        result = persistence._enrich_greenhouse_board(
+            {
+                "slug": "acme",
+                "jobs": [(101, "greenhouse-1"), (102, "greenhouse-2")],
+            }
+        )
+
+    assert result == (
+        "acme",
+        [
+            {
+                "job_id": 101,
+                "description_text": "A full Greenhouse description.",
+            }
+        ],
+        1,
+    )
+    fetch.assert_called_once_with(
+        "greenhouse",
+        "acme",
+        published_after=None,
+        greenhouse_content=True,
+    )
+
+
+def test_deferred_daily_enrichment_runs_greenhouse_and_workday_in_parallel():
+    greenhouse_result = {
+        "candidates": 10,
+        "enriched": 9,
+        "failed": 1,
+        "remaining": 1,
+    }
+    workday_result = {
+        "candidates": 4,
+        "enriched": 2,
+        "failed": 2,
+        "remaining": 2,
+    }
+    with (
+        patch.object(
+            persistence,
+            "_deferred_greenhouse_enrichment",
+            return_value=greenhouse_result,
+        ) as greenhouse,
+        patch.object(
+            persistence,
+            "_deferred_workday_enrichment",
+            return_value=workday_result,
+        ) as workday,
+    ):
+        results = persistence._deferred_daily_enrichment(
+            "dsn",
+            47,
+            "worker",
+            ("greenhouse", "workday", "bamboohr"),
+        )
+
+    assert results == {
+        "greenhouse": greenhouse_result,
+        "workday": workday_result,
+    }
+    greenhouse.assert_called_once_with("dsn", 47, "worker")
+    workday.assert_called_once_with("dsn", 47, "worker")
+
+
+def test_daily_enrichment_stats_excludes_bamboohr_jobs():
+    with _temporary_postgres() as dsn:
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            cutoff = datetime(2026, 9, 17, tzinfo=timezone.utc)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    greenhouse_board = persistence._ensure_board(
+                        cur, "greenhouse", "greenhouse-acme", cutoff
+                    )
+                    bamboohr_board = persistence._ensure_board(
+                        cur, "bamboohr", "bamboo-acme", cutoff
+                    )
+                    run_id = cur.execute(
+                        """
+                        INSERT INTO daily_import_runs (
+                            ats_scope, published_after, started_at, board_count
+                        ) VALUES (%s, %s, %s, 2)
+                        RETURNING import_run_id
+                        """,
+                        (["greenhouse", "bamboohr"], cutoff, cutoff),
+                    ).fetchone()[0]
+                    cur.execute(
+                        """
+                        INSERT INTO daily_import_run_boards
+                            (import_run_id, board_id, position, status)
+                        VALUES (%s, %s, 1, 'completed'),
+                               (%s, %s, 2, 'completed')
+                        """,
+                        (run_id, greenhouse_board, run_id, bamboohr_board),
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO jobs (
+                            board_id, company, ats, external_id, title,
+                            published_at, description_text
+                        ) VALUES
+                            (%s, 'Greenhouse Acme', 'greenhouse', 'gh-1',
+                             'Project Manager', %s, 'Description'),
+                            (%s, 'Greenhouse Acme', 'greenhouse', 'gh-2',
+                             'Product Manager', %s, NULL),
+                            (%s, 'Bamboo Acme', 'bamboohr', 'bh-1',
+                             'Project Manager', NULL, NULL)
+                        """,
+                        (
+                            greenhouse_board,
+                            cutoff,
+                            greenhouse_board,
+                            cutoff,
+                            bamboohr_board,
+                        ),
+                    )
+
+            assert persistence._daily_enrichment_stats(conn, run_id) == {
+                "total_jobs": 2,
+                "enriched_jobs": 1,
+                "missing_jobs": 1,
+                "coverage_percent": 50.0,
+            }
+
+
 def test_postgres_schema_constraints_repeat_import_and_lifecycle():
     with _temporary_postgres() as dsn:
         with psycopg.connect(dsn) as conn:

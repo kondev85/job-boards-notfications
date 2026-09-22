@@ -272,10 +272,12 @@ matcher, and writes the combined report plus one report per ATS:
 `reports/matched_roles_lever.csv` (each also has a `.json` file) for
 `infobettor@gmail.com`. It also reviews score-floor candidates with Gemini and
 writes the corresponding combined and ATS-specific top-five recommendation files.
-It never requests Greenhouse
-`content=true`, so Greenhouse descriptions remain deferred. Matching and report
-export use the same inclusive cutoff, so the reports contain only roles in that
-window.
+Greenhouse list jobs are first persisted without descriptions, then the daily
+post-import enrichment phase requests `content=true` with three Greenhouse
+workers. Workday detail enrichment runs in parallel with two workers. BambooHR
+jobs use title-only deterministic matching and are excluded from the
+description-coverage denominator. Matching and report export use the same
+inclusive cutoff, so the reports contain only roles in that window.
 
 Daily board failures are tolerated when at least 98% of the run's original board
 snapshot succeeds. In that case downstream matching, recommendations, and reports

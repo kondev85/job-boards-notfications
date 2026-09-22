@@ -386,7 +386,8 @@ ALTER TABLE daily_import_runs
 ALTER TABLE daily_import_runs DROP CONSTRAINT IF EXISTS daily_import_runs_phase_check;
 ALTER TABLE daily_import_runs ADD CONSTRAINT daily_import_runs_phase_check
     CHECK (phase IN (
-        'board_import', 'non_workday_matching', 'workday_enrichment',
+        'board_import', 'non_workday_matching', 'provider_enrichment',
+        'workday_enrichment',
         'workday_matching', 'recommendations', 'completed'
     ));
 CREATE INDEX IF NOT EXISTS daily_import_runs_resume_idx
@@ -1144,7 +1145,7 @@ def _daily_enrichment_stats(
     conn: psycopg.Connection,
     import_run_id: int,
 ) -> dict[str, int | float]:
-    """Measure description coverage for eligible jobs on active run boards."""
+    """Measure required-description coverage, excluding title-only BambooHR jobs."""
     row = conn.execute(
         """
         SELECT
@@ -1158,11 +1159,11 @@ def _daily_enrichment_stats(
         JOIN daily_import_runs AS r ON r.import_run_id = rb.import_run_id
         WHERE rb.import_run_id = %s
           AND b.active IS TRUE
+          AND b.ats <> 'bamboohr'
           AND j.closed_at IS NULL
           AND (
               r.published_after IS NULL
               OR j.published_at >= r.published_after
-              OR (b.ats = 'bamboohr' AND j.published_at IS NULL)
           )
         """,
         (import_run_id,),
@@ -1955,6 +1956,219 @@ def _workday_enrichment_remaining(
     return int(row[0])
 
 
+def _greenhouse_enrichment_candidates(
+    conn: psycopg.Connection,
+    import_run_id: int,
+) -> dict[int, dict[str, Any]]:
+    """Find current-run Greenhouse jobs that need the content=true pass."""
+    rows = conn.execute(
+        """
+        SELECT j.job_id, j.board_id, b.slug, j.external_id
+        FROM jobs AS j
+        JOIN job_boards AS b ON b.board_id = j.board_id
+        JOIN daily_import_run_boards AS rb ON rb.board_id = j.board_id
+        JOIN daily_import_runs AS r ON r.import_run_id = rb.import_run_id
+        WHERE rb.import_run_id = %s::BIGINT
+          AND b.ats = 'greenhouse'
+          AND b.active IS TRUE
+          AND rb.status IN ('completed', 'empty')
+          AND NULLIF(BTRIM(j.description_text), '') IS NULL
+          AND j.closed_at IS NULL
+          AND (
+              r.published_after IS NULL
+              OR j.published_at >= r.published_after
+          )
+        ORDER BY j.board_id, j.job_id
+        """,
+        (import_run_id,),
+    ).fetchall()
+    candidates: dict[int, dict[str, Any]] = {}
+    for job_id, board_id, slug, external_id in rows:
+        board = candidates.setdefault(
+            board_id,
+            {"slug": slug, "jobs": []},
+        )
+        board["jobs"].append((job_id, external_id))
+    conn.commit()
+    return candidates
+
+
+def _greenhouse_enrichment_remaining(
+    conn: psycopg.Connection,
+    import_run_id: int,
+) -> int:
+    row = conn.execute(
+        """
+        SELECT count(*)
+        FROM jobs AS j
+        JOIN job_boards AS b ON b.board_id = j.board_id
+        JOIN daily_import_run_boards AS rb ON rb.board_id = j.board_id
+        JOIN daily_import_runs AS r ON r.import_run_id = rb.import_run_id
+        WHERE rb.import_run_id = %s
+          AND b.ats = 'greenhouse'
+          AND b.active IS TRUE
+          AND rb.status IN ('completed', 'empty')
+          AND NULLIF(BTRIM(j.description_text), '') IS NULL
+          AND j.closed_at IS NULL
+          AND (
+              r.published_after IS NULL
+              OR j.published_at >= r.published_after
+          )
+        """,
+        (import_run_id,),
+    ).fetchone()
+    conn.commit()
+    return int(row[0])
+
+
+def _enrich_greenhouse_board(
+    board: dict[str, Any],
+) -> tuple[str, list[dict[str, Any]], int]:
+    """Fetch one Greenhouse board with content=true and return descriptions."""
+    started_at = time.monotonic()
+    job_ids = {external_id: job_id for job_id, external_id in board["jobs"]}
+    print(
+        f"Greenhouse deferred enrichment {board['slug']}: "
+        f"starting content request for {len(job_ids)} jobs",
+        flush=True,
+    )
+    with job_boards.board_deadline(BOARD_FETCH_DEADLINE_SECONDS):
+        rows, _ = _fetch_normalized(
+            "greenhouse",
+            board["slug"],
+            published_after=None,
+            greenhouse_content=True,
+        )
+    updates = [
+        {
+            "job_id": job_ids[row["external_id"]],
+            "description_text": row["description_text"],
+        }
+        for row in rows
+        if row["external_id"] in job_ids
+        and row.get("description_text")
+    ]
+    elapsed = max(time.monotonic() - started_at, 0.001)
+    print(
+        f"Greenhouse deferred enrichment {board['slug']}: finished "
+        f"{len(updates)}/{len(job_ids)} descriptions; "
+        f"{len(updates) / elapsed:.2f} jobs/s; elapsed={elapsed:.1f}s",
+        flush=True,
+    )
+    return board["slug"], updates, len(job_ids) - len(updates)
+
+
+def _deferred_greenhouse_enrichment(
+    dsn: str,
+    import_run_id: int,
+    worker_id: str,
+) -> dict[str, int]:
+    """Enrich Greenhouse descriptions after all board list imports finish."""
+    with psycopg.connect(dsn) as conn:
+        candidates = _greenhouse_enrichment_candidates(conn, import_run_id)
+    if not candidates:
+        return {"candidates": 0, "enriched": 0, "failed": 0, "remaining": 0}
+
+    attempted = sum(len(board["jobs"]) for board in candidates.values())
+    enriched = 0
+    failed = 0
+    with ThreadPoolExecutor(max_workers=DAILY_ATS_CONCURRENCY["greenhouse"]) as pool:
+        future_boards = {
+            pool.submit(_enrich_greenhouse_board, board): board
+            for board in candidates.values()
+        }
+        pending = set(future_boards)
+        completed_boards = 0
+        started_at = time.monotonic()
+        with (
+            psycopg.connect(dsn) as heartbeat_connection,
+            psycopg.connect(dsn) as conn,
+        ):
+            while pending:
+                completed_futures, pending = wait(
+                    pending,
+                    timeout=10,
+                    return_when=FIRST_COMPLETED,
+                )
+                if not completed_futures:
+                    _heartbeat_daily_import(
+                        heartbeat_connection,
+                        import_run_id,
+                        worker_id,
+                    )
+                    elapsed = max(time.monotonic() - started_at, 0.001)
+                    print(
+                        "Greenhouse deferred enrichment heartbeat: "
+                        f"{completed_boards}/{len(future_boards)} boards complete; "
+                        f"{enriched}/{attempted} jobs enriched; "
+                        f"{enriched / elapsed:.2f} jobs/s",
+                        flush=True,
+                    )
+                    continue
+                _heartbeat_daily_import(
+                    heartbeat_connection,
+                    import_run_id,
+                    worker_id,
+                )
+                for future in completed_futures:
+                    completed_boards += 1
+                    board = future_boards[future]
+                    try:
+                        slug, updates, board_failed = future.result()
+                    except Exception as exc:
+                        failed += len(board["jobs"])
+                        print(
+                            "Greenhouse deferred enrichment board failed: "
+                            f"{board['slug']}: {type(exc).__name__}: {exc}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                        continue
+                    failed += board_failed
+                    if not updates:
+                        print(
+                            f"Greenhouse deferred enrichment {slug}: "
+                            f"no descriptions returned ({board_failed} deferred)",
+                            flush=True,
+                        )
+                        continue
+                    with conn.transaction():
+                        for update in updates:
+                            conn.execute(
+                                """
+                                UPDATE jobs
+                                SET description_text = COALESCE(
+                                        %s, description_text
+                                    ),
+                                    updated_at = now()
+                                WHERE job_id = %s
+                                """,
+                                (
+                                    update["description_text"],
+                                    update["job_id"],
+                                ),
+                            )
+                    enriched += len(updates)
+                    print(
+                        f"Greenhouse deferred enrichment {slug}: "
+                        f"{len(updates)} enriched, {board_failed} deferred",
+                        flush=True,
+                    )
+            _heartbeat_daily_import(
+                heartbeat_connection,
+                import_run_id,
+                worker_id,
+            )
+    with psycopg.connect(dsn) as conn:
+        remaining = _greenhouse_enrichment_remaining(conn, import_run_id)
+    return {
+        "candidates": attempted,
+        "enriched": enriched,
+        "failed": failed,
+        "remaining": remaining,
+    }
+
+
 def _fetch_workday_detail_candidate(
     job_id: int,
     job_url: str,
@@ -2228,6 +2442,39 @@ def _deferred_workday_enrichment(
         "failed": failed,
         "remaining": remaining,
     }
+
+
+def _deferred_daily_enrichment(
+    dsn: str,
+    import_run_id: int,
+    worker_id: str,
+    selected_ats: tuple[str, ...],
+) -> dict[str, dict[str, int]]:
+    """Run provider detail passes concurrently with provider-specific limits."""
+    jobs: dict[str, tuple[Callable[..., dict[str, int]], tuple[Any, ...]]] = {}
+    if "greenhouse" in selected_ats:
+        jobs["greenhouse"] = (
+            _deferred_greenhouse_enrichment,
+            (dsn, import_run_id, worker_id),
+        )
+    if "workday" in selected_ats:
+        jobs["workday"] = (
+            _deferred_workday_enrichment,
+            (dsn, import_run_id, worker_id),
+        )
+    if not jobs:
+        return {}
+
+    results: dict[str, dict[str, int]] = {}
+    with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+        futures = {
+            pool.submit(function, *arguments): ats
+            for ats, (function, arguments) in jobs.items()
+        }
+        for future in as_completed(futures):
+            ats = futures[future]
+            results[ats] = future.result()
+    return results
 
 
 def _etag_covers(
@@ -4506,49 +4753,63 @@ def _run(args: argparse.Namespace) -> int:
                     "because downstream continuation uses job-level enrichment "
                     "coverage"
                 )
-            if daily_phase == "board_import" and "workday" in selected_ats:
-                _set_daily_run_phase(conn, daily_import_run_id, "workday_enrichment")
-                daily_phase = "workday_enrichment"
+            if (
+                daily_phase == "board_import"
+                and any(ats in selected_ats for ats in ("greenhouse", "workday"))
+            ):
+                _set_daily_run_phase(
+                    conn,
+                    daily_import_run_id,
+                    "provider_enrichment",
+                )
+                daily_phase = "provider_enrichment"
             elif daily_phase == "board_import" and match_requested and non_workday_ats:
                 _set_daily_run_phase(conn, daily_import_run_id, "non_workday_matching")
                 daily_phase = "non_workday_matching"
 
         if (
             daily_import_run_id is not None
-            and "workday" in selected_ats
+            and any(ats in selected_ats for ats in ("greenhouse", "workday"))
             and daily_phase in (
                 "board_import",
                 "non_workday_matching",
+                "provider_enrichment",
                 "workday_enrichment",
             )
         ):
-            if daily_phase != "workday_enrichment":
+            if daily_phase != "provider_enrichment":
                 _set_daily_run_phase(
                     conn,
                     daily_import_run_id,
-                    "workday_enrichment",
+                    "provider_enrichment",
                 )
-                daily_phase = "workday_enrichment"
-            enrichment_stats = _deferred_workday_enrichment(
+                daily_phase = "provider_enrichment"
+            enrichment_stats_by_ats = _deferred_daily_enrichment(
                 dsn,
                 daily_import_run_id,
                 worker_id,
+                selected_ats,
             )
-            print(
-                "Workday deferred enrichment complete: "
-                f"{enrichment_stats['enriched']}/"
-                f"{enrichment_stats['candidates']} attempted; "
-                f"{enrichment_stats['remaining']} still missing descriptions; "
-                f"{enrichment_stats['failed']} deferred"
-            )
-            if enrichment_stats["remaining"]:
+            for enrichment_ats in ("greenhouse", "workday"):
+                enrichment_stats = enrichment_stats_by_ats.get(enrichment_ats)
+                if enrichment_stats is None:
+                    continue
+                label = enrichment_ats.capitalize()
                 print(
-                    f"Daily import run {daily_import_run_id}: "
-                    f"{enrichment_stats['remaining']} Workday jobs still need "
-                    "descriptions; active-job coverage will determine whether "
-                    "downstream processing can continue.",
-                    file=sys.stderr,
+                    f"{label} deferred enrichment complete: "
+                    f"{enrichment_stats['enriched']}/"
+                    f"{enrichment_stats['candidates']} attempted; "
+                    f"{enrichment_stats['remaining']} still missing descriptions; "
+                    f"{enrichment_stats['failed']} deferred"
                 )
+                if enrichment_stats["remaining"]:
+                    print(
+                        f"Daily import run {daily_import_run_id}: "
+                        f"{enrichment_stats['remaining']} {label} jobs still "
+                        "need descriptions; active-job coverage will determine "
+                        "whether downstream processing can continue.",
+                        file=sys.stderr,
+                    )
 
         if (
             daily_import_run_id is not None
@@ -4556,6 +4817,7 @@ def _run(args: argparse.Namespace) -> int:
             and daily_phase in (
                 "board_import",
                 "non_workday_matching",
+                "provider_enrichment",
                 "workday_enrichment",
                 "workday_matching",
             )
@@ -4564,7 +4826,7 @@ def _run(args: argparse.Namespace) -> int:
             print(
                 "Daily enrichment coverage: "
                 f"{coverage['enriched_jobs']}/{coverage['total_jobs']} eligible "
-                f"active-board jobs enriched "
+                f"active-board jobs requiring descriptions enriched "
                 f"({coverage['coverage_percent']:.2f}%), "
                 f"{coverage['missing_jobs']} missing"
             )
@@ -4808,7 +5070,8 @@ def main() -> None:
         action="store_true",
         help=(
             "request Greenhouse content=true and persist full plain-text "
-            "descriptions; use with a scoped board list because responses are larger"
+            "descriptions for an explicit non-daily import; daily runs enrich "
+            "Greenhouse after list import automatically"
         ),
     )
     parser.add_argument(
@@ -4890,7 +5153,8 @@ def main() -> None:
             )
         if args.greenhouse_content:
             parser.error(
-                "--daily never requests Greenhouse descriptions; omit --greenhouse-content"
+                "--daily enriches Greenhouse descriptions automatically; "
+                "omit --greenhouse-content"
             )
         if args.ats is None:
             args.ats = ",".join(ATS_NAMES)
