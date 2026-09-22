@@ -480,8 +480,12 @@ ON CONFLICT DO NOTHING;
 CREATE TABLE IF NOT EXISTS profile_recommendation_runs (
     run_id              BIGSERIAL PRIMARY KEY,
     user_id             BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    daily_import_run_id BIGINT REFERENCES daily_import_runs(import_run_id)
+                        ON DELETE SET NULL,
     profile_source_hash TEXT NOT NULL,
     published_after     TIMESTAMPTZ,
+    window_start        TIMESTAMPTZ,
+    window_end          TIMESTAMPTZ,
     candidate_floor     INTEGER NOT NULL,
     top_n               INTEGER NOT NULL,
     candidate_count     INTEGER NOT NULL,
@@ -495,6 +499,15 @@ CREATE INDEX IF NOT EXISTS profile_recommendation_runs_user_idx
     ON profile_recommendation_runs (user_id, created_at DESC);
 ALTER TABLE profile_recommendation_runs
     ADD COLUMN IF NOT EXISTS published_after TIMESTAMPTZ;
+ALTER TABLE profile_recommendation_runs
+    ADD COLUMN IF NOT EXISTS daily_import_run_id BIGINT
+    REFERENCES daily_import_runs(import_run_id) ON DELETE SET NULL;
+ALTER TABLE profile_recommendation_runs
+    ADD COLUMN IF NOT EXISTS window_start TIMESTAMPTZ;
+ALTER TABLE profile_recommendation_runs
+    ADD COLUMN IF NOT EXISTS window_end TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS profile_recommendation_runs_daily_idx
+    ON profile_recommendation_runs (daily_import_run_id);
 
 CREATE TABLE IF NOT EXISTS job_profile_reviews (
     review_id              BIGSERIAL PRIMARY KEY,
@@ -528,6 +541,41 @@ CREATE INDEX IF NOT EXISTS job_profile_reviews_user_idx
     ON job_profile_reviews (user_id);
 CREATE INDEX IF NOT EXISTS job_profile_reviews_run_idx
     ON job_profile_reviews (recommendation_run_id);
+
+CREATE TABLE IF NOT EXISTS profile_recommendation_items (
+    item_id              BIGSERIAL PRIMARY KEY,
+    run_id               BIGINT NOT NULL
+                         REFERENCES profile_recommendation_runs(run_id)
+                         ON DELETE CASCADE,
+    user_id              BIGINT NOT NULL REFERENCES users(user_id)
+                         ON DELETE CASCADE,
+    job_id               BIGINT NOT NULL REFERENCES jobs(job_id)
+                         ON DELETE CASCADE,
+    job_source_hash      TEXT NOT NULL,
+    prompt_version       TEXT NOT NULL,
+    gemini_model         TEXT NOT NULL,
+    batch_fit_score      INTEGER CHECK (batch_fit_score BETWEEN 0 AND 100),
+    batch_recommendation TEXT,
+    batch_strengths      JSONB,
+    batch_concerns       JSONB,
+    batch_rationale      TEXT,
+    final_fit_score      INTEGER CHECK (final_fit_score BETWEEN 0 AND 100),
+    final_rank            INTEGER,
+    final_recommendation  TEXT,
+    final_strengths       JSONB,
+    final_concerns        JSONB,
+    final_rationale       TEXT,
+    is_recommended       BOOLEAN NOT NULL DEFAULT FALSE,
+    reviewed_at          TIMESTAMPTZ NOT NULL,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT profile_recommendation_items_run_job_key
+        UNIQUE (run_id, user_id, job_id)
+);
+
+CREATE INDEX IF NOT EXISTS profile_recommendation_items_run_idx
+    ON profile_recommendation_items (run_id, is_recommended, final_rank);
+CREATE INDEX IF NOT EXISTS profile_recommendation_items_user_job_idx
+    ON profile_recommendation_items (user_id, job_id, reviewed_at DESC);
 
 UPDATE jobs AS j
 SET company = c.display_name
@@ -565,6 +613,7 @@ RECOMMENDATION_MODEL_NAME = "gemini-profile-reranker"
 RECOMMENDATION_MODEL_VERSION = gemini_service.JOB_REVIEW_VERSION
 DEFAULT_RECOMMENDATION_FLOOR = 55
 RECOMMENDATION_GEMINI_REVIEW_FLOOR = 75
+RECOMMENDATION_WINDOW_DAYS = 30
 RECOMMENDATION_MAX_GEMINI_CANDIDATES = 20
 RECOMMENDATION_PINNED_FINAL_FLOOR = 70
 RECOMMENDATION_BATCH_SIZE = 10
@@ -3932,6 +3981,8 @@ def run_recommendations(
     user_email: str | None = None,
     now: datetime | None = None,
     published_after: datetime | None = None,
+    daily_import_run_id: int | None = None,
+    recommendation_window_days: int | None = RECOMMENDATION_WINDOW_DAYS,
     ats: tuple[str, ...] | None = None,
     board_ids: tuple[int, ...] | None = None,
     top_n: int = RECOMMENDATION_TOP_N,
@@ -3950,6 +4001,8 @@ def run_recommendations(
         raise ValueError("invalid recommendation sizing")
     if max_gemini_candidates < 1:
         raise ValueError("max_gemini_candidates must be positive")
+    if recommendation_window_days is not None and recommendation_window_days < 1:
+        raise ValueError("recommendation_window_days must be positive")
     gemini_review_floor = max(0, min(100, int(gemini_review_floor)))
     pinned_final_floor = max(0, min(100, int(pinned_final_floor)))
 
@@ -3983,6 +4036,25 @@ def run_recommendations(
         raise gemini_service.GeminiConfigurationError(
             "Cannot recommend jobs without a profile source hash"
         )
+    run_at = now
+    if run_at is None and daily_import_run_id is not None:
+        daily_run_row = conn.execute(
+            "SELECT started_at FROM daily_import_runs WHERE import_run_id=%s",
+            (daily_import_run_id,),
+        ).fetchone()
+        if daily_run_row:
+            run_at = daily_run_row[0]
+    run_at = run_at or datetime.now(timezone.utc)
+    if run_at.tzinfo is None:
+        run_at = run_at.replace(tzinfo=timezone.utc)
+    window_end = run_at
+    window_start = (
+        window_end - timedelta(days=recommendation_window_days)
+        if recommendation_window_days is not None
+        else published_after
+    )
+    window_start_key = window_start.isoformat() if window_start else None
+    window_end_key = window_end.isoformat() if window_end else None
     configured_candidate_floor = (
         DEFAULT_RECOMMENDATION_FLOOR
         if configured_floor is None
@@ -3993,12 +4065,9 @@ def run_recommendations(
     candidate_floor = max(configured_candidate_floor, gemini_review_floor)
     job_cutoff = ""
     job_params: tuple[Any, ...] = ()
-    if published_after is not None:
-        job_cutoff = (
-            " AND (j.published_at >= %s "
-            "OR (b.ats = 'bamboohr' AND j.published_at IS NULL))"
-        )
-        job_params = (published_after,)
+    if window_start is not None:
+        job_cutoff = " AND j.published_at >= %s AND j.published_at <= %s"
+        job_params = (window_start, window_end)
     ats_clause = ""
     if ats:
         ats_clause = " AND b.ats = ANY(%s)"
@@ -4071,16 +4140,18 @@ def run_recommendations(
             "max_gemini_candidates": max_gemini_candidates,
             "pinned_final_floor": pinned_final_floor,
             "top_n": top_n,
+            "daily_import_run_id": daily_import_run_id,
             "shortlist": [],
         }, sort_keys=True).encode("utf-8")).hexdigest()
         existing_empty = None if force else conn.execute(
             """SELECT run_id FROM profile_recommendation_runs
                WHERE user_id=%s AND profile_source_hash=%s
+                 AND daily_import_run_id IS NOT DISTINCT FROM %s
                  AND published_after IS NOT DISTINCT FROM %s
                  AND candidate_floor=%s AND top_n=%s AND shortlist_hash=%s
                ORDER BY created_at DESC LIMIT 1""",
-            (user_id_value, profile_source_hash, published_after,
-             candidate_floor, top_n, empty_hash),
+             (user_id_value, profile_source_hash, daily_import_run_id,
+              published_after, candidate_floor, top_n, empty_hash),
         ).fetchone()
         if existing_empty:
             conn.execute(
@@ -4092,7 +4163,6 @@ def run_recommendations(
             return {"candidate_floor": candidate_floor, "candidates": 0,
                     "batch_reviewed": 0, "batch_cached": 0, "final_candidates": 0,
                     "recommendations": 0, "run_id": existing_empty[0]}
-        run_at = now or datetime.now(timezone.utc)
         with conn.transaction():
             conn.execute(
                 """UPDATE job_profile_reviews
@@ -4100,12 +4170,16 @@ def run_recommendations(
                    WHERE user_id=%s""", (user_id_value,))
             empty_run_id = conn.execute(
                 """INSERT INTO profile_recommendation_runs
-                   (user_id,profile_source_hash,candidate_floor,top_n,
-                    published_after,candidate_count,shortlist_hash,model_name,model_version)
-                   VALUES (%s,%s,%s,%s,%s,0,%s,%s,%s) RETURNING run_id""",
-                (user_id_value, profile_source_hash, candidate_floor, top_n,
-                 published_after, empty_hash, os.environ.get("GEMINI_MODEL", gemini_service.DEFAULT_MODEL),
-                 gemini_service.JOB_REVIEW_VERSION),
+                   (user_id,daily_import_run_id,profile_source_hash,candidate_floor,top_n,
+                    published_after,window_start,window_end,candidate_count,
+                    shortlist_hash,model_name,model_version)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,0,%s,%s,%s)
+                   RETURNING run_id""",
+                 (user_id_value, daily_import_run_id, profile_source_hash,
+                  candidate_floor, top_n, published_after, window_start,
+                  window_end, empty_hash,
+                  os.environ.get("GEMINI_MODEL", gemini_service.DEFAULT_MODEL),
+                  gemini_service.JOB_REVIEW_VERSION),
             ).fetchone()[0]
         return {
             "candidate_floor": candidate_floor,
@@ -4161,7 +4235,6 @@ def run_recommendations(
     # Do not hold the read transaction open while waiting for Gemini. Each
     # successful batch is committed independently below.
     conn.commit()
-    run_at = now or datetime.now(timezone.utc)
     for start in range(0, len(pending), batch_size):
         if heartbeat_callback:
             heartbeat_callback()
@@ -4277,6 +4350,7 @@ def run_recommendations(
                 "max_gemini_candidates": max_gemini_candidates,
                 "pinned_final_floor": pinned_final_floor,
                 "top_n": top_n,
+                "daily_import_run_id": daily_import_run_id,
                 "ats": list(ats) if ats else None,
                 "shortlist": shortlist_signature,
             },
@@ -4291,6 +4365,7 @@ def run_recommendations(
             FROM profile_recommendation_runs
             WHERE user_id = %s
               AND profile_source_hash = %s
+              AND daily_import_run_id IS NOT DISTINCT FROM %s
               AND published_after IS NOT DISTINCT FROM %s
               AND candidate_floor = %s
               AND top_n = %s
@@ -4301,6 +4376,7 @@ def run_recommendations(
             (
                 user_id_value,
                 profile_source_hash,
+                daily_import_run_id,
                 published_after,
                 candidate_floor,
                 top_n,
@@ -4341,18 +4417,22 @@ def run_recommendations(
         run_id = conn.execute(
             """
             INSERT INTO profile_recommendation_runs (
-                user_id, profile_source_hash, candidate_floor, top_n,
-                published_after, candidate_count, shortlist_hash,
+                user_id, daily_import_run_id, profile_source_hash,
+                candidate_floor, top_n, published_after, window_start,
+                window_end, candidate_count, shortlist_hash,
                 model_name, model_version
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING run_id
             """,
             (
                 user_id_value,
+                daily_import_run_id,
                 profile_source_hash,
                 candidate_floor,
                 top_n,
                 published_after,
+                window_start,
+                window_end,
                 deterministic_candidate_count,
                 shortlist_hash,
                 model_name,
@@ -4413,6 +4493,59 @@ def run_recommendations(
                     run_at,
                     user_id_value,
                     job["job_id"],
+                ),
+            )
+            conn.execute(
+                """
+                INSERT INTO profile_recommendation_items (
+                    run_id, user_id, job_id, job_source_hash,
+                    prompt_version, gemini_model, batch_fit_score,
+                    batch_recommendation, batch_strengths, batch_concerns,
+                    batch_rationale, final_fit_score, final_rank,
+                    final_recommendation, final_strengths, final_concerns,
+                    final_rationale, is_recommended, reviewed_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s
+                )
+                ON CONFLICT (run_id, user_id, job_id) DO UPDATE SET
+                    job_source_hash = EXCLUDED.job_source_hash,
+                    prompt_version = EXCLUDED.prompt_version,
+                    gemini_model = EXCLUDED.gemini_model,
+                    batch_fit_score = EXCLUDED.batch_fit_score,
+                    batch_recommendation = EXCLUDED.batch_recommendation,
+                    batch_strengths = EXCLUDED.batch_strengths,
+                    batch_concerns = EXCLUDED.batch_concerns,
+                    batch_rationale = EXCLUDED.batch_rationale,
+                    final_fit_score = EXCLUDED.final_fit_score,
+                    final_rank = EXCLUDED.final_rank,
+                    final_recommendation = EXCLUDED.final_recommendation,
+                    final_strengths = EXCLUDED.final_strengths,
+                    final_concerns = EXCLUDED.final_concerns,
+                    final_rationale = EXCLUDED.final_rationale,
+                    is_recommended = EXCLUDED.is_recommended,
+                    reviewed_at = EXCLUDED.reviewed_at
+                """,
+                (
+                    run_id,
+                    user_id_value,
+                    job["job_id"],
+                    job["job_source_hash"],
+                    prompt_version,
+                    model_name,
+                    job["batch_review"]["fit_score"],
+                    job["batch_review"]["recommendation"],
+                    Jsonb(job["batch_review"]["strengths"]),
+                    Jsonb(job["batch_review"]["concerns"]),
+                    job["batch_review"]["rationale"],
+                    review["fit_score"],
+                    review.get("rank"),
+                    review["recommendation"],
+                    Jsonb(review["strengths"]),
+                    Jsonb(review["concerns"]),
+                    review["rationale"],
+                    is_pinned,
+                    run_at,
                 ),
             )
     return {
@@ -4904,6 +5037,8 @@ def _run(args: argparse.Namespace) -> int:
                         recommendation_stats = run_recommendations(
                             conn,
                             published_after=published_after,
+                            daily_import_run_id=daily_import_run_id,
+                            recommendation_window_days=RECOMMENDATION_WINDOW_DAYS,
                             ats=selected_ats,
                             batch_size=args.recommend_batch_size,
                             heartbeat_callback=heartbeat,
@@ -4912,6 +5047,7 @@ def _run(args: argparse.Namespace) -> int:
                     recommendation_stats = run_recommendations(
                         conn,
                         published_after=published_after,
+                        recommendation_window_days=RECOMMENDATION_WINDOW_DAYS,
                         ats=selected_ats,
                         batch_size=args.recommend_batch_size,
                     )

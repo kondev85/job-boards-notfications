@@ -373,7 +373,13 @@ boards. It uses the user's `min_match_score` as the candidate floor (55 for the
 default Konstantin profile), sends candidates in batches rather than making one
 Gemini request per job, caches reviews by profile/job content, and compares a
 deduplicated shortlist. Location and workplace rules remain deterministic hard
-filters; Gemini only ranks profile fit.
+filters; Gemini only ranks profile fit. Recommendation selection uses a rolling
+30-day publication window independent of the import cutoff. Each run stores an
+immutable row for every shortlisted Gemini result in
+`profile_recommendation_items`, including weak final reviews; the reusable
+one-row-per-job cache remains in `job_profile_reviews`. Daily resumes reuse the
+snapshot identified by `daily_import_run_id`, while separate daily runs retain
+separate history.
 
 PostgreSQL stores the latest board ETag and the cutoff covered by that response.
 If the board is unchanged, a later compatible scan receives `304 Not Modified`

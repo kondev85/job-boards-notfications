@@ -238,7 +238,7 @@ def _export_recommendations(
             LIMIT 1
         )
         SELECT
-            r.final_rank,
+            i.final_rank,
             latest_run.run_id,
             latest_run.candidate_floor,
             jm.match_id,
@@ -257,24 +257,25 @@ def _export_recommendations(
             j.published_at,
             j.job_url,
             jm.score,
-            r.batch_fit_score,
-            r.final_fit_score,
-            r.final_recommendation,
-            r.final_strengths,
-            r.final_concerns,
-            r.final_rationale,
+            i.batch_fit_score,
+            i.final_fit_score,
+            i.final_recommendation,
+            i.final_strengths,
+            i.final_concerns,
+            i.final_rationale,
             j.description_text
         FROM latest_run
-        JOIN job_profile_reviews AS r
-          ON r.recommendation_run_id = latest_run.run_id
+        JOIN profile_recommendation_items AS i
+          ON i.run_id = latest_run.run_id
         JOIN job_matches AS jm
-          ON jm.user_id = r.user_id AND jm.job_id = r.job_id
-        JOIN jobs AS j ON j.job_id = r.job_id
+          ON jm.user_id = i.user_id AND jm.job_id = i.job_id
+        JOIN jobs AS j ON j.job_id = i.job_id
         JOIN job_boards AS b ON b.board_id = j.board_id
-        WHERE j.closed_at IS NULL
+        WHERE i.is_recommended IS TRUE
+          AND j.closed_at IS NULL
           AND b.active IS TRUE
           {ats_clause}
-        ORDER BY r.final_rank
+        ORDER BY i.final_rank
         LIMIT %s
     """.format(ats_clause=ats_clause)
     with psycopg.connect(dsn) as conn:

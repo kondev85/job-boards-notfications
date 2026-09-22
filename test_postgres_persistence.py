@@ -22,7 +22,7 @@ import subprocess
 import tempfile
 from unittest.mock import patch
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterator
 
@@ -1120,6 +1120,7 @@ def test_postgres_schema_constraints_repeat_import_and_lifecycle():
                 "daily_import_run_boards",
                 "profile_recommendation_runs",
                 "job_profile_reviews",
+                "profile_recommendation_items",
                 "user_job_state",
                 "user_job_status_history",
                 "feedback_signals",
@@ -1820,17 +1821,18 @@ def test_recommendation_role_key_collapses_location_variants():
 
 def _recommendation_fixture(conn, jobs):
     """Create one profiled user, active board, and deterministic matches."""
+    fixture_time = datetime.now(timezone.utc) - timedelta(days=5)
     with conn.transaction():
         with conn.cursor() as cur:
             board_id = persistence._ensure_board(
                 cur, "ashby", "recommendation-fixtures",
-                datetime(2026, 8, 10, tzinfo=timezone.utc),
+                fixture_time,
             )
             rows = [
                 _row(
                     external_id,
                     title=title,
-                    published_at=datetime(2026, 8, 10, tzinfo=timezone.utc),
+                    published_at=fixture_time,
                 )
                 for external_id, title, company, score in jobs
             ]
@@ -1838,7 +1840,7 @@ def _recommendation_fixture(conn, jobs):
             # import so role/company diversity is exercised independently.
             persistence._upsert_board_jobs(
                 cur, board_id, "fixture-company", rows,
-                datetime(2026, 8, 10, tzinfo=timezone.utc),
+                fixture_time,
             )
             user_id = cur.execute(
                 "SELECT user_id FROM users WHERE email = %s",
@@ -1977,6 +1979,17 @@ def test_weak_final_review_is_evidence_but_not_pinned():
                    WHERE user_id=%s AND recommendation_run_id=%s""",
                 (user_id, result["run_id"]),
             ).fetchone()[0] == 1
+            item_rows = conn.execute(
+                """
+                SELECT j.external_id, i.final_fit_score, i.is_recommended
+                FROM profile_recommendation_items AS i
+                JOIN jobs AS j USING (job_id)
+                WHERE i.run_id=%s
+                ORDER BY j.external_id
+                """,
+                (result["run_id"],),
+            ).fetchall()
+            assert item_rows == [("good", 85, True), ("weak", 40, False)]
 
 
 def test_empty_recommendation_run_clears_stale_pins_and_is_cached():
@@ -2017,6 +2030,140 @@ def test_empty_recommendation_run_clears_stale_pins_and_is_cached():
                 conn, user_id=user_id, top_n=1, shortlist_size=1
             )
             assert cached["run_id"] == empty["run_id"]
+
+
+def test_recommendation_history_preserves_each_run_and_30_day_window():
+    with _temporary_postgres() as dsn:
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            user_id = _recommendation_fixture(
+                conn,
+                [
+                    ("recent", "Recent Role", "RecentCo", 90),
+                    ("old", "Old Role", "OldCo", 90),
+                ],
+            )
+            run_now = datetime.now(timezone.utc)
+            conn.execute(
+                "UPDATE jobs SET published_at=%s WHERE external_id='old'",
+                (run_now - timedelta(days=31),),
+            )
+
+            def batch(profile, payloads):
+                return [_fake_review(payload, 80) for payload in payloads]
+
+            def final(profile, payloads):
+                return [_fake_review(payload, 85) for payload in payloads]
+
+            with patch.object(
+                persistence, "_review_batch_with_split", batch
+            ), patch.object(
+                persistence.gemini_service, "compare_job_shortlist", final
+            ):
+                first = persistence.run_recommendations(
+                    conn,
+                    user_id=user_id,
+                    now=run_now,
+                    force=True,
+                    top_n=1,
+                    shortlist_size=1,
+                )
+                second = persistence.run_recommendations(
+                    conn,
+                    user_id=user_id,
+                    now=run_now + timedelta(days=1),
+                    force=True,
+                    top_n=1,
+                    shortlist_size=1,
+                )
+
+            assert first["run_id"] != second["run_id"]
+            assert conn.execute(
+                """
+                SELECT count(*)
+                FROM profile_recommendation_items
+                WHERE user_id=%s
+                """,
+                (user_id,),
+            ).fetchone()[0] == 2
+            history = conn.execute(
+                """
+                SELECT r.run_id, j.external_id, i.is_recommended,
+                       r.window_start, r.window_end
+                FROM profile_recommendation_items AS i
+                JOIN profile_recommendation_runs AS r ON r.run_id = i.run_id
+                JOIN jobs AS j ON j.job_id = i.job_id
+                WHERE i.user_id=%s
+                ORDER BY r.run_id
+                """,
+                (user_id,),
+            ).fetchall()
+            assert [row[1] for row in history] == ["recent", "recent"]
+            assert all(row[2] is True for row in history)
+            assert history[0][3] == run_now - timedelta(days=30)
+            assert history[0][4] == run_now
+            assert history[1][3] == run_now + timedelta(days=1) - timedelta(days=30)
+            assert history[1][4] == run_now + timedelta(days=1)
+
+
+def test_daily_recommendation_run_is_idempotent_on_resume():
+    with _temporary_postgres() as dsn:
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            user_id = _recommendation_fixture(
+                conn, [("daily", "Daily Role", "DailyCo", 90)]
+            )
+            daily_run_id = conn.execute(
+                """
+                INSERT INTO daily_import_runs (
+                    ats_scope, published_after, board_count
+                ) VALUES (%s, %s, 0)
+                RETURNING import_run_id
+                """,
+                (["ashby"], datetime.now(timezone.utc) - timedelta(days=2)),
+            ).fetchone()[0]
+
+            with patch.object(
+                persistence,
+                "_review_batch_with_split",
+                lambda profile, payloads: [_fake_review(p) for p in payloads],
+            ), patch.object(
+                persistence.gemini_service,
+                "compare_job_shortlist",
+                lambda profile, payloads: [_fake_review(p, 85) for p in payloads],
+            ):
+                first = persistence.run_recommendations(
+                    conn,
+                    user_id=user_id,
+                    daily_import_run_id=daily_run_id,
+                    top_n=1,
+                    shortlist_size=1,
+                )
+                resumed = persistence.run_recommendations(
+                    conn,
+                    user_id=user_id,
+                    daily_import_run_id=daily_run_id,
+                    top_n=1,
+                    shortlist_size=1,
+                )
+
+            assert resumed["run_id"] == first["run_id"]
+            assert conn.execute(
+                """
+                SELECT count(*)
+                FROM profile_recommendation_runs
+                WHERE daily_import_run_id=%s
+                """,
+                (daily_run_id,),
+            ).fetchone()[0] == 1
+            assert conn.execute(
+                """
+                SELECT count(*)
+                FROM profile_recommendation_items
+                WHERE run_id=%s
+                """,
+                (first["run_id"],),
+            ).fetchone()[0] == 1
 
 
 def test_workplace_change_rejects_existing_match():

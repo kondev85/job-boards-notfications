@@ -117,7 +117,9 @@ async function healthSnapshot() {
          'users',
          'search_runs',
          'daily_import_runs',
-         'daily_import_run_boards'
+         'daily_import_run_boards',
+         'profile_recommendation_runs',
+         'profile_recommendation_items'
        ]::text[]) AS required(table_name)
        WHERE to_regclass('public.' || table_name) IS NULL`,
     );
@@ -406,7 +408,21 @@ app.get("/api/jobs/matched", async (req: AuthedRequest, res) => {
   res.json({ rows: rows.rows, total, page, limit: effectiveLimit, scope, facets: { locations: [...facets.values()].sort((a, b) => a.label.localeCompare(b.label)) } });
 });
 app.get("/api/recommendations/latest", async (req: AuthedRequest, res) => {
-  const r = await pool.query("SELECT r.*,j.title,j.company,j.job_url,j.ats,j.external_id,j.location_raw,j.workplace_type,j.published_at,j.published_at_source,j.description_text FROM job_profile_reviews r JOIN jobs j USING(job_id) JOIN job_boards b ON b.board_id=j.board_id AND b.active IS TRUE WHERE r.user_id=$1 AND r.final_fit_score >= $2 AND r.recommendation_run_id=(SELECT run_id FROM profile_recommendation_runs WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1) ORDER BY r.final_rank NULLS LAST", [uid(req), pinnedRecommendationFloor]); res.json(r.rows);
+  const r = await pool.query(`SELECT i.item_id AS review_id,i.run_id,i.user_id,i.job_id,
+       i.batch_fit_score,i.batch_recommendation,i.batch_strengths,i.batch_concerns,
+       i.batch_rationale,i.final_fit_score,i.final_rank,i.final_recommendation,
+       i.final_strengths,i.final_concerns,i.final_rationale,i.reviewed_at,
+       j.title,j.company,j.job_url,j.ats,j.external_id,j.location_raw,
+       j.workplace_type,j.published_at,j.published_at_source,j.description_text
+       FROM profile_recommendation_items i
+       JOIN jobs j USING(job_id)
+       JOIN job_boards b ON b.board_id=j.board_id AND b.active IS TRUE
+       WHERE i.user_id=$1 AND i.is_recommended IS TRUE
+         AND i.final_fit_score >= $2
+         AND i.run_id=(SELECT run_id FROM profile_recommendation_runs
+                       WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1)
+       ORDER BY i.final_rank NULLS LAST`, [uid(req), pinnedRecommendationFloor]);
+  res.json(r.rows);
 });
 app.patch("/api/jobs/:jobId/status", async (req: AuthedRequest, res) => {
   const status = req.body?.status; if (!["new","viewed","saved","applied","rejected"].includes(status)) return res.status(400).json({ error: "Invalid status" });
