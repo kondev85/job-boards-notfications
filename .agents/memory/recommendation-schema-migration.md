@@ -7,4 +7,4 @@ Recommendation-history DDL must be maintained in the numbered migrations as well
 
 **Why:** The preview can have the older recommendation tables from scraper setup while the web API fails as soon as it queries a newly added history table.
 
-**How to apply:** Add a numbered migration, include it in the development post-merge setup, apply it to development through the supported schema flow, and rely on Publish to carry the diff to production.
+**How to apply:** Add a numbered migration, include it in the development post-merge setup, backfill pinned rows from the legacy review table when introducing history, apply it to development through the supported schema flow, and rely on Publish to carry the diff to production.
