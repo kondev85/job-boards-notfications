@@ -1,11 +1,10 @@
 ---
-name: Workday SPA detail transport
-description: How public modern Workday career pages expose posting detail data.
+name: Workday detail policy
+description: Project policy for Workday postings whose public detail pages omit descriptions.
 ---
 
-Modern Workday career pages commonly return an SPA shell with no usable JSON-LD or description. The browser loads posting details from the public Calypso endpoint derived from the page URL:
-`/wday/calypso/cxs/jobdetails/{tenant}/{site}/job/{location}/{posting-id}`. The page token is sent as `X-CALYPSO-CSRF-TOKEN`; retain JSON-LD as a fallback for older pages.
+Do not use Workday's public Calypso job-details endpoint for broad enrichment. It is hard-throttled and is not a reliable daily-import transport. When a board produces many jobs without descriptions, review its exact slug and company/board identifier and disable the board if it is not worth scanning.
 
-**Why:** The shell can be several kilobytes while containing no job description, causing a JSON-LD-only importer to mark large valid boards as permanently missing detail.
+**Why:** Broad detail requests can be throttled, while a small number of high-volume boards can dominate the daily backlog and prevent useful downstream completion.
 
-**How to apply:** Use the API response's `jobPostingInfo` fields when present, require a non-empty normalized description before treating enrichment as successful, and preserve bounded retries for throttled or empty responses.
+**How to apply:** Keep board-level missing-description reports, preserve resumable daily phases, and make active-board changes explicitly after review rather than retrying the throttled public detail endpoint.

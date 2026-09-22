@@ -1859,6 +1859,7 @@ def _workday_enrichment_candidates(
         JOIN daily_import_runs AS r ON r.import_run_id = rb.import_run_id
         WHERE rb.import_run_id = %s::BIGINT
           AND b.ats = 'workday'
+          AND b.active IS TRUE
           AND rb.status = 'completed'
           AND j.description_text IS NULL
           AND j.job_url IS NOT NULL
@@ -1893,6 +1894,7 @@ def _workday_enrichment_remaining(
         JOIN daily_import_runs AS r ON r.import_run_id = rb.import_run_id
         WHERE rb.import_run_id = %s
           AND b.ats = 'workday'
+          AND b.active IS TRUE
           AND rb.status = 'completed'
           AND j.description_text IS NULL
           AND j.job_url IS NOT NULL
