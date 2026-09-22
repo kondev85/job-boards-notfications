@@ -109,6 +109,70 @@ def _deactivate_failures(
         print(f"{ats}:{slug}")
 
 
+def _repeated_failures(
+    conn: psycopg.Connection,
+    first_run_id: int,
+    second_run_id: int,
+) -> list[dict[str, object]]:
+    """Return boards that failed in both selected runs."""
+    rows = conn.execute(
+        """
+        SELECT b.board_id, b.ats, b.slug, b.active,
+               rb.import_run_id, rb.error_type, rb.error_message
+        FROM daily_import_run_boards AS rb
+        JOIN job_boards AS b ON b.board_id = rb.board_id
+        WHERE rb.import_run_id IN (%s, %s)
+          AND rb.status = 'failed'
+        ORDER BY b.ats, b.slug, rb.import_run_id
+        """,
+        (first_run_id, second_run_id),
+    ).fetchall()
+    by_board: dict[int, dict[str, object]] = {}
+    for board_id, ats, slug, active, run_id, error_type, error_message in rows:
+        record = by_board.setdefault(
+            board_id,
+            {
+                "board_id": board_id,
+                "ats": ats,
+                "slug": slug,
+                "active": active,
+                "runs": {},
+            },
+        )
+        record["runs"][run_id] = {
+            "error_type": error_type,
+            "error_message": error_message,
+        }
+    return [
+        record
+        for record in by_board.values()
+        if len(record["runs"]) == 2
+    ]
+
+
+def _deactivate_repeated_failures(
+    conn: psycopg.Connection,
+    repeated: list[dict[str, object]],
+) -> int:
+    board_ids = [int(record["board_id"]) for record in repeated]
+    if not board_ids:
+        return 0
+    with conn.transaction():
+        rows = conn.execute(
+            """
+            UPDATE job_boards
+            SET active = FALSE
+            WHERE board_id = ANY(%s)
+              AND active IS TRUE
+            RETURNING board_id, ats, slug
+            """,
+            (board_ids,),
+        ).fetchall()
+    for board_id, ats, slug in rows:
+        print(f"Deactivated {ats}:{slug} (board_id={board_id})")
+    return len(rows)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="List failed daily boards or deactivate exact board keys."
@@ -141,10 +205,33 @@ def main() -> None:
         default=2,
         help="minimum recorded attempts for --deactivate-failures (default: 2)",
     )
+    parser.add_argument(
+        "--compare-runs",
+        nargs=2,
+        type=int,
+        metavar=("RUN_A", "RUN_B"),
+        help="compare failed boards from two daily import runs",
+    )
+    parser.add_argument(
+        "--deactivate-repeated-failures",
+        action="store_true",
+        help="deactivate boards failed in both runs selected by --compare-runs",
+    )
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="apply repeated-failure deactivation; otherwise only preview",
+    )
     args = parser.parse_args()
-    if not args.list_failures and not args.deactivate and not args.deactivate_failures:
+    if not (
+        args.list_failures
+        or args.deactivate
+        or args.deactivate_failures
+        or args.compare_runs
+    ):
         parser.error(
-            "choose --list-failures, --deactivate, or --deactivate-failures"
+            "choose --list-failures, --deactivate, --deactivate-failures, "
+            "or --compare-runs"
         )
     if args.run_id is not None and not (
         args.list_failures or args.deactivate_failures
@@ -152,6 +239,10 @@ def main() -> None:
         parser.error("--run-id requires --list-failures or --deactivate-failures")
     if args.deactivate_failures and args.run_id is None:
         parser.error("--deactivate-failures requires --run-id")
+    if args.deactivate_repeated_failures and not args.compare_runs:
+        parser.error("--deactivate-repeated-failures requires --compare-runs")
+    if args.apply and not args.deactivate_repeated_failures:
+        parser.error("--apply requires --deactivate-repeated-failures")
     if args.min_attempts < 1:
         parser.error("--min-attempts must be at least 1")
     dsn = os.environ.get("DATABASE_URL")
@@ -169,6 +260,35 @@ def main() -> None:
                 args.error_type,
                 args.min_attempts,
             )
+        if args.compare_runs:
+            first_run_id, second_run_id = args.compare_runs
+            if first_run_id == second_run_id:
+                parser.error("--compare-runs requires two different run IDs")
+            repeated = _repeated_failures(conn, first_run_id, second_run_id)
+            print(
+                f"Boards failed in both daily import runs "
+                f"{first_run_id} and {second_run_id}: {len(repeated)}"
+            )
+            for record in repeated:
+                runs = record["runs"]
+                print(
+                    f"{record['ats']}:{record['slug']} | "
+                    f"active={record['active']} | board_id={record['board_id']} | "
+                    f"run {first_run_id}: "
+                    f"{runs[first_run_id]['error_type'] or 'unknown'} | "
+                    f"run {second_run_id}: "
+                    f"{runs[second_run_id]['error_type'] or 'unknown'}"
+                )
+            if args.deactivate_repeated_failures:
+                if not args.apply:
+                    print(
+                        "Preview only. Add --apply to deactivate these boards."
+                    )
+                else:
+                    print(
+                        f"Deactivated {_deactivate_repeated_failures(conn, repeated)} "
+                        "repeatedly failed boards."
+                    )
 
 
 if __name__ == "__main__":

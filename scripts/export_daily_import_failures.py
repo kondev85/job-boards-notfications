@@ -66,6 +66,27 @@ def _latest_run_id(conn: psycopg.Connection) -> int | None:
     return row[0] if row else None
 
 
+def _run_published_after(
+    conn: psycopg.Connection,
+    import_run_id: int,
+) -> datetime | None:
+    row = conn.execute(
+        "SELECT published_after FROM daily_import_runs WHERE import_run_id = %s",
+        (import_run_id,),
+    ).fetchone()
+    if row is None:
+        raise ValueError(f"daily import run {import_run_id} does not exist")
+    return row[0]
+
+
+def _cutoff_token(published_after: datetime | None) -> str:
+    return (
+        published_after.date().isoformat()
+        if published_after is not None
+        else "no-cutoff"
+    )
+
+
 def _failed_rows(
     conn: psycopg.Connection,
     import_run_id: int,
@@ -142,6 +163,7 @@ def export_daily_import_failures(
         selected_run_id = import_run_id or _latest_run_id(conn)
         if selected_run_id is None:
             raise ValueError("no daily import runs exist")
+        published_after = _run_published_after(conn, selected_run_id)
         records = _failed_rows(conn, selected_run_id)
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -149,15 +171,32 @@ def export_daily_import_failures(
     latest_json = output_dir / "daily_import_failures.json"
     run_csv = output_dir / f"daily_import_failures_run_{selected_run_id}.csv"
     run_json = output_dir / f"daily_import_failures_run_{selected_run_id}.json"
-    for path in (latest_csv, latest_json, run_csv, run_json):
+    cutoff_token = _cutoff_token(published_after)
+    cutoff_csv = output_dir / (
+        f"daily_import_failures_after_{cutoff_token}_run_{selected_run_id}.csv"
+    )
+    cutoff_json = output_dir / (
+        f"daily_import_failures_after_{cutoff_token}_run_{selected_run_id}.json"
+    )
+    for path in (
+        latest_csv,
+        latest_json,
+        run_csv,
+        run_json,
+        cutoff_csv,
+        cutoff_json,
+    ):
         _write_report(path, records)
     return {
         "csv": latest_csv,
         "json": latest_json,
         "run_csv": run_csv,
         "run_json": run_json,
+        "cutoff_csv": cutoff_csv,
+        "cutoff_json": cutoff_json,
         "count": len(records),
         "run_id": selected_run_id,
+        "published_after": published_after,
     }
 
 
@@ -189,6 +228,8 @@ def main() -> None:
     print(f"JSON: {result['json']}")
     print(f"Run CSV:  {result['run_csv']}")
     print(f"Run JSON: {result['run_json']}")
+    print(f"Cutoff CSV:  {result['cutoff_csv']}")
+    print(f"Cutoff JSON: {result['cutoff_json']}")
 
 
 if __name__ == "__main__":

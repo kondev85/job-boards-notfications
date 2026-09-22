@@ -4234,6 +4234,11 @@ def _run(args: argparse.Namespace) -> int:
                     f"{report_paths['csv'].relative_to(Path.cwd())} and "
                     f"{report_paths['json'].relative_to(Path.cwd())}"
                 )
+                print(
+                    "Daily cutoff-specific failure report: "
+                    f"{report_paths['cutoff_csv'].relative_to(Path.cwd())} and "
+                    f"{report_paths['cutoff_json'].relative_to(Path.cwd())}"
+                )
             except Exception as exc:
                 print(
                     f"Daily failed-board report could not be written: "

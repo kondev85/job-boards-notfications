@@ -85,6 +85,26 @@ board checkpoints intact; the next scheduled invocation continues the same run. 
 importer heartbeat is refreshed after every board, and the PostgreSQL advisory lock
 prevents overlapping scheduled invocations.
 
+Each daily run writes a run-specific failure report plus an immutable
+`daily_import_failures_after_<cutoff>_run_<id>.csv/json` pair. The convenient
+`daily_import_failures.csv/json` files still point to the latest run. To find boards that
+failed in both of two runs, preview their intersection before making any registry change:
+
+```bash
+uv run scripts/manage_daily_boards.py --compare-runs 47 48
+```
+
+To disable only those repeated failures, use the explicit apply flag:
+
+```bash
+uv run scripts/manage_daily_boards.py \
+  --compare-runs 47 48 \
+  --deactivate-repeated-failures \
+  --apply
+```
+
+Disabled boards are excluded from future daily snapshots without deleting their history.
+
 That is the whole thing. You end up with:
 
 | file | what it is |

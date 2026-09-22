@@ -20,3 +20,4 @@
 - [Daily downstream phase gates](daily-downstream-phase-gates.md) — non-Workday matching may start early; Workday matching and Gemini wait for complete detail coverage.
 - [Psycopg nullable parameter casts](psycopg-null-parameter-casts.md) — cast nullable placeholders used in standalone SQL predicates to avoid PostgreSQL indeterminate datatype errors.
 - [Recruitee redirects](recruitee-redirects.md) — legacy Recruitee hosts may redirect their offers feed and must be followed before JSON parsing.
+- [Daily failure report comparison](daily-failure-report-comparison.md) — preserve cutoff/run failure snapshots and require explicit repeated-failure deactivation.

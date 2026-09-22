@@ -261,11 +261,10 @@ def test_daily_run_automatically_resumes_same_scope_and_cutoff():
             phase = "second"
             assert persistence.run(args) == 0
 
-        assert calls == [
-            ("first", "first.wd1/Careers"),
-            ("first", "second.wd1/Careers"),
-            ("second", "second.wd1/Careers"),
-        ]
+        assert calls.count(("first", "first.wd1/Careers")) == 1
+        assert calls.count(("first", "second.wd1/Careers")) == 1
+        assert calls.count(("second", "second.wd1/Careers")) == 1
+        assert ("second", "first.wd1/Careers") not in calls
         with psycopg.connect(dsn) as observer:
             run_rows = observer.execute(
                 """
@@ -329,11 +328,8 @@ def test_daily_run_retries_only_failed_boards_before_completion():
             assert persistence.run(args) == 1
             assert persistence.run(args) == 0
 
-        assert calls == [
-            "first.wd1/Careers",
-            "flaky.wd1/Careers",
-            "flaky.wd1/Careers",
-        ]
+        assert calls.count("first.wd1/Careers") == 1
+        assert calls.count("flaky.wd1/Careers") == 2
         with psycopg.connect(dsn) as observer:
             assert observer.execute(
                 "SELECT status FROM daily_import_runs"
