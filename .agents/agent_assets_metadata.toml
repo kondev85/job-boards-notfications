@@ -140,3 +140,17 @@ mtime_ms = 1790062574243
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:bcdd2077-1b25-4baf-822f-dcbb74772d86/1ae9d898-79d7-4750-9aae-9d6972373e6a/685d8efd-2c34-4077-9b85-dff669702f40"
 storage_version_token = "1790062575342209"
 content_type = "text/csv"
+
+[[outputs]]
+id = "kkHiLE3If6jh-xByjcIU3"
+uri = "file://reports/workday_run_47_enrichment_remediation.csv"
+type = "table"
+title = "Run 47 enrichment remediation by board"
+description = "All active boards contributing missing descriptions, ranked by missing jobs, with exact board/company IDs, likely cause, and recommended action."
+logical_id = "ad67ad12-0b6a-406f-8f81-f755f90e0dd3"
+content_hash = "sha256:b6d813e110c970269ba8436ddbb3545ff035ca106b5947e44b5252424b4bdf9e"
+size = 553211
+mtime_ms = 1790065942584
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:bcdd2077-1b25-4baf-822f-dcbb74772d86/ad67ad12-0b6a-406f-8f81-f755f90e0dd3/654eeb01-3212-4106-9223-35ecabba12e9"
+storage_version_token = "1790065943314744"
+content_type = "text/csv"
