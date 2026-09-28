@@ -69,7 +69,8 @@ DAILY_BOARD_WORKERS = 5
 DAILY_DETAIL_CONCURRENCY = 8
 WORKDAY_DETAIL_MAX_ATTEMPTS = 3
 BOARD_FETCH_DEADLINE_SECONDS = 60
-DAILY_MIN_SUCCESS_PERCENT = 98
+DAILY_MIN_BOARD_SUCCESS_PERCENT = 98
+DAILY_MIN_ENRICHMENT_PERCENT = 96
 DAILY_ATS_CONCURRENCY = {
     "workday": 2,
     "ashby": 3,
@@ -1186,7 +1187,8 @@ def _daily_failures_allow_downstream(failed_boards: int, board_count: int) -> bo
     """Allow downstream work when the board snapshot is at least 98% successful."""
     return failed_boards == 0 or (
         board_count > 0
-        and (board_count - failed_boards) * 100 >= board_count * DAILY_MIN_SUCCESS_PERCENT
+        and (board_count - failed_boards) * 100
+        >= board_count * DAILY_MIN_BOARD_SUCCESS_PERCENT
     )
 
 
@@ -1233,8 +1235,11 @@ def _daily_enrichment_allows_downstream(
     enriched_jobs: int,
     total_jobs: int,
 ) -> bool:
-    """Allow matching and Gemini when at least 98% of eligible jobs are enriched."""
-    return total_jobs == 0 or enriched_jobs * 100 >= total_jobs * DAILY_MIN_SUCCESS_PERCENT
+    """Allow matching and Gemini when at least 96% of eligible jobs are enriched."""
+    return (
+        total_jobs == 0
+        or enriched_jobs * 100 >= total_jobs * DAILY_MIN_ENRICHMENT_PERCENT
+    )
 
 
 def _finish_daily_import_run(
@@ -4970,14 +4975,14 @@ def _run(args: argparse.Namespace) -> int:
                 print(
                     f"Daily import run {daily_import_run_id} remains resumable: "
                     f"enrichment coverage is {coverage['coverage_percent']:.2f}%, "
-                    f"below the required {DAILY_MIN_SUCCESS_PERCENT}%. "
+                    f"below the required {DAILY_MIN_ENRICHMENT_PERCENT}%. "
                     "Matching and Gemini recommendations were not started.",
                     file=sys.stderr,
                 )
                 return 1
             print(
                 f"Daily import run {daily_import_run_id}: enrichment coverage "
-                f"meets the {DAILY_MIN_SUCCESS_PERCENT}% threshold; "
+                f"meets the {DAILY_MIN_ENRICHMENT_PERCENT}% threshold; "
                 "continuing to matching."
             )
             _set_daily_run_phase(

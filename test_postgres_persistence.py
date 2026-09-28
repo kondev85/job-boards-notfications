@@ -451,11 +451,12 @@ def test_daily_failure_threshold_allows_at_least_98_percent_success():
     assert not persistence._daily_failures_allow_downstream(21, 1000)
 
 
-def test_daily_enrichment_threshold_allows_at_least_98_percent_jobs():
+def test_daily_enrichment_threshold_allows_at_least_96_percent_jobs():
     assert persistence._daily_enrichment_allows_downstream(0, 0)
-    assert persistence._daily_enrichment_allows_downstream(98, 100)
-    assert persistence._daily_enrichment_allows_downstream(196, 200)
-    assert not persistence._daily_enrichment_allows_downstream(97, 100)
+    assert persistence._daily_enrichment_allows_downstream(96, 100)
+    assert persistence._daily_enrichment_allows_downstream(192, 200)
+    assert persistence._daily_enrichment_allows_downstream(195, 200)
+    assert not persistence._daily_enrichment_allows_downstream(95, 100)
 
 
 def test_daily_workday_workers_are_available_from_the_start():

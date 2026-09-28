@@ -18,7 +18,7 @@
 - [Personio public job URLs](personio-public-job-urls.md) — XML feeds provide posting IDs but often omit URLs; derive the public `/job/{id}` link from the board host.
 - [Deferred Workday enrichment throughput](deferred-workday-enrichment.md) — large post-list detail backlogs need shell-visible progress and jobs-per-second metrics.
 - [Daily downstream phase gates](daily-downstream-phase-gates.md) — non-Workday matching may start early; Workday matching and Gemini wait for complete detail coverage.
-- [Job-level downstream threshold](job-level-downstream-threshold.md) — active-board jobs at or above 98% description coverage may proceed to matching and Gemini across selected ATSes.
+- [Job-level downstream threshold](job-level-downstream-threshold.md) — active-board jobs at or above 96% description coverage may proceed to matching and Gemini across selected ATSes.
 - [Psycopg nullable parameter casts](psycopg-null-parameter-casts.md) — cast nullable placeholders used in standalone SQL predicates to avoid PostgreSQL indeterminate datatype errors.
 - [Recruitee redirects](recruitee-redirects.md) — legacy Recruitee hosts may redirect their offers feed and must be followed before JSON parsing.
 - [Daily failure report comparison](daily-failure-report-comparison.md) — preserve cutoff/run failure snapshots and require explicit repeated-failure deactivation.
