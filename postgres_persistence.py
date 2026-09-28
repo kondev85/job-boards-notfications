@@ -4905,7 +4905,7 @@ def _run(args: argparse.Namespace) -> int:
                 _set_daily_run_phase(conn, daily_import_run_id, "non_workday_matching")
                 daily_phase = "non_workday_matching"
 
-        if (
+        provider_enrichment_phase = (
             daily_import_run_id is not None
             and any(ats in selected_ats for ats in ("greenhouse", "workday"))
             and daily_phase in (
@@ -4914,7 +4914,23 @@ def _run(args: argparse.Namespace) -> int:
                 "provider_enrichment",
                 "workday_enrichment",
             )
-        ):
+        )
+        skip_provider_enrichment = False
+        if provider_enrichment_phase and match_requested:
+            current_coverage = _daily_enrichment_stats(conn, daily_import_run_id)
+            if _daily_enrichment_allows_downstream(
+                int(current_coverage["enriched_jobs"]),
+                int(current_coverage["total_jobs"]),
+            ):
+                skip_provider_enrichment = True
+                print(
+                    f"Daily import run {daily_import_run_id}: enrichment coverage "
+                    f"is already {current_coverage['coverage_percent']:.2f}%; "
+                    f"skipping extra provider detail requests at the "
+                    f"{DAILY_MIN_ENRICHMENT_PERCENT}% threshold."
+                )
+
+        if provider_enrichment_phase and not skip_provider_enrichment:
             if daily_phase != "provider_enrichment":
                 _set_daily_run_phase(
                     conn,
