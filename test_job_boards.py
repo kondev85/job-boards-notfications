@@ -1296,6 +1296,42 @@ def test_workday_validation_classifies_definitive_http_failures_as_invalid():
         job_boards._workday_post_json = original_post
 
 
+def test_workday_403_errors_include_safe_bot_and_retry_diagnostics():
+    import job_boards
+
+    assert "403_hint=rate_limit" in job_boards._workday_403_diagnostics(
+        {}, b"Too many requests; rate limit exceeded"
+    )
+    assert "403_hint=access_denied" in job_boards._workday_403_diagnostics(
+        {}, b"Access denied"
+    )
+    assert "403_hint=unclassified" in job_boards._workday_403_diagnostics(
+        {}, b"Request rejected"
+    )
+
+    original_pooled_request = job_boards._pooled_request
+    try:
+        job_boards._pooled_request = lambda *args, **kwargs: (
+            403,
+            {"server": "cloudflare", "cf-mitigated": "challenge", "retry-after": "30"},
+            b"<html>Verify you are human</html>",
+        )
+        try:
+            job_boards._workday_post_json(
+                "https://tenant.wd1.myworkdayjobs.com/wday/cxs/tenant/board/jobs",
+                {"limit": 1},
+            )
+        except job_boards.urllib.error.HTTPError as exc:
+            assert "403_hint=bot_challenge" in exc.reason
+            assert "server=cloudflare" in exc.reason
+            assert "retry_after=30" in exc.reason
+            assert "Verify you are human" not in exc.reason
+        else:
+            raise AssertionError("a 403 response should remain a board failure")
+    finally:
+        job_boards._pooled_request = original_pooled_request
+
+
 def test_successful_workday_cache_write_removes_checkpoint():
     import job_boards
 

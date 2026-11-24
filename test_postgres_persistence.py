@@ -451,15 +451,15 @@ def test_daily_failure_threshold_allows_at_least_98_percent_success():
     assert not persistence._daily_failures_allow_downstream(21, 1000)
 
 
-def test_daily_enrichment_threshold_allows_at_least_96_percent_jobs():
+def test_daily_enrichment_threshold_allows_at_least_94_percent_jobs():
     assert persistence._daily_enrichment_allows_downstream(0, 0)
-    assert persistence._daily_enrichment_allows_downstream(96, 100)
-    assert persistence._daily_enrichment_allows_downstream(192, 200)
+    assert persistence._daily_enrichment_allows_downstream(94, 100)
+    assert persistence._daily_enrichment_allows_downstream(188, 200)
     assert persistence._daily_enrichment_allows_downstream(195, 200)
-    assert not persistence._daily_enrichment_allows_downstream(95, 100)
+    assert not persistence._daily_enrichment_allows_downstream(93, 100)
 
 
-def test_daily_workday_workers_are_available_from_the_start():
+def test_daily_workday_workers_increase_when_workday_is_the_only_remaining_ats():
     queues = {
         "ashby": [("ashby", "board")],
         "workday": [("workday", "one"), ("workday", "two")],
@@ -468,8 +468,12 @@ def test_daily_workday_workers_are_available_from_the_start():
 
     assert persistence._daily_workday_limit(queues, active) == 2
     assert persistence._daily_workday_limit(
+        {"ashby": [], "workday": queues["workday"]},
+        {"ashby": 0, "workday": 0},
+    ) == 4
+    assert persistence._daily_workday_limit(
         {"workday": queues["workday"]},
-        {"workday": 0},
+        {"ashby": 1, "workday": 0},
     ) == 2
     assert persistence._daily_board_limit("ashby") == 3
     assert persistence._daily_board_limit("bamboohr") == 3

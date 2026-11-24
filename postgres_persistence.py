@@ -67,10 +67,11 @@ ATS_NAMES = tuple(job_boards.SOURCES)
 DAILY_IMPORT_LEASE_SECONDS = 15 * 60
 DAILY_BOARD_WORKERS = 5
 DAILY_DETAIL_CONCURRENCY = 8
+DAILY_WORKDAY_SOLO_CONCURRENCY = 4
 WORKDAY_DETAIL_MAX_ATTEMPTS = 3
 BOARD_FETCH_DEADLINE_SECONDS = 60
 DAILY_MIN_BOARD_SUCCESS_PERCENT = 98
-DAILY_MIN_ENRICHMENT_PERCENT = 96
+DAILY_MIN_ENRICHMENT_PERCENT = 94
 DAILY_ATS_CONCURRENCY = {
     "workday": 2,
     "ashby": 3,
@@ -1235,7 +1236,7 @@ def _daily_enrichment_allows_downstream(
     enriched_jobs: int,
     total_jobs: int,
 ) -> bool:
-    """Allow matching and Gemini when at least 96% of eligible jobs are enriched."""
+    """Allow matching and Gemini when at least 94% of eligible jobs are enriched."""
     return (
         total_jobs == 0
         or enriched_jobs * 100 >= total_jobs * DAILY_MIN_ENRICHMENT_PERCENT
@@ -1354,8 +1355,15 @@ def _daily_workday_limit(
     queues: dict[str, deque[tuple[int, int, str, str]]],
     active_by_ats: dict[str, int],
 ) -> int:
-    """Allow two Workday boards from the beginning of the daily run."""
-    return DAILY_ATS_CONCURRENCY["workday"]
+    """Keep Workday conservative until it is the only ATS with work remaining."""
+    other_ats = (set(queues) | set(active_by_ats)) - {"workday"}
+    other_work_remains = any(
+        queues.get(ats) or active_by_ats.get(ats, 0) > 0
+        for ats in other_ats
+    )
+    if other_work_remains:
+        return DAILY_ATS_CONCURRENCY["workday"]
+    return min(DAILY_WORKDAY_SOLO_CONCURRENCY, DAILY_BOARD_WORKERS)
 
 
 def _daily_board_limit(
@@ -1660,7 +1668,7 @@ def _run_daily_boards_parallel(
     }
     print(
         f"Daily import parallelism: {DAILY_BOARD_WORKERS} total board workers; "
-        "Workday=2, all other ATS=3; "
+        "Workday=2 while other ATS remain, up to 4 when alone; "
         f"detail concurrency={DAILY_DETAIL_CONCURRENCY}; "
         f"board deadline={BOARD_FETCH_DEADLINE_SECONDS}s",
         flush=True,
@@ -1678,7 +1686,7 @@ def _run_daily_boards_parallel(
                         if workday_limit != last_workday_limit:
                             print(
                                 f"Daily Workday board limit: {workday_limit} "
-                                "(fixed from the start)",
+                                "(current queue state)",
                                 flush=True,
                             )
                             last_workday_limit = workday_limit

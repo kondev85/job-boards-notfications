@@ -1496,6 +1496,53 @@ def normalize_workday(job: dict) -> dict | None:
     }
 
 
+def _workday_403_diagnostics(headers, response_body: bytes) -> str:
+    """Classify obvious Workday 403 hints without storing the response body."""
+    normalized_headers = {
+        str(key).casefold(): str(value).strip()
+        for key, value in (headers.items() if headers else ())
+    }
+    body_text = plain_text(
+        (response_body or b"").decode("utf-8", "replace")
+    ).casefold()
+    if (
+        normalized_headers.get("cf-mitigated", "").casefold() == "challenge"
+        or any(
+            marker in body_text
+            for marker in (
+                "captcha",
+                "verify you are human",
+                "attention required",
+                "cloudflare",
+                "bot challenge",
+                "automated request",
+            )
+        )
+    ):
+        hint = "bot_challenge"
+    elif any(
+        marker in body_text
+        for marker in ("rate limit", "too many requests", "throttl", "temporarily blocked")
+    ):
+        hint = "rate_limit"
+    elif any(
+        marker in body_text
+        for marker in ("access denied", "not authorized", "forbidden")
+    ):
+        hint = "access_denied"
+    else:
+        hint = "unclassified"
+
+    details = [f"403_hint={hint}"]
+    server = normalized_headers.get("server", "")
+    retry_after = normalized_headers.get("retry-after", "")
+    if server:
+        details.append(f"server={re.sub(r'[^a-zA-Z0-9._-]', '', server)[:40]}")
+    if retry_after:
+        details.append(f"retry_after={re.sub(r'[^a-zA-Z0-9._-]', '', retry_after)[:20]}")
+    return "client error; " + "; ".join(details)
+
+
 def _workday_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
     """POST to the public CXS endpoint with bounded retry handling."""
     body = json.dumps(payload).encode("utf-8")
@@ -1514,8 +1561,15 @@ def _workday_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
                     raise NotFound(url)
                 if status >= 400:
                     if status not in (429, 500, 502, 503, 504):
+                        reason = (
+                            _workday_403_diagnostics(
+                                response_headers, response_body
+                            )
+                            if status == 403
+                            else "client error"
+                        )
                         raise urllib.error.HTTPError(
-                            url, status, "client error", response_headers, None
+                            url, status, reason, response_headers, None
                         )
                     retry_after = response_headers.get("retry-after")
                     if attempt == 3:
@@ -1541,6 +1595,11 @@ def _workday_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
                 raise NotFound(url) from exc
+            if exc.code == 403:
+                reason = _workday_403_diagnostics(exc.headers, exc.read())
+                raise urllib.error.HTTPError(
+                    exc.url, exc.code, reason, exc.headers, None
+                ) from exc
             if exc.code not in (429, 500, 502, 503, 504) or attempt == 3:
                 raise
             _deadline_sleep(_retry_delay(exc.headers.get("Retry-After"), attempt))
