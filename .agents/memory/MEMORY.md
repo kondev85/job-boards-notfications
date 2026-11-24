@@ -27,3 +27,4 @@
 - [Workday rate-limit policy](workday-rate-limit-policy.md) — keep solo Workday concurrency capped at three and use longer bounded retries when 429/5xx responses rise.
 - [Recommendation history windows](recommendation-history.md) — immutable run items use a stable 30-day publication window; daily resumes reuse the import run timestamp and snapshot.
 - [Recommendation schema migration](recommendation-schema-migration.md) — keep recommendation-history DDL in numbered migrations because the web process does not run the Python initializer.
+- [Relevance-first enrichment](relevance-first-enrichment.md) — avoid fetching full descriptions for on-site jobs in countries where no active profile could match.
