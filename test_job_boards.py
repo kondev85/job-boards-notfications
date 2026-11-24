@@ -1595,6 +1595,48 @@ def test_workday_inspection_accounts_for_request_errors():
     assert status["errorType"] == "TimeoutError"
 
 
+def test_rippling_detail_404_keeps_listing_data_and_logs_context():
+    original_fetch = job_boards.fetch
+    stderr = io.StringIO()
+
+    def fake_fetch(url, **kwargs):
+        if "?page=" in url:
+            return json.dumps(
+                {
+                    "items": [
+                        {
+                            "uuid": "missing-detail",
+                            "name": "Listed role",
+                            "description": "Description from listing",
+                        },
+                        {
+                            "uuid": "available-detail",
+                            "name": "Another listed role",
+                        },
+                    ],
+                    "totalPages": 1,
+                }
+            ).encode()
+        if url.endswith("/missing-detail"):
+            raise job_boards.NotFound(url)
+        return json.dumps({"description": "Description from detail"}).encode()
+
+    job_boards.fetch = fake_fetch
+    try:
+        with contextlib.redirect_stderr(stderr):
+            jobs = job_boards.fetch_rippling_jobs("example-board")
+    finally:
+        job_boards.fetch = original_fetch
+
+    assert len(jobs) == 2
+    assert jobs[0]["name"] == "Listed role"
+    assert jobs[0]["description"] == "Description from listing"
+    assert jobs[1]["description"] == "Description from detail"
+    message = stderr.getvalue()
+    assert "1 detail 404(s)" in message
+    assert "page=0 posting_id=missing-detail" in message
+
+
 def test_normalizers_survive_explicit_nulls():
     """Every ATS sends JSON null for fields it has no value for.
 

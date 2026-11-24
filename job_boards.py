@@ -2267,6 +2267,8 @@ def normalize_rippling(job: dict) -> dict | None:
 def fetch_rippling_jobs(slug: str, published_after: datetime | None = None) -> list[dict]:
     jobs: list[dict] = []
     page = 0
+    detail_404_count = 0
+    detail_404_examples: list[str] = []
     while page < 1000:
         url = rippling_board_url(slug) + f"?page={page}&pageSize=1000"
         payload = json.loads(fetch(url, timeout=30, retries=3))
@@ -2279,8 +2281,23 @@ def fetch_rippling_jobs(slug: str, published_after: datetime | None = None) -> l
             posting_id = str(_provider_value(item, "uuid", "id")).strip()
             if not posting_id:
                 continue
-            detail = json.loads(fetch(_rippling_detail_url(slug, posting_id), timeout=30, retries=3))
             merged = dict(item)
+            try:
+                detail = json.loads(
+                    fetch(
+                        _rippling_detail_url(slug, posting_id),
+                        timeout=30,
+                        retries=3,
+                    )
+                )
+            except NotFound:
+                detail_404_count += 1
+                if len(detail_404_examples) < 3:
+                    detail_404_examples.append(
+                        f"page={page} posting_id={posting_id}"
+                    )
+                jobs.append(merged)
+                continue
             if isinstance(detail, dict):
                 merged.update(detail)
             jobs.append(merged)
@@ -2288,6 +2305,14 @@ def fetch_rippling_jobs(slug: str, published_after: datetime | None = None) -> l
         if page + 1 >= total_pages or not items:
             break
         page += 1
+    if detail_404_count:
+        examples = "; ".join(detail_404_examples)
+        print(
+            f"rippling/{slug}: {detail_404_count} detail 404(s); "
+            f"kept listing data for those jobs; examples: {examples}",
+            file=sys.stderr,
+            flush=True,
+        )
     return jobs
 
 

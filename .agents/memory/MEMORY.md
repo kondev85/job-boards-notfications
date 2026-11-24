@@ -21,6 +21,7 @@
 - [Job-level downstream threshold](job-level-downstream-threshold.md) — active-board jobs at or above 94% description coverage may proceed to matching and Gemini across selected ATSes.
 - [Psycopg nullable parameter casts](psycopg-null-parameter-casts.md) — cast nullable placeholders used in standalone SQL predicates to avoid PostgreSQL indeterminate datatype errors.
 - [Recruitee redirects](recruitee-redirects.md) — legacy Recruitee hosts may redirect their offers feed and must be followed before JSON parsing.
+- [Rippling detail 404 policy](rippling-detail-404-policy.md) — keep Rippling listing data when an individual posting detail has disappeared; log a bounded sample and continue.
 - [Daily failure report comparison](daily-failure-report-comparison.md) — preserve cutoff/run failure snapshots and require explicit repeated-failure deactivation.
 - [Workday detail policy](workday-spa-detail-transport.md) — do not use the throttled public Calypso detail API; review or disable boards with missing descriptions instead.
 - [Workday rate-limit policy](workday-rate-limit-policy.md) — keep solo Workday concurrency capped at three and use longer bounded retries when 429/5xx responses rise.
