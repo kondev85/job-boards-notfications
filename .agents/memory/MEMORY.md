@@ -17,7 +17,7 @@
 - [BambooHR current-openings feed](bamboohr-current-openings-feed.md) — valid non-empty feeds prove active boards because BambooHR omits public posting dates; HTML fallbacks are invalid.
 - [Personio public job URLs](personio-public-job-urls.md) — XML feeds provide posting IDs but often omit URLs; derive the public `/job/{id}` link from the board host.
 - [Deferred Workday enrichment throughput](deferred-workday-enrichment.md) — large post-list detail backlogs need shell-visible progress and jobs-per-second metrics.
-- [Daily downstream phase gates](daily-downstream-phase-gates.md) — non-Workday matching may start early; Workday matching and Gemini wait for complete detail coverage.
+- [Daily downstream phase gates](daily-downstream-phase-gates.md) — matching and Gemini proceed at 94% eligible-job description coverage while board success remains separately gated at 98%.
 - [Job-level downstream threshold](job-level-downstream-threshold.md) — active-board jobs at or above 94% description coverage may proceed to matching and Gemini across selected ATSes.
 - [Psycopg nullable parameter casts](psycopg-null-parameter-casts.md) — cast nullable placeholders used in standalone SQL predicates to avoid PostgreSQL indeterminate datatype errors.
 - [Recruitee redirects](recruitee-redirects.md) — legacy Recruitee hosts may redirect their offers feed and must be followed before JSON parsing.
