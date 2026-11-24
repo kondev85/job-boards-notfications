@@ -3,8 +3,8 @@ name: Daily failure report comparison
 description: Daily failure snapshots are preserved by cutoff and run, with explicit repeated-failure deactivation.
 ---
 
-Keep the latest failure report convenient, but preserve immutable cutoff-and-run report files for historical comparison. Compare failed board IDs across two runs before disabling; require an explicit apply action and retain database history.
+Keep the latest failure report convenient, but preserve immutable cutoff-and-run report files for historical comparison. Automatically deactivate only boards whose latest completed outcome is `NotFound` on three distinct UTC run dates since the last successful outcome. Never count throttling, server errors, deadlines, or unfinished runs.
 
-**Why:** Different publication cutoffs need comparable failure snapshots, while transient provider errors must not silently deactivate active boards.
+**Why:** Different publication cutoffs need comparable failure snapshots, while transient provider errors must not silently deactivate active boards. A successful later fetch means the board recovered and resets its failure count.
 
-**How to apply:** Use the report exporter for dated artifacts and the board-management comparison command for a preview followed by optional deactivation.
+**How to apply:** Apply the rule after a run completes and before a new run snapshots active boards. Use the report exporter and board-management comparison command to inspect history; preserve old run records when deactivating.

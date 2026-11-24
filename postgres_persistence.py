@@ -980,6 +980,13 @@ def _prepare_daily_import_run(
                 (lease_seconds, worker_id, import_run_id),
             )
         else:
+            deactivated = _deactivate_repeated_notfound_boards(conn)
+            if deactivated:
+                print(
+                    "Daily board maintenance: deactivated "
+                    f"{len(deactivated)} boards with NotFound failures on "
+                    "3 distinct completed run dates."
+                )
             board_rows = conn.execute(
                 """
                 SELECT board_id, ats, slug
@@ -1191,6 +1198,74 @@ def _daily_failures_allow_downstream(failed_boards: int, board_count: int) -> bo
         and (board_count - failed_boards) * 100
         >= board_count * DAILY_MIN_BOARD_SUCCESS_PERCENT
     )
+
+
+def _deactivate_repeated_notfound_boards(
+    conn: psycopg.Connection,
+) -> list[tuple[str, str]]:
+    """Deactivate boards with final NotFound outcomes on three distinct run dates."""
+    return conn.execute(
+        """
+        WITH completed_run_outcomes AS (
+            SELECT
+                rb.board_id,
+                (r.started_at AT TIME ZONE 'UTC')::DATE AS run_date,
+                rb.status,
+                rb.error_type,
+                row_number() OVER (
+                    PARTITION BY
+                        rb.board_id,
+                        (r.started_at AT TIME ZONE 'UTC')::DATE
+                    ORDER BY r.started_at DESC, r.import_run_id DESC
+                ) AS date_rank
+            FROM daily_import_run_boards AS rb
+            JOIN daily_import_runs AS r
+              ON r.import_run_id = rb.import_run_id
+            WHERE r.status IN ('completed', 'completed_with_errors')
+              AND r.phase = 'completed'
+        ),
+        daily_outcomes AS (
+            SELECT board_id, run_date, status, error_type
+            FROM completed_run_outcomes
+            WHERE date_rank = 1
+        ),
+        last_success AS (
+            SELECT board_id, max(run_date) AS run_date
+            FROM daily_outcomes
+            WHERE status IN ('completed', 'empty')
+            GROUP BY board_id
+        ),
+        latest_outcome AS (
+            SELECT DISTINCT ON (board_id)
+                board_id, status, error_type
+            FROM daily_outcomes
+            ORDER BY board_id, run_date DESC
+        ),
+        eligible AS (
+            SELECT outcome.board_id
+            FROM daily_outcomes AS outcome
+            LEFT JOIN last_success AS success USING (board_id)
+            WHERE outcome.status = 'failed'
+              AND outcome.error_type = 'NotFound'
+              AND (
+                  success.run_date IS NULL
+                  OR outcome.run_date > success.run_date
+              )
+            GROUP BY outcome.board_id
+            HAVING count(DISTINCT outcome.run_date) >= 3
+        )
+        UPDATE job_boards AS board
+        SET active = FALSE
+        FROM eligible
+        JOIN latest_outcome AS latest
+          ON latest.board_id = eligible.board_id
+        WHERE board.board_id = eligible.board_id
+          AND board.active IS TRUE
+          AND latest.status = 'failed'
+          AND latest.error_type = 'NotFound'
+        RETURNING board.ats, board.slug
+        """
+    ).fetchall()
 
 
 def _daily_enrichment_stats(
@@ -5147,6 +5222,17 @@ def _run(args: argparse.Namespace) -> int:
                 failed_boards=daily_failed_boards,
                 downstream_failed=False,
             )
+            with psycopg.connect(dsn) as maintenance_conn:
+                with maintenance_conn.transaction():
+                    deactivated = _deactivate_repeated_notfound_boards(
+                        maintenance_conn
+                    )
+            if deactivated:
+                print(
+                    "Daily board maintenance: automatically deactivated "
+                    f"{len(deactivated)} boards with NotFound failures on "
+                    "3 distinct completed run dates."
+                )
             final_status = (
                 "completed_with_errors" if daily_failed_boards else "completed"
             )

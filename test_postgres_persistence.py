@@ -459,6 +459,127 @@ def test_daily_enrichment_threshold_allows_at_least_94_percent_jobs():
     assert not persistence._daily_enrichment_allows_downstream(93, 100)
 
 
+def test_daily_auto_deactivation_requires_three_distinct_notfound_dates():
+    with _temporary_postgres() as dsn:
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            conn.commit()
+            boards = {}
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    for slug in (
+                        "repeat-three-dates",
+                        "same-date-retries",
+                        "recovered",
+                        "transient-errors",
+                        "still-running",
+                    ):
+                        boards[slug] = persistence._ensure_board(
+                            cur,
+                            "ashby",
+                            slug,
+                            datetime(2026, 8, 1, tzinfo=timezone.utc),
+                        )
+
+            run_sequence = 0
+
+            def record_outcome(
+                slug: str,
+                day: int,
+                *,
+                status: str = "failed",
+                error_type: str | None = "NotFound",
+                run_status: str | None = None,
+            ) -> None:
+                nonlocal run_sequence
+                run_sequence += 1
+                started_at = datetime(
+                    2026, 8, day, tzinfo=timezone.utc
+                ) + timedelta(hours=run_sequence % 20)
+                final_run_status = run_status or (
+                    "completed_with_errors"
+                    if status == "failed"
+                    else "completed"
+                )
+                run_id = conn.execute(
+                    """
+                    INSERT INTO daily_import_runs (
+                        ats_scope, published_after, status, phase,
+                        started_at, board_count
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, 1
+                    )
+                    RETURNING import_run_id
+                    """,
+                    (
+                        ["ashby"],
+                        datetime(2026, 8, 1, tzinfo=timezone.utc),
+                        final_run_status,
+                        "board_import" if final_run_status == "running" else "completed",
+                        started_at,
+                    ),
+                ).fetchone()[0]
+                conn.execute(
+                    """
+                    INSERT INTO daily_import_run_boards (
+                        import_run_id, board_id, position, status,
+                        attempts, error_type, completed_at
+                    ) VALUES (%s, %s, 1, %s, 1, %s, %s)
+                    """,
+                    (
+                        run_id,
+                        boards[slug],
+                        status,
+                        error_type,
+                        started_at,
+                    ),
+                )
+                conn.commit()
+
+            for day in (1, 2, 3):
+                record_outcome("repeat-three-dates", day)
+            for _ in range(3):
+                record_outcome("same-date-retries", 4)
+            for day in (5, 6, 7):
+                record_outcome("recovered", day)
+            record_outcome("recovered", 8, status="completed", error_type=None)
+            for day in (9, 10, 11):
+                record_outcome(
+                    "transient-errors", day, error_type="HTTPError"
+                )
+            for day in (12, 13):
+                record_outcome("still-running", day)
+            record_outcome(
+                "still-running",
+                14,
+                run_status="running",
+            )
+
+            with conn.transaction():
+                deactivated = persistence._deactivate_repeated_notfound_boards(
+                    conn
+                )
+
+            assert deactivated == [("ashby", "repeat-three-dates")]
+            active_statuses = dict(
+                conn.execute(
+                    """
+                    SELECT slug, active
+                    FROM job_boards
+                    WHERE slug = ANY(%s)
+                    """,
+                    (list(boards),),
+                ).fetchall()
+            )
+            assert active_statuses == {
+                "repeat-three-dates": False,
+                "same-date-retries": True,
+                "recovered": True,
+                "transient-errors": True,
+                "still-running": True,
+            }
+
+
 def test_daily_workday_workers_increase_when_workday_is_the_only_remaining_ats():
     queues = {
         "ashby": [("ashby", "board")],
