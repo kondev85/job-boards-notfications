@@ -459,6 +459,48 @@ def test_daily_enrichment_threshold_allows_at_least_94_percent_jobs():
     assert not persistence._daily_enrichment_allows_downstream(93, 100)
 
 
+def test_relevance_prefilter_keeps_listing_but_rejects_irrelevant_descriptions():
+    user = {
+        "target_roles": ["Project Manager"],
+        "target_industries": [],
+        "profile_json": {},
+        "base_city": "Madrid",
+        "base_country": "Spain",
+        "remote_allowed": True,
+        "onsite_allowed": True,
+        "hybrid_allowed": True,
+        "willing_to_relocate": False,
+        "relocation_cities": [],
+        "relocation_countries": [],
+    }
+    india_onsite = {
+        "ats": "greenhouse",
+        "title": "Project Manager",
+        "location_raw": "Bengaluru, India",
+        "is_remote": False,
+        "workplace_type": "onsite",
+    }
+    spain_remote = india_onsite | {
+        "location_raw": "Remote - Spain",
+        "is_remote": True,
+        "workplace_type": "remote",
+    }
+    dentist = spain_remote | {"title": "Dentist"}
+
+    assert not persistence._job_is_enrichment_candidate(india_onsite, [user])
+    assert persistence._job_is_enrichment_candidate(spain_remote, [user])
+    assert not persistence._job_is_enrichment_candidate(dentist, [user])
+
+    rows = [
+        india_onsite | {"description_text": "Long description"},
+        spain_remote | {"description_text": "Relevant description"},
+    ]
+    filtered = persistence._strip_irrelevant_job_descriptions(rows, [user])
+    assert filtered[0]["description_text"] is None
+    assert filtered[0]["title"] == "Project Manager"
+    assert filtered[1]["description_text"] == "Relevant description"
+
+
 def test_daily_auto_deactivation_requires_three_distinct_notfound_dates():
     with _temporary_postgres() as dsn:
         with psycopg.connect(dsn) as conn:
@@ -1159,6 +1201,17 @@ def test_daily_enrichment_stats_excludes_bamboohr_jobs():
                     bamboohr_board = persistence._ensure_board(
                         cur, "bamboohr", "bamboo-acme", cutoff
                     )
+                    cur.execute(
+                        """
+                        INSERT INTO users (
+                            name, email, target_roles, base_country,
+                            remote_allowed, onsite_allowed, hybrid_allowed
+                        ) VALUES (
+                            'Test User', 'test@example.test',
+                            ARRAY['Project Manager'], 'Spain', TRUE, TRUE, TRUE
+                        )
+                        """
+                    )
                     run_id = cur.execute(
                         """
                         INSERT INTO daily_import_runs (
@@ -1181,14 +1234,17 @@ def test_daily_enrichment_stats_excludes_bamboohr_jobs():
                         """
                         INSERT INTO jobs (
                             board_id, company, ats, external_id, title,
-                            published_at, description_text
+                            published_at, description_text, location_raw,
+                            is_remote, workplace_type
                         ) VALUES
                             (%s, 'Greenhouse Acme', 'greenhouse', 'gh-1',
-                             'Project Manager', %s, 'Description'),
+                             'Project Manager', %s, 'Description',
+                             'Remote - Spain', TRUE, 'remote'),
                             (%s, 'Greenhouse Acme', 'greenhouse', 'gh-2',
-                             'Product Manager', %s, NULL),
+                             'Product Manager', %s, NULL,
+                             'Remote - Spain', TRUE, 'remote'),
                             (%s, 'Bamboo Acme', 'bamboohr', 'bh-1',
-                             'Project Manager', NULL, NULL)
+                             'Project Manager', NULL, NULL, NULL, FALSE, 'onsite')
                         """,
                         (
                             greenhouse_board,

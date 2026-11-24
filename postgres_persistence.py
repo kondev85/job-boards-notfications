@@ -1272,14 +1272,26 @@ def _daily_enrichment_stats(
     conn: psycopg.Connection,
     import_run_id: int,
 ) -> dict[str, int | float]:
-    """Measure required-description coverage, excluding title-only BambooHR jobs."""
-    row = conn.execute(
+    """Measure description coverage for imported jobs relevant to active users."""
+    users = _daily_enrichment_users(conn)
+    rows = conn.execute(
         """
-        SELECT
-            count(*)::int,
-            count(*) FILTER (
-                WHERE NULLIF(BTRIM(j.description_text), '') IS NOT NULL
-            )::int
+        SELECT b.ats, j.title, j.department, j.team,
+               CASE
+                   WHEN lower(BTRIM(COALESCE(j.location_raw, ''))) IN (
+                       '', 'remote', 'anywhere', 'work from home',
+                       'work from anywhere'
+                   )
+                   AND (
+                       lower(COALESCE(j.workplace_type, '')) = 'remote'
+                       OR j.is_remote IS TRUE
+                   )
+                   THEN j.description_text
+                   ELSE NULL
+               END AS remote_description_evidence,
+               j.location_raw, j.address, j.is_remote, j.workplace_type,
+               NULLIF(BTRIM(j.description_text), '') IS NOT NULL
+                   AS has_description
         FROM jobs AS j
         JOIN job_boards AS b ON b.board_id = j.board_id
         JOIN daily_import_run_boards AS rb ON rb.board_id = j.board_id
@@ -1287,6 +1299,7 @@ def _daily_enrichment_stats(
         WHERE rb.import_run_id = %s
           AND b.active IS TRUE
           AND b.ats <> 'bamboohr'
+          AND rb.status IN ('completed', 'empty')
           AND j.closed_at IS NULL
           AND (
               r.published_after IS NULL
@@ -1294,9 +1307,19 @@ def _daily_enrichment_stats(
           )
         """,
         (import_run_id,),
-    ).fetchone()
+    ).fetchall()
     conn.commit()
-    total, enriched = (int(row[0]), int(row[1]))
+    columns = (
+        "ats", "title", "department", "team", "description_text",
+        "location_raw", "address", "is_remote", "workplace_type",
+        "has_description",
+    )
+    relevant = [
+        row for row in rows
+        if _job_is_enrichment_candidate(dict(zip(columns, row)), users)
+    ]
+    total = len(relevant)
+    enriched = sum(1 for row in relevant if row[-1])
     missing = total - enriched
     coverage = (enriched * 100 / total) if total else 100.0
     return {
@@ -1305,6 +1328,78 @@ def _daily_enrichment_stats(
         "missing_jobs": missing,
         "coverage_percent": coverage,
     }
+
+
+def _daily_enrichment_users(conn: psycopg.Connection) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        """
+        SELECT target_roles, target_industries, base_city, base_country,
+               remote_allowed, onsite_allowed, hybrid_allowed,
+               willing_to_relocate, relocation_cities, relocation_countries,
+               profile_json
+        FROM users
+        WHERE active IS TRUE
+        ORDER BY user_id
+        """
+    ).fetchall()
+    conn.commit()
+    columns = (
+        "target_roles", "target_industries", "base_city", "base_country",
+        "remote_allowed", "onsite_allowed", "hybrid_allowed",
+        "willing_to_relocate", "relocation_cities", "relocation_countries",
+        "profile_json",
+    )
+    return [dict(zip(columns, row)) for row in rows]
+
+
+def _job_is_enrichment_candidate(
+    job: dict[str, Any],
+    users: list[dict[str, Any]],
+) -> bool:
+    """Keep jobs that could fit at least one active profile before detail fetch."""
+    role_text = " ".join(
+        str(job.get(field) or "") for field in ("title", "department", "team")
+    )
+    for user in users:
+        if not _workplace_matches(job, user):
+            continue
+        if _location_is_configured(user) and not _location_matches(job, user):
+            # Generic remote postings may describe their hiring geography only
+            # in the detail body, so retain them for a definitive check.
+            location = str(job.get("location_raw") or "").strip().casefold()
+            generic_remote = location in {
+                "", "remote", "anywhere", "work from home", "work from anywhere",
+            }
+            if not (
+                generic_remote
+                and bool(user.get("remote_allowed"))
+                and _workplace_kind(job) == "remote"
+            ):
+                continue
+        has_role_constraints = bool(
+            _preference_values(user.get("target_roles"))
+            or _profile_items(user, "experience_areas")
+        )
+        if has_role_constraints and _role_fit(user, job, role_text) <= 0:
+            continue
+        return True
+    return False
+
+
+def _strip_irrelevant_job_descriptions(
+    rows: list[dict[str, Any]],
+    users: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Persist all listing metadata, but retain descriptions only for candidates."""
+    filtered: list[dict[str, Any]] = []
+    for row in rows:
+        if row.get("description_text") and not _job_is_enrichment_candidate(
+            row, users
+        ):
+            filtered.append({**row, "description_text": None})
+        else:
+            filtered.append(row)
+    return filtered
 
 
 def _daily_enrichment_allows_downstream(
@@ -1496,6 +1591,7 @@ def _import_daily_board(
     greenhouse_content: bool,
     worker_id: str,
     automatic_retry: bool,
+    relevance_users: list[dict[str, Any]],
 ) -> dict[str, int]:
     """Fetch and commit one daily board using a connection owned by this worker."""
     position, tracked_board_id, ats, slug = item
@@ -1538,6 +1634,23 @@ def _import_daily_board(
                 cached_workday_jobs=cached_workday_jobs,
                 detail_concurrency=DAILY_DETAIL_CONCURRENCY,
                 workday_enrich_details=False if ats == "workday" else None,
+            )
+        descriptions_before_filter = sum(
+            1 for row in rows if str(row.get("description_text") or "").strip()
+        )
+        rows = _strip_irrelevant_job_descriptions(rows, relevance_users)
+        descriptions_after_filter = sum(
+            1 for row in rows if str(row.get("description_text") or "").strip()
+        )
+        descriptions_skipped = (
+            descriptions_before_filter - descriptions_after_filter
+        )
+        if descriptions_skipped:
+            print(
+                f"{position}/{daily_board_count} {ats}/{slug}: skipped "
+                f"{descriptions_skipped} descriptions outside active-profile "
+                "location/role filters",
+                flush=True,
             )
         empty_workable_board = (
             ats == "workable"
@@ -1750,6 +1863,7 @@ def _run_daily_boards_parallel(
     )
 
     with psycopg.connect(dsn) as heartbeat_connection:
+        relevance_users = _daily_enrichment_users(heartbeat_connection)
         with ThreadPoolExecutor(max_workers=DAILY_BOARD_WORKERS) as pool:
             while active or any(queues[ats] for ats in ats_order):
                 while len(active) < DAILY_BOARD_WORKERS and ats_order:
@@ -1791,6 +1905,7 @@ def _run_daily_boards_parallel(
                         greenhouse_content,
                         worker_id,
                         automatic_retry,
+                        relevance_users,
                     )
                     active[future] = (ats, item)
 
@@ -2035,9 +2150,12 @@ def _workday_enrichment_candidates(
     import_run_id: int,
 ) -> dict[int, dict[str, Any]]:
     """Find current-run Workday jobs due for another detail attempt."""
+    users = _daily_enrichment_users(conn)
     rows = conn.execute(
         """
-        SELECT j.job_id, j.board_id, b.slug, j.job_url
+        SELECT j.job_id, j.board_id, b.slug, j.job_url, j.title,
+               j.department, j.team, j.location_raw, j.address,
+               j.is_remote, j.workplace_type
         FROM jobs AS j
         JOIN job_boards AS b ON b.board_id = j.board_id
         JOIN daily_import_run_boards AS rb ON rb.board_id = j.board_id
@@ -2056,7 +2174,22 @@ def _workday_enrichment_candidates(
         (import_run_id, WORKDAY_DETAIL_MAX_ATTEMPTS),
     ).fetchall()
     candidates: dict[int, dict[str, Any]] = {}
-    for job_id, board_id, slug, job_url in rows:
+    for (
+        job_id, board_id, slug, job_url, title, department, team,
+        location_raw, address, is_remote, workplace_type,
+    ) in rows:
+        job = {
+            "ats": "workday",
+            "title": title,
+            "department": department,
+            "team": team,
+            "location_raw": location_raw,
+            "address": address,
+            "is_remote": is_remote,
+            "workplace_type": workplace_type,
+        }
+        if not _job_is_enrichment_candidate(job, users):
+            continue
         board = candidates.setdefault(
             board_id,
             {"slug": slug, "jobs": []},
@@ -2070,27 +2203,8 @@ def _workday_enrichment_remaining(
     conn: psycopg.Connection,
     import_run_id: int,
 ) -> int:
-    row = conn.execute(
-        """
-        SELECT count(*)
-        FROM jobs AS j
-        JOIN job_boards AS b ON b.board_id = j.board_id
-        JOIN daily_import_run_boards AS rb ON rb.board_id = j.board_id
-        JOIN daily_import_runs AS r ON r.import_run_id = rb.import_run_id
-        WHERE rb.import_run_id = %s
-          AND b.ats = 'workday'
-          AND b.active IS TRUE
-          AND rb.status = 'completed'
-          AND j.description_text IS NULL
-          AND j.job_url IS NOT NULL
-          AND j.closed_at IS NULL
-          AND j.last_seen >= r.started_at
-          AND j.workday_detail_attempts < %s
-        """,
-        (import_run_id, WORKDAY_DETAIL_MAX_ATTEMPTS),
-    ).fetchone()
-    conn.commit()
-    return int(row[0])
+    candidates = _workday_enrichment_candidates(conn, import_run_id)
+    return sum(len(board["jobs"]) for board in candidates.values())
 
 
 def _greenhouse_enrichment_candidates(
@@ -2098,9 +2212,12 @@ def _greenhouse_enrichment_candidates(
     import_run_id: int,
 ) -> dict[int, dict[str, Any]]:
     """Find current-run Greenhouse jobs that need the content=true pass."""
+    users = _daily_enrichment_users(conn)
     rows = conn.execute(
         """
-        SELECT j.job_id, j.board_id, b.slug, j.external_id
+        SELECT j.job_id, j.board_id, b.slug, j.external_id, j.title,
+               j.department, j.team, j.location_raw, j.address,
+               j.is_remote, j.workplace_type
         FROM jobs AS j
         JOIN job_boards AS b ON b.board_id = j.board_id
         JOIN daily_import_run_boards AS rb ON rb.board_id = j.board_id
@@ -2120,7 +2237,22 @@ def _greenhouse_enrichment_candidates(
         (import_run_id,),
     ).fetchall()
     candidates: dict[int, dict[str, Any]] = {}
-    for job_id, board_id, slug, external_id in rows:
+    for (
+        job_id, board_id, slug, external_id, title, department, team,
+        location_raw, address, is_remote, workplace_type,
+    ) in rows:
+        job = {
+            "ats": "greenhouse",
+            "title": title,
+            "department": department,
+            "team": team,
+            "location_raw": location_raw,
+            "address": address,
+            "is_remote": is_remote,
+            "workplace_type": workplace_type,
+        }
+        if not _job_is_enrichment_candidate(job, users):
+            continue
         board = candidates.setdefault(
             board_id,
             {"slug": slug, "jobs": []},
@@ -2134,28 +2266,8 @@ def _greenhouse_enrichment_remaining(
     conn: psycopg.Connection,
     import_run_id: int,
 ) -> int:
-    row = conn.execute(
-        """
-        SELECT count(*)
-        FROM jobs AS j
-        JOIN job_boards AS b ON b.board_id = j.board_id
-        JOIN daily_import_run_boards AS rb ON rb.board_id = j.board_id
-        JOIN daily_import_runs AS r ON r.import_run_id = rb.import_run_id
-        WHERE rb.import_run_id = %s
-          AND b.ats = 'greenhouse'
-          AND b.active IS TRUE
-          AND rb.status IN ('completed', 'empty')
-          AND NULLIF(BTRIM(j.description_text), '') IS NULL
-          AND j.closed_at IS NULL
-          AND (
-              r.published_after IS NULL
-              OR j.published_at >= r.published_after
-          )
-        """,
-        (import_run_id,),
-    ).fetchone()
-    conn.commit()
-    return int(row[0])
+    candidates = _greenhouse_enrichment_candidates(conn, import_run_id)
+    return sum(len(board["jobs"]) for board in candidates.values())
 
 
 def _enrich_greenhouse_board(
