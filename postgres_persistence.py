@@ -67,7 +67,7 @@ ATS_NAMES = tuple(job_boards.SOURCES)
 DAILY_IMPORT_LEASE_SECONDS = 15 * 60
 DAILY_BOARD_WORKERS = 5
 DAILY_DETAIL_CONCURRENCY = 8
-DAILY_WORKDAY_SOLO_CONCURRENCY = 4
+DAILY_WORKDAY_SOLO_CONCURRENCY = 3
 WORKDAY_DETAIL_MAX_ATTEMPTS = 3
 BOARD_FETCH_DEADLINE_SECONDS = 60
 DAILY_MIN_BOARD_SUCCESS_PERCENT = 98
@@ -1668,7 +1668,7 @@ def _run_daily_boards_parallel(
     }
     print(
         f"Daily import parallelism: {DAILY_BOARD_WORKERS} total board workers; "
-        "Workday=2 while other ATS remain, up to 4 when alone; "
+        "Workday=2 while other ATS remain, up to 3 when alone; "
         f"detail concurrency={DAILY_DETAIL_CONCURRENCY}; "
         f"board deadline={BOARD_FETCH_DEADLINE_SECONDS}s",
         flush=True,

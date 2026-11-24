@@ -2417,6 +2417,15 @@ def test_retry_after_beats_the_exponential_delay_but_is_capped():
     assert _retry_delay("3600", 0) == 30.0, "an absurd Retry-After is capped"
 
 
+def test_workday_throttling_uses_longer_bounded_backoff():
+    from job_boards import _workday_retry_delay
+
+    assert _workday_retry_delay(None, 0) == 5.0
+    assert _workday_retry_delay(None, 1) == 10.0
+    assert _workday_retry_delay("12", 0) == 12.0
+    assert _workday_retry_delay("3600", 0) == 30.0
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

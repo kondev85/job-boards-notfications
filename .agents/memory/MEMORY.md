@@ -23,5 +23,6 @@
 - [Recruitee redirects](recruitee-redirects.md) — legacy Recruitee hosts may redirect their offers feed and must be followed before JSON parsing.
 - [Daily failure report comparison](daily-failure-report-comparison.md) — preserve cutoff/run failure snapshots and require explicit repeated-failure deactivation.
 - [Workday detail policy](workday-spa-detail-transport.md) — do not use the throttled public Calypso detail API; review or disable boards with missing descriptions instead.
+- [Workday rate-limit policy](workday-rate-limit-policy.md) — keep solo Workday concurrency capped at three and use longer bounded retries when 429/5xx responses rise.
 - [Recommendation history windows](recommendation-history.md) — immutable run items use a stable 30-day publication window; daily resumes reuse the import run timestamp and snapshot.
 - [Recommendation schema migration](recommendation-schema-migration.md) — keep recommendation-history DDL in numbered migrations because the web process does not run the Python initializer.

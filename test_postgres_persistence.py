@@ -470,7 +470,7 @@ def test_daily_workday_workers_increase_when_workday_is_the_only_remaining_ats()
     assert persistence._daily_workday_limit(
         {"ashby": [], "workday": queues["workday"]},
         {"ashby": 0, "workday": 0},
-    ) == 4
+    ) == 3
     assert persistence._daily_workday_limit(
         {"workday": queues["workday"]},
         {"ashby": 1, "workday": 0},

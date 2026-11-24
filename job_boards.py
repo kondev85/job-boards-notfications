@@ -329,6 +329,29 @@ def _retry_delay(retry_after: str | None, attempt: int, cap: float = 30.0) -> fl
         return float(2**attempt)
 
 
+def _workday_retry_delay(
+    retry_after: str | None,
+    attempt: int,
+    cap: float = 30.0,
+) -> float:
+    """Use a slower bounded backoff for Workday throttling and server errors."""
+    delay: float | None = None
+    if retry_after:
+        try:
+            delay = float(retry_after)
+        except (TypeError, ValueError):
+            try:
+                retry_at = parsedate_to_datetime(retry_after)
+                if retry_at.tzinfo is None:
+                    retry_at = retry_at.replace(tzinfo=timezone.utc)
+                delay = (retry_at - datetime.now(timezone.utc)).total_seconds()
+            except (TypeError, ValueError, OverflowError):
+                delay = None
+    if delay is None or not delay >= 0:
+        delay = 5.0 * (2**attempt)
+    return min(delay, cap)
+
+
 def fetch(
     url: str,
     timeout: int = 30,
@@ -1576,7 +1599,7 @@ def _workday_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
                         raise urllib.error.HTTPError(
                             url, status, "server error", response_headers, None
                         )
-                    _deadline_sleep(_retry_delay(retry_after, attempt))
+                    _deadline_sleep(_workday_retry_delay(retry_after, attempt))
                     continue
                 result = json.loads(response_body)
                 if not isinstance(result, dict):
@@ -1602,7 +1625,9 @@ def _workday_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
                 ) from exc
             if exc.code not in (429, 500, 502, 503, 504) or attempt == 3:
                 raise
-            _deadline_sleep(_retry_delay(exc.headers.get("Retry-After"), attempt))
+            _deadline_sleep(
+                _workday_retry_delay(exc.headers.get("Retry-After"), attempt)
+            )
         except (urllib.error.URLError, TimeoutError, http.client.HTTPException, OSError):
             if attempt == 3:
                 raise
