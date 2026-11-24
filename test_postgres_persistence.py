@@ -829,6 +829,45 @@ def test_adapter_mappings_are_offline_and_keep_descriptions():
     assert skipped == 0 and greenhouse_rows[0]["external_id"] == "42"
     assert greenhouse_rows[0]["description_text"] is None
 
+    hibob_rows, skipped = _with_fetch(
+        {
+            "jobAdDetails": [
+                {
+                    "id": "8b8fa627-e06a-4fe4-ab09-d080aa3144ec",
+                    "title": "Senior Accounts Payable and Treasury",
+                    "department": "Finance",
+                    "publishedAt": "2026-11-19T09:57:05.043504Z",
+                    "workspaceTypeId": "on_site",
+                    "employmentType": "Permanent",
+                    "site": "Gibraltar",
+                    "postingLocations": [
+                        {
+                            "city": "Gibraltar",
+                            "country": "Gibraltar",
+                            "displayValue": "Gibraltar",
+                        }
+                    ],
+                    "description": "<div>Finance &amp; treasury.</div>",
+                }
+            ]
+        },
+        lambda: persistence._fetch_normalized("hibob", "acme"),
+    )
+    assert skipped == 0 and len(hibob_rows) == 1
+    assert hibob_rows[0]["external_id"] == (
+        "acme:8b8fa627-e06a-4fe4-ab09-d080aa3144ec"
+    )
+    assert hibob_rows[0]["title"] == "Senior Accounts Payable and Treasury"
+    assert hibob_rows[0]["location_raw"] == "Gibraltar"
+    assert hibob_rows[0]["workplace_type"] == "onsite"
+    assert hibob_rows[0]["published_at"] == datetime(
+        2026, 11, 19, 9, 57, 5, tzinfo=timezone.utc
+    )
+    assert hibob_rows[0]["description_text"] == "Finance & treasury."
+    assert hibob_rows[0]["job_url"].endswith(
+        "/jobs/8b8fa627-e06a-4fe4-ab09-d080aa3144ec"
+    )
+
     bamboohr_rows, skipped = _with_fetch(
         {
             "meta": {"totalCount": 1},
@@ -1261,6 +1300,30 @@ def test_daily_enrichment_stats_excludes_bamboohr_jobs():
                 "missing_jobs": 1,
                 "coverage_percent": 50.0,
             }
+
+
+def test_hibob_schema_and_upgrade_migration_allow_board_and_job_rows():
+    with _temporary_postgres() as dsn:
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            conn.execute(Path("migrations/005_hibob_ats.sql").read_text())
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    seen_at = datetime(2026, 11, 25, tzinfo=timezone.utc)
+                    board_id = persistence._ensure_board(
+                        cur, "hibob", "example", seen_at
+                    )
+                    inserted, closed = persistence._upsert_board_jobs(
+                        cur,
+                        board_id,
+                        "Example",
+                        [_row("example:hibob-1", ats="hibob")],
+                        seen_at,
+                    )
+                    assert (inserted, closed) == (1, 0)
+            assert conn.execute(
+                "SELECT ats, external_id FROM jobs WHERE ats = 'hibob'"
+            ).fetchone() == ("hibob", "example:hibob-1")
 
 
 def test_postgres_schema_constraints_repeat_import_and_lifecycle():

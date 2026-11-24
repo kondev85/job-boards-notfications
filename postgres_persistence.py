@@ -85,6 +85,7 @@ DAILY_ATS_CONCURRENCY = {
     "bamboohr": 3,
     "pinpoint": 3,
     "breezy": 3,
+    "hibob": 1,
     "rippling": 3,
 }
 
@@ -206,7 +207,7 @@ CREATE TABLE IF NOT EXISTS job_boards (
     ats         TEXT NOT NULL CHECK (ats IN (
         'ashby', 'greenhouse', 'lever', 'smartrecruiters', 'workday',
         'recruitee', 'teamtailor', 'workable',
-        'personio', 'bamboohr', 'pinpoint', 'breezy', 'rippling'
+        'personio', 'bamboohr', 'pinpoint', 'breezy', 'hibob', 'rippling'
     )),
     slug        TEXT NOT NULL,
     active      BOOLEAN NOT NULL DEFAULT TRUE,
@@ -227,7 +228,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     ats                TEXT NOT NULL CHECK (ats IN (
         'ashby', 'greenhouse', 'lever', 'smartrecruiters', 'workday',
         'recruitee', 'teamtailor', 'workable',
-        'personio', 'bamboohr', 'pinpoint', 'breezy', 'rippling'
+        'personio', 'bamboohr', 'pinpoint', 'breezy', 'hibob', 'rippling'
     )),
     external_id        TEXT NOT NULL,
     title              TEXT NOT NULL,
@@ -271,14 +272,14 @@ ALTER TABLE job_boards ADD CONSTRAINT job_boards_ats_check
     CHECK (ats IN (
         'ashby', 'greenhouse', 'lever', 'smartrecruiters', 'workday',
         'recruitee', 'teamtailor', 'workable',
-        'personio', 'bamboohr', 'pinpoint', 'breezy', 'rippling'
+        'personio', 'bamboohr', 'pinpoint', 'breezy', 'hibob', 'rippling'
     ));
 ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_ats_check;
 ALTER TABLE jobs ADD CONSTRAINT jobs_ats_check
     CHECK (ats IN (
         'ashby', 'greenhouse', 'lever', 'smartrecruiters', 'workday',
         'recruitee', 'teamtailor', 'workable',
-        'personio', 'bamboohr', 'pinpoint', 'breezy', 'rippling'
+        'personio', 'bamboohr', 'pinpoint', 'breezy', 'hibob', 'rippling'
     ));
 
 CREATE TABLE IF NOT EXISTS users (
@@ -770,6 +771,7 @@ def _source_updated_at(ats: str, raw_job: dict[str, Any]) -> datetime | None:
         "bamboohr": ("updatedAt", "dateUpdated", "updated_at"),
         "pinpoint": ("updated_at", "updatedAt", "modified_at"),
         "breezy": ("updatedAt", "updated_at", "modifiedAt"),
+        "hibob": (),
         "rippling": ("updatedOn", "updatedAt", "createdOn"),
     }
     for key in keys_by_ats[ats]:
@@ -2037,6 +2039,7 @@ def _fetch_normalized(
             "bamboohr",
             "pinpoint",
             "breezy",
+            "hibob",
             "rippling",
         }:
             normalized["id"] = f"{slug}:{normalized['id']}"

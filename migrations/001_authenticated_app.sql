@@ -4,14 +4,14 @@ ALTER TABLE job_boards ADD CONSTRAINT job_boards_ats_check
   CHECK (ats IN (
     'ashby', 'greenhouse', 'lever', 'smartrecruiters', 'workday',
     'recruitee', 'teamtailor', 'workable',
-    'personio', 'bamboohr', 'pinpoint', 'breezy', 'rippling'
+    'personio', 'bamboohr', 'pinpoint', 'breezy', 'hibob', 'rippling'
   ));
 ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_ats_check;
 ALTER TABLE jobs ADD CONSTRAINT jobs_ats_check
   CHECK (ats IN (
     'ashby', 'greenhouse', 'lever', 'smartrecruiters', 'workday',
     'recruitee', 'teamtailor', 'workable',
-    'personio', 'bamboohr', 'pinpoint', 'breezy', 'rippling'
+    'personio', 'bamboohr', 'pinpoint', 'breezy', 'hibob', 'rippling'
   ));
 
 CREATE TABLE IF NOT EXISTS user_job_state (

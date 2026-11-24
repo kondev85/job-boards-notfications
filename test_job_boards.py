@@ -14,6 +14,7 @@ import re
 import sqlite3
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import job_boards
 from job_boards import (
@@ -2109,6 +2110,150 @@ def test_bamboohr_normalizes_deadline_to_published_date():
 
     assert normalized["publishedAt"] == "2026-08-31T22:59:59+00:00"
     assert normalized["publishedAtSource"] == "deadline_minus_30"
+
+
+def test_hibob_normalizes_full_fixture_and_remote_fields():
+    job = {
+        "id": "8b8fa627-e06a-4fe4-ab09-d080aa3144ec",
+        "title": "Senior Accounts Payable and Treasury",
+        "department": "Finance",
+        "publishedAt": "2026-11-19T09:57:05.043504Z",
+        "workspaceTypeId": "on_site",
+        "employmentType": "Permanent",
+        "site": "Gibraltar",
+        "postingLocations": [
+            {
+                "city": "Gibraltar",
+                "country": "Gibraltar",
+                "displayValue": "Gibraltar",
+            }
+        ],
+        "description": "<div>Manage accounts payable &amp; treasury.</div>",
+    }
+    normalized = job_boards.normalize_hibob(
+        job | {"jobUrl": job_boards.hibob_job_url("example", job["id"])}
+    )
+
+    assert normalized["id"] == job["id"]
+    assert normalized["title"] == job["title"]
+    assert normalized["department"] == "Finance"
+    assert normalized["employmentType"] == "Permanent"
+    assert normalized["location"] == "Gibraltar"
+    assert normalized["address"]["locations"][0]["country"] == "Gibraltar"
+    assert normalized["isRemote"] is False
+    assert normalized["workplaceType"] == "onsite"
+    assert normalized["publishedAt"] == "2026-11-19T09:57:05+00:00"
+    assert normalized["jobUrl"].endswith(f"/jobs/{job['id']}")
+    assert plain_text(normalized["_description"]) == (
+        "Manage accounts payable & treasury."
+    )
+
+
+def test_hibob_fetch_uses_required_header_and_allows_empty_feed():
+    calls = []
+    original_fetch = job_boards.fetch
+    job_boards.fetch = lambda url, **kwargs: (
+        calls.append((url, kwargs))
+        or json.dumps({"jobAdDetails": []}).encode()
+    )
+    try:
+        assert job_boards.fetch_hibob_jobs("example") == []
+        assert job_boards.hibob_board_exists("example") is True
+    finally:
+        job_boards.fetch = original_fetch
+
+    assert calls[0][0] == job_boards.hibob_board_url("example")
+    assert calls[0][1]["headers"] == {"companyIdentifier": "example"}
+    assert calls[1][1]["headers"] == {"companyIdentifier": "example"}
+    assert job_boards.board_url("hibob", "example") == calls[0][0]
+    assert job_boards.SOURCES["hibob"]["registry_only"] is True
+
+
+def test_hibob_board_validation_distinguishes_401_from_404():
+    original_fetch = job_boards.fetch
+    try:
+        job_boards.fetch = lambda *args, **kwargs: (_ for _ in ()).throw(
+            job_boards.urllib.error.HTTPError(
+                "https://example.careers.hibob.com/api/job-ad",
+                401,
+                "Unauthorized",
+                None,
+                None,
+            )
+        )
+        assert job_boards.hibob_board_exists("example") is None
+        assert job_boards.board_exists("hibob", "example") is None
+        job_boards.fetch = lambda *args, **kwargs: (_ for _ in ()).throw(
+            job_boards.NotFound("missing")
+        )
+        assert job_boards.hibob_board_exists("missing") is False
+        assert job_boards.board_exists("hibob", "missing") is False
+    finally:
+        job_boards.fetch = original_fetch
+
+
+def test_hibob_rejects_bad_payload_and_prefixes_ids_for_scan():
+    original_fetch_jobs = job_boards.SOURCES["hibob"]["fetch_jobs"]
+    original_fetch = job_boards.fetch
+    try:
+        job_boards.fetch = lambda *args, **kwargs: b'{"notJobAdDetails":[]}'
+        try:
+            job_boards.fetch_hibob_jobs("example")
+        except ValueError as exc:
+            assert "jobAdDetails list" in str(exc)
+        else:
+            raise AssertionError("malformed HiBob feed should fail")
+
+        job = {
+            "id": "abc-123",
+            "title": "Accounts Payable",
+            "workspaceTypeId": "on_site",
+            "postingLocations": [{"displayValue": "Gibraltar"}],
+            "description": "<p>Accounts team</p>",
+            "jobUrl": "https://example.careers.hibob.com/jobs/abc-123",
+        }
+        job_boards.SOURCES["hibob"]["fetch_jobs"] = (
+            lambda slug, cutoff: [job]
+        )
+        rows = scan_board("hibob", "example", None, False, "fuzzy")
+        assert rows[0]["id"] == "example:abc-123"
+        assert rows[0]["jobUrl"].endswith("/abc-123")
+    finally:
+        job_boards.SOURCES["hibob"]["fetch_jobs"] = original_fetch_jobs
+        job_boards.fetch = original_fetch
+
+
+def test_hibob_pacing_is_shared_across_tenant_subdomains():
+    original_schedule = dict(job_boards._NEXT_REQUEST_AT)
+    job_boards._NEXT_REQUEST_AT.clear()
+    try:
+        with (
+            patch.object(job_boards.time, "monotonic", side_effect=[10.0, 11.0]),
+            patch.object(job_boards, "_deadline_sleep") as sleep,
+        ):
+            job_boards._wait_for_paced_host("one.careers.hibob.com")
+            job_boards._wait_for_paced_host("two.careers.hibob.com")
+        sleep.assert_called_once_with(0.5)
+    finally:
+        job_boards._NEXT_REQUEST_AT.clear()
+        job_boards._NEXT_REQUEST_AT.update(original_schedule)
+
+
+def test_hibob_discovery_keeps_inconclusive_401_candidate():
+    original_wayback = job_boards.candidates_from_wayback
+    original_board_exists = job_boards.board_exists
+    original_read_boards = job_boards._read_boards
+    try:
+        job_boards.candidates_from_wayback = lambda domains, since_days=None: {
+            "tenant": "tenant"
+        }
+        job_boards.board_exists = lambda ats, slug: None
+        job_boards._read_boards = lambda path: {}
+        assert job_boards.discover_boards("hibob") == ["tenant"]
+    finally:
+        job_boards.candidates_from_wayback = original_wayback
+        job_boards.board_exists = original_board_exists
+        job_boards._read_boards = original_read_boards
 
 
 def test_bamboohr_registry_rejects_empty_current_feed():

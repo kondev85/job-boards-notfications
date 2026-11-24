@@ -10,6 +10,7 @@ export const ATS_OPTIONS = [
   { value: "personio", label: "Personio" },
   { value: "bamboohr", label: "BambooHR" },
   { value: "pinpoint", label: "Pinpoint" },
+  { value: "hibob", label: "HiBob" },
   { value: "rippling", label: "Rippling" },
 ] as const;
 

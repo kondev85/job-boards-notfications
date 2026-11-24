@@ -179,6 +179,7 @@ _REQUEST_PACING_LOCK = threading.Lock()
 _NEXT_REQUEST_AT: dict[str, float] = {}
 _REQUEST_INTERVALS = {
     "apply.workable.com": 2.0,
+    "hibob": 1.5,
 }
 _PROVIDER_REQUEST_INTERVAL = 1.0
 _WORKABLE_CACHE_LOCK = threading.Lock()
@@ -187,7 +188,8 @@ _WORKABLE_CACHE_LOCK = threading.Lock()
 def _wait_for_paced_host(netloc: str) -> None:
     """Keep provider requests spaced even when callers use worker threads."""
     hostname = netloc.split(":", 1)[0].lower()
-    interval = _REQUEST_INTERVALS.get(hostname)
+    pacing_key = "hibob" if hostname.endswith(".careers.hibob.com") else hostname
+    interval = _REQUEST_INTERVALS.get(pacing_key)
     if interval is None and (
         hostname == "ats.rippling.com"
         or hostname.endswith(".bamboohr.com")
@@ -202,9 +204,9 @@ def _wait_for_paced_host(netloc: str) -> None:
 
     with _REQUEST_PACING_LOCK:
         now = time.monotonic()
-        scheduled = _NEXT_REQUEST_AT.get(hostname, now)
+        scheduled = _NEXT_REQUEST_AT.get(pacing_key, now)
         wait = max(0.0, scheduled - now)
-        _NEXT_REQUEST_AT[hostname] = max(now, scheduled) + interval
+        _NEXT_REQUEST_AT[pacing_key] = max(now, scheduled) + interval
     if wait > 0:
         _deadline_sleep(wait)
 
@@ -312,6 +314,7 @@ def _is_pooled_host(netloc: str) -> bool:
         or hostname.endswith(".personio.de")
         or hostname.endswith(".pinpointhq.com")
         or hostname.endswith(".breezy.hr")
+        or hostname.endswith(".careers.hibob.com")
     )
 
 
@@ -2219,6 +2222,122 @@ def breezy_board_exists(slug: str) -> bool:
         return False
 
 
+def hibob_board_url(slug: str) -> str:
+    tenant = str(slug).strip()
+    if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?", tenant):
+        raise ValueError(f"hibob/{slug}: invalid tenant slug")
+    return f"https://{tenant}.careers.hibob.com/api/job-ad"
+
+
+def hibob_job_url(slug: str, posting_id: str) -> str:
+    tenant = str(slug).strip()
+    if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?", tenant):
+        raise ValueError(f"hibob/{slug}: invalid tenant slug")
+    return (
+        f"https://{tenant}.careers.hibob.com/jobs/"
+        f"{urllib.parse.quote(str(posting_id), safe='')}"
+    )
+
+
+def _hibob_get_json(slug: str, timeout: int = 30, retries: int = 3) -> dict:
+    """Fetch HiBob's public job-ad feed with its required tenant identifier."""
+    body = fetch(
+        hibob_board_url(slug),
+        timeout=timeout,
+        retries=retries,
+        headers={"companyIdentifier": str(slug).strip()},
+    )
+    payload = json.loads(body)
+    if not isinstance(payload, dict):
+        raise ValueError(f"hibob/{slug}: response is not an object")
+    return payload
+
+
+def normalize_hibob(job: dict) -> dict | None:
+    posting_id = str(job.get("id") or "").strip()
+    title = str(job.get("title") or "").strip()
+    if not posting_id or not title:
+        return None
+
+    posting_locations = job.get("postingLocations")
+    locations = (
+        [item for item in posting_locations if isinstance(item, dict)]
+        if isinstance(posting_locations, list)
+        else []
+    )
+    labels = list(dict.fromkeys(
+        str(item.get("displayValue") or "").strip()
+        for item in locations
+        if str(item.get("displayValue") or "").strip()
+    ))
+    if not labels:
+        fallback = " ".join(
+            str(job.get(field) or "").strip()
+            for field in ("site", "country")
+            if str(job.get(field) or "").strip()
+        )
+        if fallback:
+            labels.append(fallback)
+
+    workplace_id = str(job.get("workspaceTypeId") or "").strip().casefold()
+    remote = workplace_id == "remote"
+    workplace_type = (
+        "remote" if remote
+        else "onsite" if workplace_id == "on_site"
+        else ""
+    )
+    return {
+        "id": posting_id,
+        "title": title,
+        "department": _provider_value(job, "department"),
+        "team": None,
+        "employmentType": _provider_value(job, "employmentType"),
+        "location": "; ".join(labels),
+        "isRemote": remote,
+        "workplaceType": workplace_type,
+        "address": {"locations": locations} if locations else None,
+        "publishedAt": _provider_datetime(job.get("publishedAt")),
+        "jobUrl": job.get("jobUrl"),
+        "_description": _provider_value(job, "description"),
+        "_sourceUpdatedAt": None,
+    }
+
+
+def fetch_hibob_jobs(
+    slug: str,
+    published_after: datetime | None = None,
+) -> list[dict]:
+    payload = _hibob_get_json(slug)
+    job_ads = payload.get("jobAdDetails")
+    if not isinstance(job_ads, list):
+        raise ValueError(f"hibob/{slug}: response has no jobAdDetails list")
+    jobs = []
+    for item in job_ads:
+        if not isinstance(item, dict):
+            continue
+        posting_id = str(item.get("id") or "").strip()
+        if not posting_id:
+            continue
+        jobs.append({
+            **item,
+            "jobUrl": hibob_job_url(slug, posting_id),
+        })
+    return jobs
+
+
+def hibob_board_exists(slug: str) -> bool | None:
+    """Return None for 401 so discovery retains the slug for later validation."""
+    try:
+        payload = _hibob_get_json(slug, timeout=25, retries=2)
+    except NotFound:
+        return False
+    except urllib.error.HTTPError as exc:
+        if exc.code == 401:
+            return None
+        raise
+    return isinstance(payload.get("jobAdDetails"), list)
+
+
 def rippling_board_url(slug: str) -> str:
     return (
         "https://ats.rippling.com/api/v2/board/"
@@ -2453,6 +2572,17 @@ SOURCES = {
         "fetch_jobs": fetch_breezy_jobs,
         "board_exists": breezy_board_exists,
     },
+    "hibob": {
+        "domains": ["careers.hibob.com"],
+        "registry_only": True,
+        "api": None,
+        "jobs": lambda payload: payload.get("jobAdDetails"),
+        "normalize": normalize_hibob,
+        "content_param": None,
+        "junk_prefixes": (),
+        "fetch_jobs": fetch_hibob_jobs,
+        "board_exists": hibob_board_exists,
+    },
     "rippling": {
         "domains": ["ats.rippling.com"],
         "registry_only": True,
@@ -2504,6 +2634,8 @@ def board_url(ats: str, slug: str, want_content: bool = False) -> str:
         return pinpoint_board_url(slug)
     if ats == "breezy":
         return breezy_board_url(slug)
+    if ats == "hibob":
+        return hibob_board_url(slug)
     if ats == "rippling":
         return rippling_board_url(slug)
     url = SOURCES[ats]["api"].format(slug=urllib.parse.quote(slug))
@@ -2906,7 +3038,7 @@ def plausible(slug: str, ats: str = "ashby") -> bool:
     )
 
 
-def board_exists(ats: str, slug: str) -> bool:
+def board_exists(ats: str, slug: str) -> bool | None:
     """Validate a board with the cheapest provider-specific public request.
 
     The original APIs support cheap HEAD probes. SmartRecruiters uses a one-item GET
@@ -2915,7 +3047,8 @@ def board_exists(ats: str, slug: str) -> bool:
     try:
         custom = SOURCES[ats].get("board_exists")
         if custom:
-            return bool(custom(slug))
+            result = custom(slug)
+            return None if result is None else bool(result)
         fetch(board_url(ats, slug), timeout=25, retries=2, method="HEAD")
         return True
     except NotFound:
@@ -2961,16 +3094,21 @@ def discover_boards(
     candidates = sorted((s for s in seen.values() if plausible(s, ats)), key=str.lower)
     print(f"  validating {len(candidates)} plausible slugs...", file=sys.stderr)
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
-        live = [
-            s for s, ok in zip(candidates, pool.map(lambda x: board_exists(ats, x), candidates))
-            if ok
-        ]
-    print(f"  {len(live)} live boards ({len(candidates) - len(live)} dead)", file=sys.stderr)
+        results = list(pool.map(lambda x: board_exists(ats, x), candidates))
+    live = [slug for slug, result in zip(candidates, results) if result is True]
+    inconclusive = [
+        slug for slug, result in zip(candidates, results) if result is None
+    ]
+    print(
+        f"  {len(live)} live boards, {len(inconclusive)} inconclusive, "
+        f"{len(candidates) - len(live) - len(inconclusive)} dead",
+        file=sys.stderr,
+    )
 
     # Discovery only sees what the archive captured, so a real board that was never
     # crawled is invisible to it. Union in every slug already known-good rather than
     # letting a refresh lose boards an earlier run had.
-    known = {s.lower(): s for s in live}
+    known = {s.lower(): s for s in [*live, *inconclusive]}
     for path in (BOARDS_SEED, BOARDS_CACHE):
         for slug in _read_boards(path).get(ats, []):
             known.setdefault(slug.lower(), slug)
@@ -3687,6 +3825,7 @@ def scan_board(
             "bamboohr",
             "pinpoint",
             "breezy",
+            "hibob",
             "rippling",
         }:
             norm["id"] = f"{slug}:{norm['id']}"
