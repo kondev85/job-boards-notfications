@@ -1638,6 +1638,62 @@ def test_rippling_detail_404_keeps_listing_data_and_logs_context():
     assert "page=0 posting_id=missing-detail" in message
 
 
+def test_rippling_skips_detail_requests_for_postings_outside_cutoff():
+    original_fetch = job_boards.fetch
+    requested_details = []
+
+    def fake_fetch(url, **kwargs):
+        if "?page=" in url:
+            return json.dumps(
+                {
+                    "items": [
+                        {
+                            "uuid": "old-role",
+                            "name": "Old role",
+                            "createdOn": "2026-09-24T23:59:59Z",
+                        },
+                        {
+                            "uuid": "recent-role",
+                            "name": "Recent role",
+                            "createdOn": "2026-09-26T00:00:00Z",
+                        },
+                        {"uuid": "unknown-date", "name": "Undated role"},
+                    ],
+                    "totalPages": 1,
+                }
+            ).encode()
+        requested_details.append(url)
+        return json.dumps({"description": "Detail description"}).encode()
+
+    job_boards.fetch = fake_fetch
+    try:
+        jobs = job_boards.fetch_rippling_jobs(
+            "example-board",
+            datetime(2026, 9, 25, tzinfo=timezone.utc),
+        )
+    finally:
+        job_boards.fetch = original_fetch
+
+    assert [job["uuid"] for job in jobs] == [
+        "old-role", "recent-role", "unknown-date"
+    ]
+    assert len(requested_details) == 1
+    assert requested_details[0].endswith("/recent-role")
+    assert "description" not in jobs[0]
+    assert jobs[1]["description"] == "Detail description"
+
+
+def test_retry_deadline_error_includes_the_retry_cause():
+    try:
+        with job_boards.board_deadline(0.01):
+            job_boards._deadline_sleep(1, "HTTP 429 from https://ats.rippling.com/")
+    except job_boards.BoardDeadlineExceeded as exc:
+        assert "HTTP 429" in str(exc)
+        assert "requested delay" in str(exc)
+    else:
+        raise AssertionError("expected the retry to exceed its board deadline")
+
+
 def test_normalizers_survive_explicit_nulls():
     """Every ATS sends JSON null for fields it has no value for.
 

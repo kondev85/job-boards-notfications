@@ -152,10 +152,14 @@ def _bounded_timeout(timeout: float) -> float:
     return min(timeout, max(0.05, remaining))
 
 
-def _deadline_sleep(seconds: float) -> None:
+def _deadline_sleep(seconds: float, retry_cause: str | None = None) -> None:
     deadline = _BOARD_DEADLINE.get()
     if deadline is not None and deadline - time.monotonic() <= seconds:
-        raise BoardDeadlineExceeded("board deadline reached during retry backoff")
+        cause = f"; retry cause: {retry_cause}" if retry_cause else ""
+        raise BoardDeadlineExceeded(
+            "board deadline reached during retry backoff"
+            f" (requested delay {seconds:.1f}s{cause})"
+        )
     time.sleep(seconds)
 
 
@@ -432,7 +436,8 @@ def fetch(
                         request_url, status, "server error", None, None
                     )
                 _deadline_sleep(
-                    _retry_delay(response_headers.get("retry-after"), attempt)
+                    _retry_delay(response_headers.get("retry-after"), attempt),
+                    f"HTTP {status} from {request_url}",
                 )
                 attempt += 1
                 continue
@@ -442,7 +447,8 @@ def fetch(
                         request_url, status, "throttled", None, None
                     )
                 _deadline_sleep(
-                    _retry_delay(response_headers.get("retry-after"), attempt)
+                    _retry_delay(response_headers.get("retry-after"), attempt),
+                    f"HTTP {status} from {request_url}",
                 )
                 attempt += 1
                 continue
@@ -453,10 +459,18 @@ def fetch(
             if response_headers.get("content-encoding") == "gzip":
                 response_body = gzip.decompress(response_body)
             return response_body
-        except (urllib.error.URLError, TimeoutError, http.client.HTTPException, OSError):
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            http.client.HTTPException,
+            OSError,
+        ) as exc:
             if attempt == retries - 1:
                 raise
-            _deadline_sleep(2**attempt)
+            _deadline_sleep(
+                2**attempt,
+                f"{type(exc).__name__}: {str(exc)[:180]} from {request_url}",
+            )
             attempt += 1
     raise RuntimeError("unreachable")
 
@@ -2388,6 +2402,10 @@ def fetch_rippling_jobs(slug: str, published_after: datetime | None = None) -> l
     page = 0
     detail_404_count = 0
     detail_404_examples: list[str] = []
+    skipped_detail_count = 0
+    cutoff = published_after
+    if cutoff is not None and cutoff.tzinfo is None:
+        cutoff = cutoff.replace(tzinfo=timezone.utc)
     while page < 1000:
         url = rippling_board_url(slug) + f"?page={page}&pageSize=1000"
         payload = json.loads(fetch(url, timeout=30, retries=3))
@@ -2401,6 +2419,27 @@ def fetch_rippling_jobs(slug: str, published_after: datetime | None = None) -> l
             if not posting_id:
                 continue
             merged = dict(item)
+            if cutoff is not None:
+                published_text = _provider_datetime(
+                    _provider_value(
+                        item,
+                        "createdOn",
+                        "createdAt",
+                        "publishedAt",
+                        "datePosted",
+                    )
+                )
+                if not published_text:
+                    skipped_detail_count += 1
+                    jobs.append(merged)
+                    continue
+                published_at = datetime.fromisoformat(
+                    published_text.replace("Z", "+00:00")
+                )
+                if published_at < cutoff:
+                    skipped_detail_count += 1
+                    jobs.append(merged)
+                    continue
             try:
                 detail = json.loads(
                     fetch(
@@ -2430,6 +2469,12 @@ def fetch_rippling_jobs(slug: str, published_after: datetime | None = None) -> l
             f"rippling/{slug}: {detail_404_count} detail 404(s); "
             f"kept listing data for those jobs; examples: {examples}",
             file=sys.stderr,
+            flush=True,
+        )
+    if skipped_detail_count:
+        print(
+            f"rippling/{slug}: skipped {skipped_detail_count} detail request(s) "
+            "for postings outside the cutoff or without a usable posting date",
             flush=True,
         )
     return jobs
