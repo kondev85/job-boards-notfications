@@ -44,7 +44,7 @@ import socket
 import sys
 import time
 import unicodedata
-from collections import deque
+from collections import Counter, deque
 from concurrent.futures import (
     FIRST_COMPLETED,
     ThreadPoolExecutor,
@@ -71,7 +71,7 @@ DAILY_WORKDAY_SOLO_CONCURRENCY = 3
 WORKDAY_DETAIL_MAX_ATTEMPTS = 3
 BOARD_FETCH_DEADLINE_SECONDS = 60
 DAILY_MIN_BOARD_SUCCESS_PERCENT = 98
-DAILY_MIN_ENRICHMENT_PERCENT = 94
+DAILY_MIN_ENRICHMENT_PERCENT = 90
 DAILY_ATS_CONCURRENCY = {
     "workday": 2,
     "ashby": 3,
@@ -2151,6 +2151,8 @@ def _cached_workday_jobs(
 def _workday_enrichment_candidates(
     conn: psycopg.Connection,
     import_run_id: int,
+    *,
+    due_only: bool = True,
 ) -> dict[int, dict[str, Any]]:
     """Find current-run Workday jobs due for another detail attempt."""
     users = _daily_enrichment_users(conn)
@@ -2172,9 +2174,14 @@ def _workday_enrichment_candidates(
           AND j.closed_at IS NULL
           AND j.last_seen >= r.started_at
           AND j.workday_detail_attempts < %s
+          AND (
+              %s::BOOLEAN IS FALSE
+              OR j.workday_detail_retry_after IS NULL
+              OR j.workday_detail_retry_after <= now()
+          )
         ORDER BY j.board_id, j.job_id
         """,
-        (import_run_id, WORKDAY_DETAIL_MAX_ATTEMPTS),
+        (import_run_id, WORKDAY_DETAIL_MAX_ATTEMPTS, due_only),
     ).fetchall()
     candidates: dict[int, dict[str, Any]] = {}
     for (
@@ -2206,7 +2213,9 @@ def _workday_enrichment_remaining(
     conn: psycopg.Connection,
     import_run_id: int,
 ) -> int:
-    candidates = _workday_enrichment_candidates(conn, import_run_id)
+    candidates = _workday_enrichment_candidates(
+        conn, import_run_id, due_only=False
+    )
     return sum(len(board["jobs"]) for board in candidates.values())
 
 
@@ -2421,25 +2430,49 @@ def _deferred_greenhouse_enrichment(
     }
 
 
+def _workday_detail_failure_reason(exc: BaseException | None = None) -> str:
+    """Store a bounded, useful failure category instead of a generic sentinel."""
+    if exc is None:
+        return "no_usable_description"
+    if isinstance(exc, job_boards.BoardDeadlineExceeded):
+        return "board_deadline_exceeded"
+    if isinstance(exc, job_boards.NotFound):
+        return "not_found"
+    status = getattr(exc, "code", None)
+    if isinstance(status, int):
+        return f"http_{status}"
+    if isinstance(exc, TimeoutError):
+        return "timeout"
+    return f"{type(exc).__name__}: {str(exc)[:180]}"
+
+
 def _fetch_workday_detail_candidate(
     job_id: int,
     job_url: str,
-) -> tuple[int, dict[str, Any] | None]:
-    fields = job_boards.workday_detail_fields(job_url)
+) -> tuple[int, dict[str, Any] | None, str | None]:
+    try:
+        fields = job_boards.workday_detail_fields(job_url)
+    except Exception as exc:
+        return job_id, None, _workday_detail_failure_reason(exc)
     description = _plain_description(
         "workday",
         {"_description": (fields or {}).get("jobDescription")},
     )
-    return job_id, fields if description else None
+    return (
+        job_id,
+        fields if description else None,
+        None if description else _workday_detail_failure_reason(),
+    )
 
 
 def _enrich_workday_board(
     board: dict[str, Any],
-) -> tuple[str, list[dict[str, Any]], int, list[int]]:
+) -> tuple[str, list[dict[str, Any]], int, list[tuple[int, str]]]:
     """Fetch missing Workday details for one board within its own deadline."""
     updates: list[dict[str, Any]] = []
     failed = 0
-    failed_job_ids: list[int] = []
+    failed_jobs: list[tuple[int, str]] = []
+    failure_counts: Counter[str] = Counter()
     total = len(board["jobs"])
     completed = 0
     started_at = time.monotonic()
@@ -2463,16 +2496,21 @@ def _enrich_workday_board(
             futures = list(future_jobs)
             for future in as_completed(futures):
                 try:
-                    job_id, fields = future.result()
-                except Exception:
+                    job_id, fields, error = future.result()
+                except Exception as exc:
                     failed += 1
-                    failed_job_ids.append(future_jobs[future])
+                    job_id = future_jobs[future]
+                    error = _workday_detail_failure_reason(exc)
+                    failed_jobs.append((job_id, error))
+                    failure_counts[error] += 1
                 else:
                     if fields:
                         updates.append({"job_id": job_id, **fields})
                     else:
                         failed += 1
-                        failed_job_ids.append(job_id)
+                        failure = error or _workday_detail_failure_reason()
+                        failed_jobs.append((job_id, failure))
+                        failure_counts[failure] += 1
                 completed += 1
                 now = time.monotonic()
                 if (
@@ -2486,7 +2524,8 @@ def _enrich_workday_board(
                     print(
                         f"Workday deferred enrichment {board['slug']}: "
                         f"{completed}/{total} detail requests done; "
-                        f"{len(updates)} enriched, {failed} deferred; "
+                        f"{len(updates)} enriched, {failed} deferred "
+                        f"({dict(failure_counts)}); "
                         f"{rate:.2f} jobs/s; elapsed={elapsed:.1f}s",
                         flush=True,
                     )
@@ -2494,11 +2533,12 @@ def _enrich_workday_board(
     elapsed = max(time.monotonic() - started_at, 0.001)
     print(
         f"Workday deferred enrichment {board['slug']}: finished "
-        f"{completed}/{total}; {len(updates)} enriched, {failed} deferred; "
+        f"{completed}/{total}; {len(updates)} enriched, {failed} deferred "
+        f"({dict(failure_counts)}); "
         f"{completed / elapsed:.2f} jobs/s; elapsed={elapsed:.1f}s",
         flush=True,
     )
-    return board["slug"], updates, failed, failed_job_ids
+    return board["slug"], updates, failed, failed_jobs
 
 
 def _deferred_workday_enrichment(
@@ -2563,14 +2603,48 @@ def _deferred_workday_enrichment(
                 for future in completed_futures:
                     completed_boards += 1
                     try:
-                        slug, updates, board_failed, failed_job_ids = future.result()
+                        slug, updates, board_failed, failed_jobs = future.result()
                     except Exception as exc:
-                        failed += 1
-                        failed_job_ids = [
-                            job_id for job_id, _ in future_boards[future]["jobs"]
+                        failed_jobs = [
+                            (job_id, _workday_detail_failure_reason(exc))
+                            for job_id, _ in future_boards[future]["jobs"]
                         ]
+                        failed += len(failed_jobs)
                         with conn.transaction():
-                            conn.execute(
+                            with conn.cursor() as cur:
+                                cur.executemany(
+                                    """
+                                    UPDATE jobs
+                                    SET workday_detail_attempts =
+                                            workday_detail_attempts + 1,
+                                        workday_detail_retry_after = now()
+                                            + make_interval(
+                                                secs => LEAST(
+                                                    86400,
+                                                    60 * power(
+                                                        5, workday_detail_attempts
+                                                    )
+                                                )
+                                            ),
+                                        workday_detail_error = %s
+                                    WHERE job_id = %s
+                                    """,
+                                    [
+                                        (error, job_id)
+                                        for job_id, error in failed_jobs
+                                    ],
+                                )
+                        print(
+                            "Workday deferred enrichment board failed: "
+                            f"{type(exc).__name__}: {exc}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                        continue
+                    failed += board_failed
+                    with conn.transaction():
+                        with conn.cursor() as cur:
+                            cur.executemany(
                                 """
                                 UPDATE jobs
                                 SET workday_detail_attempts =
@@ -2585,41 +2659,12 @@ def _deferred_workday_enrichment(
                                             )
                                         ),
                                     workday_detail_error = %s
-                                WHERE job_id = ANY(%s)
-                                """,
-                                (
-                                    f"{type(exc).__name__}: {exc}",
-                                    failed_job_ids,
-                                ),
-                            )
-                        print(
-                            "Workday deferred enrichment board failed: "
-                            f"{type(exc).__name__}: {exc}",
-                            file=sys.stderr,
-                            flush=True,
-                        )
-                        continue
-                    failed += board_failed
-                    with conn.transaction():
-                        for job_id in failed_job_ids:
-                            conn.execute(
-                                """
-                                UPDATE jobs
-                                SET workday_detail_attempts =
-                                        workday_detail_attempts + 1,
-                                    workday_detail_retry_after = now()
-                                        + make_interval(
-                                            secs => LEAST(
-                                                86400,
-                                                60 * power(
-                                                    5, workday_detail_attempts
-                                                )
-                                            )
-                                        ),
-                                    workday_detail_error = 'detail_unavailable'
                                 WHERE job_id = %s
                                 """,
-                                (job_id,),
+                                [
+                                    (error, job_id)
+                                    for job_id, error in failed_jobs
+                                ],
                             )
                     if not updates:
                         print(

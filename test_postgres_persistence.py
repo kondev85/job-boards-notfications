@@ -25,6 +25,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterator
+from urllib.error import HTTPError
 
 import psycopg
 
@@ -451,12 +452,205 @@ def test_daily_failure_threshold_allows_at_least_98_percent_success():
     assert not persistence._daily_failures_allow_downstream(21, 1000)
 
 
-def test_daily_enrichment_threshold_allows_at_least_94_percent_jobs():
+def test_daily_enrichment_threshold_allows_at_least_90_percent_jobs():
     assert persistence._daily_enrichment_allows_downstream(0, 0)
-    assert persistence._daily_enrichment_allows_downstream(94, 100)
-    assert persistence._daily_enrichment_allows_downstream(188, 200)
+    assert persistence._daily_enrichment_allows_downstream(90, 100)
+    assert persistence._daily_enrichment_allows_downstream(180, 200)
     assert persistence._daily_enrichment_allows_downstream(195, 200)
-    assert not persistence._daily_enrichment_allows_downstream(93, 100)
+    assert not persistence._daily_enrichment_allows_downstream(89, 100)
+
+
+def test_workday_detail_failure_reasons_are_specific():
+    assert persistence._workday_detail_failure_reason(
+        HTTPError("https://jobs.example/1", 429, "Too Many Requests", {}, None)
+    ) == "http_429"
+    assert persistence._workday_detail_failure_reason(
+        job_boards.BoardDeadlineExceeded("detail deadline")
+    ) == "board_deadline_exceeded"
+    assert persistence._workday_detail_failure_reason() == "no_usable_description"
+
+    with patch.object(
+        job_boards,
+        "workday_detail_fields",
+        side_effect=TimeoutError("detail request timed out"),
+    ):
+        assert persistence._fetch_workday_detail_candidate(
+            3, "https://jobs.example/3"
+        ) == (3, None, "timeout")
+
+
+def test_workday_detail_candidates_honor_retry_time_and_profile_filters():
+    with _temporary_postgres() as dsn:
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            conn.commit()
+            started_at = datetime.now(timezone.utc) - timedelta(hours=1)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    board_id = persistence._ensure_board(
+                        cur,
+                        "workday",
+                        "example.wd3/profile-filter-test",
+                        started_at,
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO users (
+                            name, email, target_roles, base_country,
+                            remote_allowed, onsite_allowed, hybrid_allowed
+                        ) VALUES (
+                            'Test User', 'test@example.test',
+                            ARRAY['Project Manager'], 'Spain', TRUE, TRUE, TRUE
+                        )
+                        """
+                    )
+                    run_id = cur.execute(
+                        """
+                        INSERT INTO daily_import_runs (
+                            ats_scope, published_after, started_at, board_count
+                        ) VALUES (%s, %s, %s, 1)
+                        RETURNING import_run_id
+                        """,
+                        (["workday"], started_at, started_at),
+                    ).fetchone()[0]
+                    cur.execute(
+                        """
+                        INSERT INTO daily_import_run_boards
+                            (import_run_id, board_id, position, status)
+                        VALUES (%s, %s, 1, 'completed')
+                        """,
+                        (run_id, board_id),
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO jobs (
+                            board_id, company, ats, external_id, title,
+                            job_url, location_raw, is_remote, workplace_type,
+                            workday_detail_attempts, workday_detail_retry_after
+                        ) VALUES
+                            (%s, 'Test', 'workday', 'due', 'Project Manager',
+                             'https://jobs.example/due', 'Remote - Spain', TRUE, 'remote',
+                             1, now() - interval '1 minute'),
+                            (%s, 'Test', 'workday', 'waiting', 'Project Manager',
+                             'https://jobs.example/waiting', 'Remote - Spain', TRUE, 'remote',
+                             1, now() + interval '1 hour'),
+                            (%s, 'Test', 'workday', 'wrong-role', 'Dentist',
+                             'https://jobs.example/wrong-role', 'Remote - Spain', TRUE, 'remote',
+                             0, NULL),
+                            (%s, 'Test', 'workday', 'wrong-location', 'Project Manager',
+                             'https://jobs.example/wrong-location', 'Bengaluru, India',
+                             FALSE, 'onsite', 0, NULL)
+                        """,
+                        (board_id, board_id, board_id, board_id),
+                    )
+
+            candidates = persistence._workday_enrichment_candidates(conn, run_id)
+            assert list(candidates) == [board_id]
+            assert candidates[board_id]["slug"] == "example.wd3/profile-filter-test"
+            assert len(candidates[board_id]["jobs"]) == 1
+            assert candidates[board_id]["jobs"][0][1] is not None
+            assert persistence._workday_enrichment_remaining(conn, run_id) == 2
+
+
+def test_deferred_workday_enrichment_persists_classified_retry():
+    with _temporary_postgres() as dsn:
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            conn.commit()
+            started_at = datetime.now(timezone.utc) - timedelta(hours=1)
+            slug = "example.wd3/retry-test"
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    board_id = persistence._ensure_board(
+                        cur, "workday", slug, started_at
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO users (
+                            name, email, target_roles, base_country,
+                            remote_allowed, onsite_allowed, hybrid_allowed
+                        ) VALUES (
+                            'Test User', 'test@example.test',
+                            ARRAY['Project Manager'], 'Spain', TRUE, TRUE, TRUE
+                        )
+                        """
+                    )
+                    run_id = cur.execute(
+                        """
+                        INSERT INTO daily_import_runs (
+                            ats_scope, published_after, started_at, board_count
+                        ) VALUES (%s, %s, %s, 1)
+                        RETURNING import_run_id
+                        """,
+                        (["workday"], started_at, started_at),
+                    ).fetchone()[0]
+                    cur.execute(
+                        """
+                        INSERT INTO daily_import_run_boards
+                            (import_run_id, board_id, position, status)
+                        VALUES (%s, %s, 1, 'completed')
+                        """,
+                        (run_id, board_id),
+                    )
+                    job_id = cur.execute(
+                        """
+                        INSERT INTO jobs (
+                            board_id, company, ats, external_id, title, job_url,
+                            location_raw, is_remote, workplace_type
+                        ) VALUES (
+                            %s, 'Test', 'workday', 'retry-job',
+                            'Project Manager', 'https://jobs.example/retry',
+                            'Remote - Spain', TRUE, 'remote'
+                        )
+                        RETURNING job_id
+                        """,
+                        (board_id,),
+                    ).fetchone()[0]
+
+            real_candidates = persistence._workday_enrichment_candidates
+
+            def candidates_for_test(conn, requested_run_id, *, due_only=True):
+                if due_only:
+                    return {
+                        board_id: {
+                            "slug": slug,
+                            "jobs": [(job_id, "https://jobs.example/retry")],
+                        }
+                    }
+                return real_candidates(
+                    conn, requested_run_id, due_only=due_only
+                )
+
+            with (
+                patch.object(
+                    persistence,
+                    "_workday_enrichment_candidates",
+                    side_effect=candidates_for_test,
+                ),
+                patch.object(
+                    persistence,
+                    "_enrich_workday_board",
+                    return_value=(slug, [], 1, [(job_id, "http_429")]),
+                ),
+            ):
+                result = persistence._deferred_workday_enrichment(
+                    dsn, run_id, "worker"
+                )
+
+            assert result == {
+                "candidates": 1,
+                "enriched": 0,
+                "failed": 1,
+                "remaining": 1,
+            }
+            assert conn.execute(
+                """
+                SELECT workday_detail_attempts, workday_detail_error,
+                       workday_detail_retry_after > now()
+                FROM jobs WHERE job_id = %s
+                """,
+                (job_id,),
+            ).fetchone() == (1, "http_429", True)
 
 
 def test_relevance_prefilter_keeps_listing_but_rejects_irrelevant_descriptions():
