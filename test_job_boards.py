@@ -2669,6 +2669,45 @@ def test_workday_throttling_uses_longer_bounded_backoff():
     assert _workday_retry_delay("3600", 0) == 30.0
 
 
+def test_workday_429_logs_host_and_sets_a_host_scoped_cooldown():
+    import job_boards
+
+    state_names = (
+        "_WORKDAY_NEXT_REQUEST_AT",
+        "_WORKDAY_COOLDOWN_UNTIL",
+        "_WORKDAY_429_STREAK",
+    )
+    old_state = {
+        name: getattr(job_boards, name).copy()
+        for name in state_names
+    }
+    try:
+        for name in state_names:
+            getattr(job_boards, name).clear()
+        output = io.StringIO()
+        with contextlib.redirect_stderr(output):
+            delay = job_boards._record_workday_429(
+                "https://tenant.wd5.myworkdayjobs.com/wday/cxs/tenant/Careers/jobs",
+                {"retry-after": "12", "server": "workday-edge"},
+                0,
+            )
+
+        host = "tenant.wd5.myworkdayjobs.com"
+        assert delay == 12.0
+        assert job_boards._WORKDAY_429_STREAK[host] == 1
+        assert job_boards._WORKDAY_COOLDOWN_UNTIL[host] > 0
+        assert "host=tenant.wd5.myworkdayjobs.com" in output.getvalue()
+        assert "kind=listing" in output.getvalue()
+        assert "retry_after=12" in output.getvalue()
+        assert "cooldown=12.0s" in output.getvalue()
+        assert "server=workday-edge" in output.getvalue()
+    finally:
+        for name, value in old_state.items():
+            target = getattr(job_boards, name)
+            target.clear()
+            target.update(value)
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

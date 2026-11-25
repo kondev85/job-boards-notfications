@@ -186,6 +186,12 @@ _REQUEST_INTERVALS = {
     "hibob": 1.5,
 }
 _PROVIDER_REQUEST_INTERVAL = 1.0
+_WORKDAY_REQUEST_INTERVAL = 1.0
+_WORKDAY_COOLDOWN_CAP = 120.0
+_WORKDAY_PACING_CONDITION = threading.Condition()
+_WORKDAY_NEXT_REQUEST_AT: dict[str, float] = {}
+_WORKDAY_COOLDOWN_UNTIL: dict[str, float] = {}
+_WORKDAY_429_STREAK: dict[str, int] = {}
 _WORKABLE_CACHE_LOCK = threading.Lock()
 
 
@@ -254,7 +260,10 @@ def _pooled_request(
             )
         try:
             conn.timeout = _bounded_timeout(timeout)
-            _wait_for_paced_host(parts.netloc)
+            if _is_workday_host(parts.netloc):
+                _wait_for_workday_host(parts.netloc, url)
+            else:
+                _wait_for_paced_host(parts.netloc)
             if body is None:
                 conn.request(method, target, headers=headers)
             else:
@@ -359,6 +368,100 @@ def _workday_retry_delay(
     return min(delay, cap)
 
 
+def _is_workday_host(netloc: str) -> bool:
+    hostname = netloc.split(":", 1)[0].lower()
+    return hostname.endswith(".myworkdayjobs.com")
+
+
+def _workday_host_key(netloc: str) -> str:
+    return netloc.split(":", 1)[0].lower()
+
+
+def _workday_request_kind(url: str) -> str:
+    path = urllib.parse.urlsplit(url).path.casefold()
+    return "listing" if "/wday/cxs/" in path else "detail"
+
+
+def _wait_for_workday_host(netloc: str, url: str) -> None:
+    """Space requests per Workday tenant and honor any active host cooldown."""
+    host = _workday_host_key(netloc)
+    reported_wait = False
+    while True:
+        with _WORKDAY_PACING_CONDITION:
+            now = time.monotonic()
+            scheduled = _WORKDAY_NEXT_REQUEST_AT.get(host, now)
+            cooldown = _WORKDAY_COOLDOWN_UNTIL.get(host, now)
+            allowed_at = max(scheduled, cooldown)
+            delay = max(0.0, allowed_at - now)
+            if delay <= 0:
+                _WORKDAY_NEXT_REQUEST_AT[host] = now + _WORKDAY_REQUEST_INTERVAL
+                return
+            if not reported_wait:
+                print(
+                    f"Workday request wait: host={host} "
+                    f"kind={_workday_request_kind(url)} "
+                    f"delay={delay:.1f}s reason=host_pacing_or_429_cooldown",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                reported_wait = True
+            deadline = _BOARD_DEADLINE.get()
+            if deadline is not None and deadline - now <= delay:
+                # Use the common deadline error rather than waiting past a board's
+                # budget while honoring a tenant-specific 429 cooldown.
+                pass
+            else:
+                _WORKDAY_PACING_CONDITION.wait(timeout=delay)
+                continue
+        _deadline_sleep(delay)
+
+
+def _record_workday_429(
+    url: str,
+    response_headers: dict,
+    attempt: int,
+) -> float:
+    """Apply a bounded tenant-host cooldown and log safe rate-limit evidence."""
+    parts = urllib.parse.urlsplit(url)
+    host = _workday_host_key(parts.netloc)
+    headers = _lower_headers(response_headers or {})
+    raw_retry_after = str(headers.get("retry-after") or "").strip()
+    retry_after = re.sub(r"[^a-zA-Z0-9.,:_+ -]", "", raw_retry_after)[:40]
+    server = re.sub(r"[^a-zA-Z0-9._-]", "", str(headers.get("server") or ""))[:40]
+    with _WORKDAY_PACING_CONDITION:
+        streak = _WORKDAY_429_STREAK.get(host, 0) + 1
+        _WORKDAY_429_STREAK[host] = streak
+        exponential = min(5.0 * (2 ** min(streak - 1, 5)), _WORKDAY_COOLDOWN_CAP)
+        header_delay = (
+            _workday_retry_delay(raw_retry_after, attempt, cap=_WORKDAY_COOLDOWN_CAP)
+            if raw_retry_after
+            else 0.0
+        )
+        delay = max(exponential, header_delay)
+        until = time.monotonic() + delay
+        _WORKDAY_COOLDOWN_UNTIL[host] = max(
+            _WORKDAY_COOLDOWN_UNTIL.get(host, 0.0),
+            until,
+        )
+        _WORKDAY_PACING_CONDITION.notify_all()
+    timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    print(
+        f"Workday HTTP 429: at={timestamp} host={host} "
+        f"kind={_workday_request_kind(url)} attempt={attempt + 1} "
+        f"streak={streak} retry_after={retry_after or 'absent'} "
+        f"server={server or 'unknown'} cooldown={delay:.1f}s",
+        file=sys.stderr,
+        flush=True,
+    )
+    return delay
+
+
+def _record_workday_success(url: str) -> None:
+    host = _workday_host_key(urllib.parse.urlsplit(url).netloc)
+    with _WORKDAY_PACING_CONDITION:
+        _WORKDAY_429_STREAK.pop(host, None)
+
+
 def fetch(
     url: str,
     timeout: int = 30,
@@ -401,6 +504,11 @@ def fetch(
                     headers=headers,
                     body=body,
                 )
+            if _is_workday_host(urllib.parse.urlsplit(request_url).netloc):
+                if status == 429:
+                    _record_workday_429(request_url, response_headers, attempt)
+                elif 200 <= status < 400:
+                    _record_workday_success(request_url)
             if meta is not None:
                 meta["etag"] = response_headers.get("etag")
             if status == 304:
@@ -443,6 +551,21 @@ def fetch(
                 continue
             if status in (429, 403):
                 if attempt == retries - 1:
+                    if status == 429 and _is_workday_host(
+                        urllib.parse.urlsplit(request_url).netloc
+                    ):
+                        reason = (
+                            "rate limited; "
+                            f"retry_after={response_headers.get('retry-after', 'absent')}; "
+                            f"server={response_headers.get('server', 'unknown')}"
+                        )
+                        raise urllib.error.HTTPError(
+                            request_url,
+                            status,
+                            reason,
+                            response_headers,
+                            None,
+                        )
                     raise urllib.error.HTTPError(
                         request_url, status, "throttled", None, None
                     )
@@ -1597,6 +1720,10 @@ def _workday_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
                 status, response_headers, response_body = _pooled_request(
                     url, "POST", timeout, headers, body
                 )
+                if status == 429 and attempt < 3:
+                    _record_workday_429(url, response_headers, attempt)
+                elif 200 <= status < 400:
+                    _record_workday_success(url)
                 if status == 404:
                     raise NotFound(url)
                 if status >= 400:
@@ -1614,9 +1741,22 @@ def _workday_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
                     retry_after = response_headers.get("retry-after")
                     if attempt == 3:
                         raise urllib.error.HTTPError(
-                            url, status, "server error", response_headers, None
+                            url,
+                            status,
+                            "rate limited or provider error; "
+                            f"server={response_headers.get('server', 'unknown')}; "
+                            f"retry_after={retry_after or 'absent'}",
+                            response_headers,
+                            None,
                         )
-                    _deadline_sleep(_workday_retry_delay(retry_after, attempt))
+                    _deadline_sleep(
+                        _workday_retry_delay(retry_after, attempt),
+                        retry_cause=(
+                            f"HTTP {status}; host={_workday_host_key(urllib.parse.urlsplit(url).netloc)}; "
+                            f"kind={_workday_request_kind(url)}; "
+                            f"retry_after={retry_after or 'absent'}"
+                        ),
+                    )
                     continue
                 result = json.loads(response_body)
                 if not isinstance(result, dict):
@@ -1635,6 +1775,12 @@ def _workday_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
                 raise NotFound(url) from exc
+            if exc.code == 429:
+                _record_workday_429(
+                    exc.url or url,
+                    _lower_headers(exc.headers or {}),
+                    attempt,
+                )
             if exc.code == 403:
                 reason = _workday_403_diagnostics(exc.headers, exc.read())
                 raise urllib.error.HTTPError(
@@ -1642,8 +1788,15 @@ def _workday_post_json(url: str, payload: dict, timeout: int = 30) -> dict:
                 ) from exc
             if exc.code not in (429, 500, 502, 503, 504) or attempt == 3:
                 raise
+            retry_after = exc.headers.get("Retry-After")
             _deadline_sleep(
-                _workday_retry_delay(exc.headers.get("Retry-After"), attempt)
+                _workday_retry_delay(retry_after, attempt),
+                retry_cause=(
+                    f"HTTP {exc.code}; "
+                    f"host={_workday_host_key(urllib.parse.urlsplit(exc.url or url).netloc)}; "
+                    f"kind={_workday_request_kind(exc.url or url)}; "
+                    f"retry_after={retry_after or 'absent'}"
+                ),
             )
         except (urllib.error.URLError, TimeoutError, http.client.HTTPException, OSError):
             if attempt == 3:
