@@ -878,22 +878,23 @@ def test_daily_auto_deactivation_requires_three_distinct_notfound_dates():
             }
 
 
-def test_daily_workday_workers_increase_when_workday_is_the_only_remaining_ats():
+def test_daily_workday_concurrency_stays_serial_to_reduce_rate_limits():
     queues = {
         "ashby": [("ashby", "board")],
         "workday": [("workday", "one"), ("workday", "two")],
     }
     active = {"ashby": 0, "workday": 1}
 
-    assert persistence._daily_workday_limit(queues, active) == 2
+    assert persistence._daily_workday_limit(queues, active) == 1
     assert persistence._daily_workday_limit(
         {"ashby": [], "workday": queues["workday"]},
         {"ashby": 0, "workday": 0},
-    ) == 3
+    ) == 1
     assert persistence._daily_workday_limit(
         {"workday": queues["workday"]},
         {"ashby": 1, "workday": 0},
-    ) == 2
+    ) == 1
+    assert persistence.DAILY_WORKDAY_DETAIL_CONCURRENCY == 2
     assert persistence._daily_board_limit("ashby") == 3
     assert persistence._daily_board_limit("bamboohr") == 3
     assert persistence._daily_board_limit("personio") == 3

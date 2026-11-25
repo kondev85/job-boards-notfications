@@ -67,13 +67,14 @@ ATS_NAMES = tuple(job_boards.SOURCES)
 DAILY_IMPORT_LEASE_SECONDS = 15 * 60
 DAILY_BOARD_WORKERS = 5
 DAILY_DETAIL_CONCURRENCY = 8
-DAILY_WORKDAY_SOLO_CONCURRENCY = 3
+DAILY_WORKDAY_DETAIL_CONCURRENCY = 2
+DAILY_WORKDAY_SOLO_CONCURRENCY = 1
 WORKDAY_DETAIL_MAX_ATTEMPTS = 3
 BOARD_FETCH_DEADLINE_SECONDS = 60
 DAILY_MIN_BOARD_SUCCESS_PERCENT = 98
 DAILY_MIN_ENRICHMENT_PERCENT = 90
 DAILY_ATS_CONCURRENCY = {
-    "workday": 2,
+    "workday": 1,
     "ashby": 3,
     "greenhouse": 3,
     "lever": 3,
@@ -1863,8 +1864,9 @@ def _run_daily_boards_parallel(
     }
     print(
         f"Daily import parallelism: {DAILY_BOARD_WORKERS} total board workers; "
-        "Workday=2 while other ATS remain, up to 3 when alone; "
+        "Workday=1 board at a time; "
         f"detail concurrency={DAILY_DETAIL_CONCURRENCY}; "
+        f"Workday detail concurrency={DAILY_WORKDAY_DETAIL_CONCURRENCY}; "
         f"board deadline={BOARD_FETCH_DEADLINE_SECONDS}s",
         flush=True,
     )
@@ -2488,7 +2490,9 @@ def _enrich_workday_board(
         flush=True,
     )
     with job_boards.board_deadline(BOARD_FETCH_DEADLINE_SECONDS):
-        with ThreadPoolExecutor(max_workers=DAILY_DETAIL_CONCURRENCY) as pool:
+        with ThreadPoolExecutor(
+            max_workers=DAILY_WORKDAY_DETAIL_CONCURRENCY
+        ) as pool:
             future_jobs = {
                 pool.submit(
                     copy_context().run,
@@ -5153,6 +5157,47 @@ def _run(args: argparse.Namespace) -> int:
                 _set_daily_run_phase(conn, daily_import_run_id, "non_workday_matching")
                 daily_phase = "non_workday_matching"
 
+        # Workday can spend a long time enriching its large description backlog.
+        # Persist useful scores from the other selected ATSes first so those
+        # results are visible while the Workday phase continues. The final
+        # all-ATS matching pass below refreshes these records after enrichment.
+        if (
+            daily_import_run_id is not None
+            and "workday" in selected_ats
+            and non_workday_ats
+            and match_requested
+            and daily_phase in ("provider_enrichment", "non_workday_matching")
+        ):
+            _set_daily_run_phase(
+                conn,
+                daily_import_run_id,
+                "non_workday_matching",
+            )
+            with _daily_phase_heartbeat(
+                dsn,
+                daily_import_run_id,
+                worker_id,
+            ) as heartbeat:
+                early_match_stats = run_matching(
+                    conn,
+                    published_after=published_after,
+                    ats=non_workday_ats,
+                    heartbeat_callback=heartbeat,
+                )
+            print(
+                "Early matching complete for non-Workday ATSes: "
+                f"{early_match_stats['evaluated']} evaluated, "
+                f"{early_match_stats['matched']} matched, "
+                f"{early_match_stats['skipped']} excluded; "
+                "these results are available while Workday enrichment runs."
+            )
+            _set_daily_run_phase(
+                conn,
+                daily_import_run_id,
+                "workday_enrichment",
+            )
+            daily_phase = "workday_enrichment"
+
         provider_enrichment_phase = (
             daily_import_run_id is not None
             and any(ats in selected_ats for ats in ("greenhouse", "workday"))
@@ -5179,7 +5224,7 @@ def _run(args: argparse.Namespace) -> int:
                 )
 
         if provider_enrichment_phase and not skip_provider_enrichment:
-            if daily_phase != "provider_enrichment":
+            if daily_phase not in ("provider_enrichment", "workday_enrichment"):
                 _set_daily_run_phase(
                     conn,
                     daily_import_run_id,

@@ -3,8 +3,8 @@ name: Workday rate-limit policy
 description: Concurrency and retry posture for Workday board-fetch throttling.
 ---
 
-Keep Workday at two concurrent boards while other ATSes remain and cap it at three when Workday is the only ATS left. Use a longer bounded exponential retry for Workday 429/5xx responses and respect `Retry-After` within the board deadline.
+Keep Workday board-fetch concurrency at one and Workday detail concurrency at two until the 429 rate is re-evaluated. Use bounded exponential retry for Workday 429/5xx responses and respect `Retry-After` within the board deadline.
 
-**Why:** Run 49 continued to record frequent Workday 429s under the previous two-worker cap, so raising solo concurrency to four risked increasing throttling rather than improving throughput.
+**Why:** Recent runs showed widespread Workday 429s, and deferred enrichment could fan out multiple detail requests per board on top of concurrent boards. A serialized board queue and small detail pool reduce request bursts while keeping other ATS workers available.
 
-**How to apply:** Reassess concurrency only after observing the 429 rate under the lower cap. Keep retries bounded so a throttled board cannot stall the full daily run.
+**How to apply:** Reassess concurrency only after observing 429 rates with these limits. Keep retries bounded, and do not raise Workday concurrency merely because it is the last ATS remaining.
