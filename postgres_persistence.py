@@ -1132,6 +1132,11 @@ def _record_daily_board_failure(
     worker_id: str | None = None,
     automatic_retry: bool = False,
 ) -> None:
+    status_code = getattr(exc, "code", None)
+    same_run_skip = isinstance(
+        exc,
+        (job_boards.NotFound, job_boards.InvalidBoardResponse),
+    ) or status_code in {400, 401, 403, 404, 410, 422}
     with conn.transaction():
         conn.execute(
             """
@@ -1141,13 +1146,13 @@ def _record_daily_board_failure(
                 error_type = %s,
                 error_message = %s,
                 retry_after = CASE
-                    WHEN %s THEN now() + make_interval(
+                    WHEN %s THEN now() + interval '30 days'
+                    ELSE now() + make_interval(
                         secs => LEAST(
-                            3600,
-                            60 * power(2, LEAST(attempts + 1, 6))
+                            21600,
+                            900 * power(2, LEAST(attempts, 4))
                         )
                     )
-                    ELSE NULL
                 END,
                 completed_at = now()
             WHERE import_run_id = %s AND board_id = %s
@@ -1155,7 +1160,7 @@ def _record_daily_board_failure(
             (
                 type(exc).__name__,
                 str(exc)[:4000],
-                automatic_retry,
+                same_run_skip,
                 import_run_id,
                 board_id,
             ),

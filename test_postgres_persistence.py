@@ -460,6 +460,68 @@ def test_daily_enrichment_threshold_allows_at_least_90_percent_jobs():
     assert not persistence._daily_enrichment_allows_downstream(89, 100)
 
 
+def test_daily_board_retry_backoff_is_default_for_permanent_and_transient_errors():
+    with _temporary_postgres() as dsn:
+        with psycopg.connect(dsn) as conn:
+            conn.execute(persistence.SCHEMA_SQL)
+            conn.commit()
+            now = datetime.now(timezone.utc)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    permanent_board = persistence._ensure_board(
+                        cur, "ashby", "permanent-failure", now
+                    )
+                    transient_board = persistence._ensure_board(
+                        cur, "workday", "example.wd3/transient-failure", now
+                    )
+                    run_id = cur.execute(
+                        """
+                        INSERT INTO daily_import_runs (
+                            ats_scope, published_after, board_count
+                        ) VALUES (%s, %s, 2)
+                        RETURNING import_run_id
+                        """,
+                        (["ashby", "workday"], now),
+                    ).fetchone()[0]
+                    cur.execute(
+                        """
+                        INSERT INTO daily_import_run_boards
+                            (import_run_id, board_id, position)
+                        VALUES (%s, %s, 1), (%s, %s, 2)
+                        """,
+                        (run_id, permanent_board, run_id, transient_board),
+                    )
+
+            persistence._record_daily_board_failure(
+                conn,
+                run_id,
+                permanent_board,
+                job_boards.NotFound("board gone"),
+                automatic_retry=False,
+            )
+            persistence._record_daily_board_failure(
+                conn,
+                run_id,
+                transient_board,
+                HTTPError(
+                    "https://jobs.example/board", 429,
+                    "Too Many Requests", {}, None,
+                ),
+                automatic_retry=False,
+            )
+            retry_delays = conn.execute(
+                """
+                SELECT board_id, EXTRACT(EPOCH FROM retry_after - now())
+                FROM daily_import_run_boards
+                WHERE import_run_id = %s
+                """,
+                (run_id,),
+            ).fetchall()
+            delays = dict(retry_delays)
+            assert delays[permanent_board] > 29 * 24 * 60 * 60
+            assert 14 * 60 <= delays[transient_board] <= 16 * 60
+
+
 def test_workday_detail_failure_reasons_are_specific():
     assert persistence._workday_detail_failure_reason(
         HTTPError("https://jobs.example/1", 429, "Too Many Requests", {}, None)
